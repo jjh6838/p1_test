@@ -3,7 +3,7 @@ import geopandas as gpd
 import rasterio
 from rasterio.features import shapes
 from rasterio.mask import mask
-from shapely.geometry import shape, Point, LineString, Polygon
+from shapely.geometry import shape, Point, LineString, Polygon, MultiLineString
 from shapely.ops import nearest_points
 from scipy.spatial import Voronoi
 import numpy as np
@@ -20,20 +20,7 @@ grid_lines_path = r"KOR\gridfinder\gridfinder-version_1-grid-kor.gpkg"
 population_raster_path = r"KOR\jrc_ghsl\GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0__KOR.tif"
 south_korea_boundary_path = r"GADM\gadm41_KOR.gpkg"
 # Output GeoPackage path
-output_gpkg_path = r"outputs\korea_integrated_dataset_v3_jeju.gpkg"
-
-
-# Read the energy data CSV and calculate the sum of "Value" for the specified conditions
-energy_data = pd.read_csv(energy_data_csv_path)
-filtered_energy_data = energy_data[
-    (energy_data['Country code'] == 'KOR') &
-    (energy_data['Year'] == 2023) &
-    (energy_data['Category'] == 'Capacity') &
-    (energy_data['Subcategory'] == 'Fuel') &
-    (energy_data['Unit'] == 'GW')
-]
-total_capacity = filtered_energy_data['Value'].sum()
-print(f"Total Capacity for KOR in 2023: {total_capacity} GW")
+output_gpkg_path = r"outputs\korea_integrated_dataset_v4_jeju.gpkg"
 
 # Read the energy facilities data from the Excel file
 energy_facilities_df = pd.read_excel(energy_facilities_path, sheet_name="Powerfacilities")
@@ -41,9 +28,6 @@ filtered_energy_facilities_df = energy_facilities_df[
     (energy_facilities_df['Country/area'] == 'South Korea') &
     (energy_facilities_df['Status'] == 'operating')
 ]
-total_capacity_mw = filtered_energy_facilities_df['Capacity (MW)'].sum()
-print(f"Total Capacity of operating facilities in South Korea: {total_capacity_mw} MW")
-
 # Convert the filtered DataFrame to a GeoDataFrame
 energy_facilities = gpd.GeoDataFrame(
     filtered_energy_facilities_df,
@@ -206,20 +190,80 @@ grid_lines_korea = grid_lines_proj.to_crs(common_crs)
 population_centroids_gdf = population_centroids_proj.to_crs(common_crs)
 
 # Rule 1: Establish comprehensive connections
-def establish_comprehensive_connections(connections_energy_gdf, grid_lines_korea, connections_pop_gdf):
+def establish_comprehensive_connections(connections_energy_gdf, 
+                                        grid_lines_korea, 
+                                        connections_pop_gdf):
     # Combine all connections into a single GeoDataFrame
-    combined_connections = gpd.GeoDataFrame(pd.concat([connections_energy_gdf, grid_lines_korea, connections_pop_gdf], ignore_index=True))
+    combined_connections = gpd.GeoDataFrame(pd.concat([connections_energy_gdf, 
+                                                       grid_lines_korea, 
+                                                       connections_pop_gdf], ignore_index=True))
     
     # Ensure the CRS is consistent
     combined_connections = combined_connections.to_crs(connections_energy_gdf.crs)
     
     return combined_connections
 
-# Establish comprehensive connections
-comprehensive_connections_gdf = establish_comprehensive_connections(connections_energy_gdf, grid_lines_korea, connections_pop_gdf)
+# Establish comprehensive connections including new connections to centroids
+comprehensive_connections_gdf = establish_comprehensive_connections(connections_energy_gdf, 
+                                                                    grid_lines_korea, 
+                                                                    connections_pop_gdf)
 
-#Rules 2-3
 
+# Import conversion rates from p1_ember_analysis1.py
+from p1_ember_analysis1 import KOR_2023_wind_conversion_rate_jeju, KOR_2023_oilgas_conversion_rate_jeju
+
+# Rule 2: Connect each centroid to the closest node based on proximity along the lines of comprehensive_connections_gdf
+def connect_centroids_to_closest_node(energy_facilities_proj, 
+                                      population_centroids_proj, 
+                                      comprehensive_connections_gdf, 
+                                      projected_crs):
+    connections_list = []  # This will store the single shortest LineString for each centroid
+    
+    # Reproject comprehensive_connections_gdf to the desired CRS
+    comprehensive_connections_proj = comprehensive_connections_gdf.to_crs(projected_crs)
+    
+    # Ensure energy facilities and centroids are in projected CRS
+    facilities_proj = energy_facilities_proj.to_crs(projected_crs)
+    centroids_proj = population_centroids_proj.to_crs(projected_crs)
+    
+    # Loop over each centroid to find the closest facility
+    for _, centroid in centroids_proj.iterrows():
+        shortest_distance = float('inf')
+        shortest_connection = None
+        
+        for _, facility in facilities_proj.iterrows():
+            # Create a LineString between the centroid and the energy facility
+            line = LineString([facility.geometry, centroid.geometry])
+            
+            # Calculate the direct distance between centroid and facility
+            direct_distance = centroid.geometry.distance(facility.geometry)
+            
+            # Update shortest connection if this is the shortest so far and within threshold
+            if direct_distance < shortest_distance and direct_distance <= 10000:  # 10 km threshold
+                shortest_distance = direct_distance
+                shortest_connection = line
+        
+        # If a connection was found, add it to the list
+        if shortest_connection is not None:
+            connections_list.append(shortest_connection)
+    
+    # Return the list of LineStrings (one per centroid)
+    return connections_list
+
+# Generate connections and supply distribution
+connections_to_centroids = connect_centroids_to_closest_node(
+    energy_facilities_proj, 
+    population_centroids_proj,
+    comprehensive_connections_gdf,
+    projected_crs
+)
+
+
+# Convert connections to GeoDataFrame
+connections_to_centroids_gdf = gpd.GeoDataFrame(
+    {"geometry": connections_to_centroids},
+    crs=projected_crs
+).to_crs(common_crs)
 
 
 # Step 7: Save all layers to GeoPackage
@@ -230,7 +274,8 @@ layer_data = {
     "connections_energy": connections_energy_gdf,
     "connections_pop": connections_pop_gdf,
     "voronoi_polygons": voronoi_gdf,
-    "connections_all": comprehensive_connections_gdf
+    "connections_all": comprehensive_connections_gdf,
+    "connections_to_centroids": connections_to_centroids_gdf
 }
 
 # Write layers to GeoPackage
@@ -239,11 +284,11 @@ if os.path.exists(output_gpkg_path):
 
 try:
     for layer_name, gdf in layer_data.items():
-        if not gdf.empty:
+        if isinstance(gdf, gpd.GeoDataFrame) and not gdf.empty:
             print(f"Writing layer {layer_name} to GeoPackage")
             gdf.to_file(output_gpkg_path, layer=layer_name, driver="GPKG")
         else:
-            print(f"Layer {layer_name} is empty and will not be written to GeoPackage")
+            print(f"Layer {layer_name} is empty or not a GeoDataFrame and will not be written to GeoPackage")
 except Exception as e:
     print(f"An error occurred: {e}")
     raise
