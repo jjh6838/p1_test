@@ -42,7 +42,7 @@ filtered_energy_facilities_df = energy_facilities_df[
     (energy_facilities_df['Status'] == 'operating')
 ]
 total_capacity_mw = filtered_energy_facilities_df['Capacity (MW)'].sum()
-print(f"Total Capacity of operating facilities in a region in South Korea: {total_capacity_mw} MW")
+print(f"Total Capacity of operating facilities in South Korea: {total_capacity_mw} MW")
 
 # Convert the filtered DataFrame to a GeoDataFrame
 energy_facilities = gpd.GeoDataFrame(
@@ -205,6 +205,23 @@ energy_facilities_korea = energy_facilities_proj.to_crs(common_crs)
 grid_lines_korea = grid_lines_proj.to_crs(common_crs)
 population_centroids_gdf = population_centroids_proj.to_crs(common_crs)
 
+# Rule 1: Establish comprehensive connections
+def establish_comprehensive_connections(connections_energy_gdf, grid_lines_korea, connections_pop_gdf):
+    # Combine all connections into a single GeoDataFrame
+    combined_connections = gpd.GeoDataFrame(pd.concat([connections_energy_gdf, grid_lines_korea, connections_pop_gdf], ignore_index=True))
+    
+    # Ensure the CRS is consistent
+    combined_connections = combined_connections.to_crs(connections_energy_gdf.crs)
+    
+    return combined_connections
+
+# Establish comprehensive connections
+comprehensive_connections_gdf = establish_comprehensive_connections(connections_energy_gdf, grid_lines_korea, connections_pop_gdf)
+
+#Rules 2-3
+
+
+
 # Step 7: Save all layers to GeoPackage
 layer_data = {
     "energy_facilities_korea": energy_facilities_korea,
@@ -213,6 +230,7 @@ layer_data = {
     "connections_energy": connections_energy_gdf,
     "connections_pop": connections_pop_gdf,
     "voronoi_polygons": voronoi_gdf,
+    "connections_all": comprehensive_connections_gdf
 }
 
 # Write layers to GeoPackage
@@ -229,4 +247,3 @@ try:
 except Exception as e:
     print(f"An error occurred: {e}")
     raise
-
