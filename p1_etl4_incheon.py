@@ -31,11 +31,16 @@ filtered_energy_facilities_df = energy_facilities_df[
     (energy_facilities_df['Country/area'] == 'South Korea') &
     (energy_facilities_df['Status'] == 'operating')
 ]
+
+# Define CRS constants
+GEOGRAPHIC_CRS = "EPSG:4326"  # For input/output and geographic operations
+PROJECTED_CRS = "EPSG:3857"   # For distance calculations
+
 # Convert the filtered DataFrame to a GeoDataFrame
 energy_facilities = gpd.GeoDataFrame(
     filtered_energy_facilities_df,
     geometry=gpd.points_from_xy(filtered_energy_facilities_df['Longitude'], filtered_energy_facilities_df['Latitude']),
-    crs="EPSG:4326"
+    crs=GEOGRAPHIC_CRS
 )
 
 # Step 1: Load grid lines and South Korea boundary
@@ -46,15 +51,14 @@ korea_boundary = gpd.read_file(south_korea_boundary_path, layer='ADM_ADM_1')
 regions_of_interest = ['Jeju']
 filtered_boundary = korea_boundary[korea_boundary['NAME_1'].isin(regions_of_interest)]
 common_crs = korea_boundary.crs
-projected_crs = "EPSG:3857"  # For distance calculations
 
-# Ensure CRS matches across all layers
-energy_facilities = energy_facilities.to_crs(common_crs)
-grid_lines = grid_lines.to_crs(common_crs)
+# Ensure consistent CRS for clipping operations
+energy_facilities_clip = energy_facilities.to_crs(filtered_boundary.crs)
+grid_lines_clip = grid_lines.to_crs(filtered_boundary.crs)
 
 # Step 2: Clip energy facilities and grid lines to filtered boundary
-energy_facilities_korea = gpd.clip(energy_facilities, filtered_boundary)
-grid_lines_korea = gpd.clip(grid_lines, filtered_boundary)
+energy_facilities_korea = gpd.clip(energy_facilities_clip, filtered_boundary)
+grid_lines_korea = gpd.clip(grid_lines_clip, filtered_boundary)
 
 print(f"Total Capacity of operating facilities in South Korea: {energy_facilities_korea['Capacity (MW)'].sum()} MW")
 
@@ -120,9 +124,9 @@ voronoi_gdf = gpd.GeoDataFrame(
 )
 
 # Step 5: Reproject layers to a projected CRS for distance calculations
-energy_facilities_proj = energy_facilities_korea.to_crs(projected_crs)
-grid_lines_proj = grid_lines_korea.to_crs(projected_crs)
-population_centroids_proj = population_centroids_gdf.to_crs(projected_crs)
+energy_facilities_proj = energy_facilities_korea.to_crs(PROJECTED_CRS)
+grid_lines_proj = grid_lines_korea.to_crs(PROJECTED_CRS)
+population_centroids_proj = population_centroids_gdf.to_crs(PROJECTED_CRS)
 
 print(f"Energy facilities projected CRS: {energy_facilities_proj.crs}")  # Debug statement
 print(f"Grid lines projected CRS: {grid_lines_proj.crs}")  # Debug statement
@@ -206,7 +210,7 @@ graph_nodes = gpd.GeoDataFrame(
         'geometry': [Point(node) for node in network_graph.nodes()],
         'type': [data['type'] for node, data in network_graph.nodes(data=True)]
     },
-    crs=projected_crs
+    crs=PROJECTED_CRS
 )
 
 graph_edges = gpd.GeoDataFrame(
@@ -214,11 +218,11 @@ graph_edges = gpd.GeoDataFrame(
         'geometry': [LineString([Point(edge[0]), Point(edge[1])]) for edge in network_graph.edges()],
         'length': [LineString([Point(edge[0]), Point(edge[1])]).length for edge in network_graph.edges()]
     },
-    crs=projected_crs
+    crs=PROJECTED_CRS
 )
 
 # Find shortest paths from population centroids to the nearest facility
-def find_shortest_paths(network_graph, num_centroids=10):
+def find_shortest_paths(network_graph, num_centroids=100):
     shortest_paths = []
     pop_centroid_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'pop_centroid']
     facility_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'facility']
@@ -239,10 +243,6 @@ def find_shortest_paths(network_graph, num_centroids=10):
 # Get the shortest paths for the first 20 centroids
 shortest_paths = find_shortest_paths(network_graph, num_centroids=10)
 
-# Print the shortest paths for the first 20 centroids
-for centroid, facility, path, length in shortest_paths:
-    print(f"Centroid {centroid} -> Facility {facility}: Path {path}, Length {length}")
-
 # Step 7: Save all layers to GeoPackage
 # First ensure all layers have matching CRS
 layer_data = {
@@ -255,9 +255,89 @@ layer_data = {
     # Convert shortest paths to GeoDataFrame
     "shortest_paths": gpd.GeoDataFrame(
         {"geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in shortest_paths]},
-        crs=projected_crs
+        crs=PROJECTED_CRS
     ).to_crs(common_crs)
 }
+
+
+# Visualization using GeoPandas and Matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch  # Add this import
+
+# Before visualization, ensure all layers are in the same CRS (use common_crs for visualization)
+visualization_crs = common_crs
+
+# Convert all layers to visualization CRS
+voronoi_gdf = voronoi_gdf.to_crs(visualization_crs)
+grid_lines_proj = grid_lines_proj.to_crs(visualization_crs)
+energy_facilities_proj = energy_facilities_proj.to_crs(visualization_crs)
+population_centroids_proj = population_centroids_proj.to_crs(visualization_crs)
+graph_nodes = graph_nodes.to_crs(visualization_crs)
+graph_edges = graph_edges.to_crs(visualization_crs)
+
+# Print CRS of each layer to verify
+print("CRS Verification:")
+print(f"Voronoi polygons CRS: {voronoi_gdf.crs}")
+print(f"Grid lines CRS: {grid_lines_proj.crs}")
+print(f"Energy facilities CRS: {energy_facilities_proj.crs}")
+print(f"Population centroids CRS: {population_centroids_proj.crs}")
+print(f"Graph nodes CRS: {graph_nodes.crs}")
+print(f"Graph edges CRS: {graph_edges.crs}")
+
+# Create a figure and axis with specific bounds
+fig, ax = plt.subplots(figsize=(12, 12))
+
+# Get the bounds from filtered_boundary
+bounds = filtered_boundary.to_crs(visualization_crs).total_bounds
+
+# Plot Voronoi polygons
+voronoi_gdf.plot(ax=ax, color='lightblue', edgecolor='none', alpha=0.5, label='Voronoi Polygons')
+
+# Plot grid lines
+grid_lines_proj.plot(ax=ax, color='gray', linewidth=1, label='Grid Lines')
+
+# Plot energy facilities
+energy_facilities_proj.plot(ax=ax, color='red', markersize=50, marker='^', label='Facilities')
+
+# Plot population centroids
+population_centroids_proj.plot(ax=ax, color='green', markersize=20, marker='o', label='Centroids')
+
+# Plot network edges
+graph_edges.plot(ax=ax, color='blue', linewidth=0.5, alpha=0.7, label='Network Connections')
+
+# Plot network nodes
+graph_nodes[graph_nodes['type'] == 'grid_line'].plot(ax=ax, color='blue', markersize=10, marker='.', label='Grid Line Nodes')
+graph_nodes[graph_nodes['type'] == 'facility'].plot(ax=ax, color='red', markersize=50, marker='^', label='Facility Nodes')
+graph_nodes[graph_nodes['type'] == 'pop_centroid'].plot(ax=ax, color='green', markersize=20, marker='o', label='Centroid Nodes')
+
+# Customize the legend
+legend_elements = [
+    Line2D([0], [0], marker='^', color='w', label='Facilities', markerfacecolor='red', markersize=15),
+    Line2D([0], [0], marker='o', color='w', label='Centroids', markerfacecolor='green', markersize=10),
+    Line2D([0], [0], marker='.', color='w', label='Grid Line Nodes', markerfacecolor='blue', markersize=10),
+    Line2D([0], [0], color='blue', lw=1, label='Network Connections'),
+    Patch(facecolor='lightblue', edgecolor='none', label='Voronoi Polygons'),
+    Patch(facecolor='gray', edgecolor='none', label='Grid Lines')
+]
+ax.legend(handles=legend_elements, loc='upper right')
+
+# Set the plot bounds
+ax.set_xlim([bounds[0], bounds[2]])
+ax.set_ylim([bounds[1], bounds[3]])
+
+# Add titles and labels
+ax.set_title('Comprehensive Network Visualization', fontsize=16)
+ax.set_xlabel('Longitude', fontsize=12)
+ax.set_ylabel('Latitude', fontsize=12)
+
+# Adjust layout for better spacing
+plt.tight_layout()
+
+# Show the plot
+plt.show()
+
+
 
 # Write layers to GeoPackage
 if os.path.exists(output_gpkg_path):
