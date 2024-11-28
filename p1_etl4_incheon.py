@@ -43,6 +43,13 @@ energy_facilities = gpd.GeoDataFrame(
     crs=GEOGRAPHIC_CRS
 )
 
+# Create a dictionary to map facility coordinates to GEM IDs
+energy_facilities_proj = energy_facilities.to_crs(PROJECTED_CRS)
+facility_gem_ids = dict(zip(
+    [(x, y) for x, y in zip(energy_facilities_proj['geometry'].x, energy_facilities_proj['geometry'].y)],
+    energy_facilities['GEM unit/phase ID']
+))
+
 # Step 1: Load grid lines and South Korea boundary
 grid_lines = gpd.read_file(grid_lines_path)
 korea_boundary = gpd.read_file(south_korea_boundary_path, layer='ADM_ADM_1')
@@ -57,10 +64,10 @@ energy_facilities_clip = energy_facilities.to_crs(filtered_boundary.crs)
 grid_lines_clip = grid_lines.to_crs(filtered_boundary.crs)
 
 # Step 2: Clip energy facilities and grid lines to filtered boundary
-energy_facilities_korea = gpd.clip(energy_facilities_clip, filtered_boundary)
-grid_lines_korea = gpd.clip(grid_lines_clip, filtered_boundary)
+energy_facilities = gpd.clip(energy_facilities_clip, filtered_boundary)
+grid_lines = gpd.clip(grid_lines_clip, filtered_boundary)
 
-print(f"Total Capacity of operating facilities in South Korea: {energy_facilities_korea['Capacity (MW)'].sum()} MW")
+print(f"Total Capacity of operating facilities in South Korea: {energy_facilities['Capacity (MW)'].sum()} MW")
 
 # Step 3: Load population raster and extract centroids
 with rasterio.open(population_raster_path) as src:
@@ -124,8 +131,8 @@ voronoi_gdf = gpd.GeoDataFrame(
 )
 
 # Step 5: Reproject layers to a projected CRS for distance calculations
-energy_facilities_proj = energy_facilities_korea.to_crs(PROJECTED_CRS)
-grid_lines_proj = grid_lines_korea.to_crs(PROJECTED_CRS)
+energy_facilities_proj = energy_facilities.to_crs(PROJECTED_CRS)
+grid_lines_proj = grid_lines.to_crs(PROJECTED_CRS)
 population_centroids_proj = population_centroids_gdf.to_crs(PROJECTED_CRS)
 
 print(f"Energy facilities projected CRS: {energy_facilities_proj.crs}")  # Debug statement
@@ -133,73 +140,92 @@ print(f"Grid lines projected CRS: {grid_lines_proj.crs}")  # Debug statement
 print(f"Population centroids projected CRS: {population_centroids_proj.crs}")  # Debug statement
 
 
-# New Step: Create Network Graph
+from shapely.ops import unary_union
+from shapely.ops import split as split_line
+
+def split_intersecting_edges(lines):
+    """Split lines at their intersections and return all unique segments."""
+    # Merge all lines
+    merged = unary_union(lines)
+    
+    # Find all intersection points
+    if isinstance(merged, (LineString, MultiLineString)):
+        # Create a list of all segments
+        segments = []
+        if isinstance(merged, LineString):
+            segments.append(merged)
+        else:
+            segments.extend(list(merged.geoms))
+            
+        # Split each segment at intersection points
+        final_segments = []
+        for segment in segments:
+            coords = list(segment.coords)
+            for i in range(len(coords) - 1):
+                final_segments.append(LineString([coords[i], coords[i + 1]]))
+                
+        return final_segments
+    return []
+
 def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     # Initialize empty graph
     G = nx.Graph()
     
-    # 1. Process grid lines to ensure single linestrings
+    # 1. Process grid lines and split at intersections
     single_lines = []
     for _, row in grid_lines_gdf.iterrows():
         if isinstance(row.geometry, MultiLineString):
-            single_lines.extend(list(row.geometry.geoms))  # Use .geoms to iterate over MultiLineString
+            single_lines.extend(list(row.geometry.geoms))
         else:
             single_lines.append(row.geometry)
     
-    # 2. Collect all nodes
+    # Split lines at intersections
+    split_lines = split_intersecting_edges(single_lines)
+    print(f"Original line count: {len(single_lines)}, After splitting: {len(split_lines)}")
+    
+    # 2. Create nodes at all line endpoints and intersections
     nodes = set()
-
-    # 3. Create sets of node positions for each type
-    facility_nodes = set()
-    pop_centroid_nodes = set()
-    grid_line_nodes = set()
+    for line in split_lines:
+        coords = list(line.coords)
+        nodes.add(coords[0])
+        nodes.add(coords[-1])
     
-    for point in facilities_gdf.geometry:
-        facility_nodes.add((point.x, point.y))
+    # 3. Add facility and centroid nodes
+    facility_nodes = set((point.x, point.y) for point in facilities_gdf.geometry)
+    pop_centroid_nodes = set((point.x, point.y) for point in centroids_gdf.geometry)
     
-    for point in centroids_gdf.geometry:
-        pop_centroid_nodes.add((point.x, point.y))
-        
-    for line in single_lines:
-        grid_line_nodes.add((line.coords[0][0], line.coords[0][1]))
-        grid_line_nodes.add((line.coords[-1][0], line.coords[-1][1]))
-
-    # 4. Add nodes to the graph with a 'type' attribute
+    # 4. Add all nodes to the graph with their types
+    for node in nodes:
+        G.add_node(node, pos=node, type='grid_line')
     for node in facility_nodes:
         G.add_node(node, pos=node, type='facility')
     for node in pop_centroid_nodes:
         G.add_node(node, pos=node, type='pop_centroid')
-    for node in grid_line_nodes:
-        G.add_node(node, pos=node, type='grid_line')
     
-    # 5. Create edges along existing grid lines
-    for line in single_lines:
+    # 5. Create edges from split lines
+    for line in split_lines:
         coords = list(line.coords)
-        for i in range(len(coords) - 1):
-            start_node = coords[i]
-            end_node = coords[i + 1]
-            G.add_edge(start_node, end_node, weight=Point(start_node).distance(Point(end_node)))
-
-    # 6. Connect facilities and centroids to the nearest grid line
-    for facility in facilities_gdf.geometry:
-        nearest_line = grid_lines_gdf.distance(facility).idxmin()
-        nearest_point = nearest_points(facility, grid_lines_gdf.loc[nearest_line].geometry)[1]
-        G.add_edge((facility.x, facility.y), (nearest_point.x, nearest_point.y), weight=facility.distance(nearest_point))
-
-    for centroid in centroids_gdf.geometry:
-        nearest_line = grid_lines_gdf.distance(centroid).idxmin()
-        nearest_point = nearest_points(centroid, grid_lines_gdf.loc[nearest_line].geometry)[1]
-        distance = centroid.distance(nearest_point)
-        if distance <= 10000:  # 50 km in meters
-            G.add_edge((centroid.x, centroid.y), (nearest_point.x, nearest_point.y), weight=distance)
+        G.add_edge(coords[0], coords[-1], weight=line.length)
     
-    # Ensure all nodes have a 'type' attribute
-    for node, data in G.nodes(data=True):
-        if 'type' not in data:
-            data['type'] = 'grid_line'
+    # 6. Connect facilities and centroids to nearest grid nodes
+    for point_gdf, point_type in [(facilities_gdf, 'facility'), (centroids_gdf, 'pop_centroid')]:
+        for point in point_gdf.geometry:
+            point_coord = (point.x, point.y)
+            
+            # Find nearest node in the grid network
+            grid_nodes = [n for n, d in G.nodes(data=True) if d['type'] == 'grid_line']
+            if grid_nodes:
+                nearest_node = min(grid_nodes, 
+                                 key=lambda n: Point(n).distance(point))
+                
+                # Add edge if within distance threshold (10km for centroids)
+                distance = Point(nearest_node).distance(point)
+                if point_type == 'pop_centroid' and distance > 10000:
+                    continue
+                G.add_edge(point_coord, nearest_node, weight=distance)
     
     return G
-    
+
 # Create network graph
 network_graph = create_network_graph(energy_facilities_proj, grid_lines_proj, population_centroids_proj)
 
@@ -222,41 +248,68 @@ graph_edges = gpd.GeoDataFrame(
 )
 
 # Find shortest paths from population centroids to the nearest facility
-def find_shortest_paths(network_graph, num_centroids=100):
+def find_shortest_paths(network_graph, num_centroids=None):
     shortest_paths = []
     pop_centroid_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'pop_centroid']
     facility_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'facility']
     
+    # Limit number of centroids if specified
+    if num_centroids is not None:
+        pop_centroid_nodes = pop_centroid_nodes[:num_centroids]
+    
+    print(f"Processing {len(pop_centroid_nodes)} centroids and {len(facility_nodes)} facilities...")
+    
     for i, centroid in enumerate(pop_centroid_nodes):
-        if i >= num_centroids:
-            break
         try:
-            # Find the shortest path to any facility node
-            lengths, paths = nx.single_source_dijkstra(network_graph, centroid)
-            nearest_facility = min(facility_nodes, key=lambda node: lengths.get(node, float('inf')))
-            shortest_paths.append((centroid, nearest_facility, paths[nearest_facility], lengths[nearest_facility]))
+            # Find shortest paths to all facilities
+            shortest_distance = float('inf')
+            shortest_path = None
+            nearest_facility = None
+            
+            for facility in facility_nodes:
+                try:
+                    # Use nx.shortest_path_length and nx.shortest_path instead of single_source_dijkstra
+                    path_length = nx.shortest_path_length(network_graph, centroid, facility, weight='weight')
+                    if path_length < shortest_distance:
+                        shortest_distance = path_length
+                        shortest_path = nx.shortest_path(network_graph, centroid, facility, weight='weight')
+                        nearest_facility = facility
+                except nx.NetworkXNoPath:
+                    continue
+            
+            if shortest_path is not None:
+                shortest_paths.append((centroid, nearest_facility, shortest_path, shortest_distance))
+                if i % 500 == 0:  # Progress update every 500 centroids
+                    print(f"Processed {i+1}/{len(pop_centroid_nodes)} centroids")
         except Exception as e:
             print(f"Error finding path for centroid {centroid}: {e}")
     
+    print(f"Successfully found {len(shortest_paths)} paths")
     return shortest_paths
 
-# Get the shortest paths for the first 20 centroids
-shortest_paths = find_shortest_paths(network_graph, num_centroids=10)
+# Update the shortest paths call
+shortest_paths = find_shortest_paths(network_graph)  # Remove the num_centroids limit
+
+# Update the shortest paths GeoDataFrame creation
+shortest_paths_gdf = gpd.GeoDataFrame(
+    {
+        "geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in shortest_paths],
+        "distance": [distance for _, _, _, distance in shortest_paths],
+        "facility_gem_id": [facility_gem_ids.get(facility, 'unknown') for _, facility, _, _ in shortest_paths]
+    }, 
+    crs=PROJECTED_CRS
+)
 
 # Step 7: Save all layers to GeoPackage
 # First ensure all layers have matching CRS
 layer_data = {
-    "energy_facilities_korea": energy_facilities_proj.to_crs(common_crs),
-    "grid_lines_korea": grid_lines_proj.to_crs(common_crs),
+    "energy_facilities": energy_facilities_proj.to_crs(common_crs),
+    "grid_lines": grid_lines_proj.to_crs(common_crs),
     "population_centroids": population_centroids_proj.to_crs(common_crs),
     "voronoi_polygons": voronoi_gdf.to_crs(common_crs),
     "network_nodes": graph_nodes.to_crs(common_crs),
     "network_edges": graph_edges.to_crs(common_crs),
-    # Convert shortest paths to GeoDataFrame
-    "shortest_paths": gpd.GeoDataFrame(
-        {"geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in shortest_paths]},
-        crs=PROJECTED_CRS
-    ).to_crs(common_crs)
+    "shortest_paths": shortest_paths_gdf.to_crs(common_crs)
 }
 
 
@@ -275,15 +328,7 @@ energy_facilities_proj = energy_facilities_proj.to_crs(visualization_crs)
 population_centroids_proj = population_centroids_proj.to_crs(visualization_crs)
 graph_nodes = graph_nodes.to_crs(visualization_crs)
 graph_edges = graph_edges.to_crs(visualization_crs)
-
-# Print CRS of each layer to verify
-print("CRS Verification:")
-print(f"Voronoi polygons CRS: {voronoi_gdf.crs}")
-print(f"Grid lines CRS: {grid_lines_proj.crs}")
-print(f"Energy facilities CRS: {energy_facilities_proj.crs}")
-print(f"Population centroids CRS: {population_centroids_proj.crs}")
-print(f"Graph nodes CRS: {graph_nodes.crs}")
-print(f"Graph edges CRS: {graph_edges.crs}")
+shortest_paths_gdf = shortest_paths_gdf.to_crs(visualization_crs)
 
 # Create a figure and axis with specific bounds
 fig, ax = plt.subplots(figsize=(12, 12))
@@ -311,12 +356,16 @@ graph_nodes[graph_nodes['type'] == 'grid_line'].plot(ax=ax, color='blue', marker
 graph_nodes[graph_nodes['type'] == 'facility'].plot(ax=ax, color='red', markersize=50, marker='^', label='Facility Nodes')
 graph_nodes[graph_nodes['type'] == 'pop_centroid'].plot(ax=ax, color='green', markersize=20, marker='o', label='Centroid Nodes')
 
+# Plot shortest paths
+shortest_paths_gdf.plot(ax=ax, color='red', linewidth=2, linestyle='--', alpha=0.7, label='Shortest Paths')
+
 # Customize the legend
 legend_elements = [
     Line2D([0], [0], marker='^', color='w', label='Facilities', markerfacecolor='red', markersize=15),
     Line2D([0], [0], marker='o', color='w', label='Centroids', markerfacecolor='green', markersize=10),
     Line2D([0], [0], marker='.', color='w', label='Grid Line Nodes', markerfacecolor='blue', markersize=10),
     Line2D([0], [0], color='blue', lw=1, label='Network Connections'),
+    Line2D([0], [0], color='red', lw=2, linestyle='--', label='Shortest Paths'),
     Patch(facecolor='lightblue', edgecolor='none', label='Voronoi Polygons'),
     Patch(facecolor='gray', edgecolor='none', label='Grid Lines')
 ]
@@ -336,8 +385,6 @@ plt.tight_layout()
 
 # Show the plot
 plt.show()
-
-
 
 # Write layers to GeoPackage
 if os.path.exists(output_gpkg_path):
