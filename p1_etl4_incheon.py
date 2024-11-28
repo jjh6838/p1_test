@@ -9,9 +9,12 @@ from scipy.spatial import Voronoi
 import numpy as np
 import os
 import pandas as pd
+import networkx as nx
+from shapely.ops import split, linemerge
+from itertools import combinations
 
 # Suppress specific user warnings
-warnings.filterwarnings("ignore", message="You are attempting to write an empty DataFrame to file")
+# warnings.filterwarnings("ignore", message="You are attempting to write an empty DataFrame to file")
 
 # File paths
 energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format.csv"
@@ -39,13 +42,13 @@ energy_facilities = gpd.GeoDataFrame(
 grid_lines = gpd.read_file(grid_lines_path)
 korea_boundary = gpd.read_file(south_korea_boundary_path, layer='ADM_ADM_1')
 
-# Filter the boundary data to include only "Incheon"
+# Filter the boundary data and set common CRS
 regions_of_interest = ['Jeju']
 filtered_boundary = korea_boundary[korea_boundary['NAME_1'].isin(regions_of_interest)]
+common_crs = korea_boundary.crs
+projected_crs = "EPSG:3857"  # For distance calculations
 
 # Ensure CRS matches across all layers
-common_crs = korea_boundary.crs
-print(f"Common CRS: {common_crs}")  # Debug statement
 energy_facilities = energy_facilities.to_crs(common_crs)
 grid_lines = grid_lines.to_crs(common_crs)
 
@@ -55,28 +58,12 @@ grid_lines_korea = gpd.clip(grid_lines, filtered_boundary)
 
 print(f"Total Capacity of operating facilities in South Korea: {energy_facilities_korea['Capacity (MW)'].sum()} MW")
 
-
-print(f"Energy facilities CRS: {energy_facilities_korea.crs}")  # Debug statement
-print(f"Grid lines CRS: {grid_lines_korea.crs}")  # Debug statement
-print(f"Filtered boundary CRS: {filtered_boundary.crs}")  # Debug statement
-
-# Step 3: Load population raster and extract centroids within filtered boundary
-try:
-    with rasterio.open(population_raster_path) as src:
-        population_crs = src.crs
-        print(f"Population raster CRS: {population_crs}")  # Debug statement
-
-        # Reproject filtered boundary to raster CRS
-        filtered_boundary_reproj = filtered_boundary.to_crs(population_crs)
-        print(f"Filtered boundary reprojected CRS: {filtered_boundary_reproj.crs}")  # Debug statement
-
-        # Mask raster with filtered boundary
-        masked_population, masked_transform = mask(
-            src, [geom for geom in filtered_boundary_reproj.geometry], crop=True
-        )
-except Exception as e:
-    print(f"Error processing raster: {e}")
-    raise
+# Step 3: Load population raster and extract centroids
+with rasterio.open(population_raster_path) as src:
+    filtered_boundary_reproj = filtered_boundary.to_crs(src.crs)
+    masked_population, masked_transform = mask(
+        src, [geom for geom in filtered_boundary_reproj.geometry], crop=True
+    )
 
 # Extract centroids and population values of high-value population cells
 threshold = 0  # Modify as needed
@@ -99,7 +86,7 @@ for geom, val in shapes(masked_population[0], transform=masked_transform):
 # Create a GeoDataFrame with centroids and population values
 population_centroids_gdf = gpd.GeoDataFrame(
     {'geometry': centroids, 'population': values},
-    crs=population_crs
+    crs=src.crs
 ).to_crs(common_crs)
 
 print(f"Population centroids CRS: {population_centroids_gdf.crs}")  # Debug statement
@@ -133,7 +120,6 @@ voronoi_gdf = gpd.GeoDataFrame(
 )
 
 # Step 5: Reproject layers to a projected CRS for distance calculations
-projected_crs = "EPSG:3857"  # Example projected CRS
 energy_facilities_proj = energy_facilities_korea.to_crs(projected_crs)
 grid_lines_proj = grid_lines_korea.to_crs(projected_crs)
 population_centroids_proj = population_centroids_gdf.to_crs(projected_crs)
@@ -142,140 +128,135 @@ print(f"Energy facilities projected CRS: {energy_facilities_proj.crs}")  # Debug
 print(f"Grid lines projected CRS: {grid_lines_proj.crs}")  # Debug statement
 print(f"Population centroids projected CRS: {population_centroids_proj.crs}")  # Debug statement
 
-# Step 6: Connect energy facilities to grid and population centroids
-connections_energy = []
-connections_pop = []
 
-# Connect energy facilities to grid
-for _, facility in energy_facilities_proj.iterrows():
-    distances = grid_lines_proj.distance(facility.geometry)
-    nearest_line = grid_lines_proj.loc[distances.idxmin()].geometry
-    nearest_point = nearest_points(facility.geometry, nearest_line)[1]
-    connections_energy.append(LineString([facility.geometry, nearest_point]))
-
-# Connect population centroids to grid or energy facilities
-for _, centroid in population_centroids_proj.iterrows():
-    # Calculate distances to grid lines
-    distances_grid = grid_lines_proj.distance(centroid.geometry)
-    nearest_grid_line = grid_lines_proj.loc[distances_grid.idxmin()].geometry
-    nearest_grid_point = nearest_points(centroid.geometry, nearest_grid_line)[1]
-    distance_to_grid = centroid.geometry.distance(nearest_grid_point)
+# New Step: Create Network Graph
+def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
+    # Initialize empty graph
+    G = nx.Graph()
     
-    # Calculate distances to energy facilities
-    distances_facilities = energy_facilities_proj.distance(centroid.geometry)
-    nearest_facility = energy_facilities_proj.loc[distances_facilities.idxmin()].geometry
-    nearest_facility_point = nearest_points(centroid.geometry, nearest_facility)[1]
-    distance_to_facility = centroid.geometry.distance(nearest_facility_point)
+    # 1. Process grid lines to ensure single linestrings
+    single_lines = []
+    for _, row in grid_lines_gdf.iterrows():
+        if isinstance(row.geometry, MultiLineString):
+            single_lines.extend(list(row.geometry.geoms))  # Use .geoms to iterate over MultiLineString
+        else:
+            single_lines.append(row.geometry)
     
-    # Choose the shorter connection and only add if shorter than 10 km
-    if distance_to_grid < distance_to_facility and distance_to_grid <= 10000:
-        connections_pop.append(LineString([centroid.geometry, nearest_grid_point]))
-    elif distance_to_facility <= 10000:
-        connections_pop.append(LineString([centroid.geometry, nearest_facility_point]))
+    # 2. Collect all nodes
+    nodes = set()
 
-# Convert connections to GeoDataFrame
-connections_energy_gdf = gpd.GeoDataFrame(
-    {"geometry": connections_energy},
-    crs=projected_crs
-).to_crs(common_crs)
-
-connections_pop_gdf = gpd.GeoDataFrame(
-    {"geometry": connections_pop},
-    crs=projected_crs
-).to_crs(common_crs)
-
-# Reproject layers back to common CRS
-energy_facilities_korea = energy_facilities_proj.to_crs(common_crs)
-grid_lines_korea = grid_lines_proj.to_crs(common_crs)
-population_centroids_gdf = population_centroids_proj.to_crs(common_crs)
-
-# Rule 1: Establish comprehensive connections
-def establish_comprehensive_connections(connections_energy_gdf, 
-                                        grid_lines_korea, 
-                                        connections_pop_gdf):
-    # Combine all connections into a single GeoDataFrame
-    combined_connections = gpd.GeoDataFrame(pd.concat([connections_energy_gdf, 
-                                                       grid_lines_korea, 
-                                                       connections_pop_gdf], ignore_index=True))
+    # 3. Create sets of node positions for each type
+    facility_nodes = set()
+    pop_centroid_nodes = set()
+    grid_line_nodes = set()
     
-    # Ensure the CRS is consistent
-    combined_connections = combined_connections.to_crs(connections_energy_gdf.crs)
+    for point in facilities_gdf.geometry:
+        facility_nodes.add((point.x, point.y))
     
-    return combined_connections
-
-# Establish comprehensive connections including new connections to centroids
-comprehensive_connections_gdf = establish_comprehensive_connections(connections_energy_gdf, 
-                                                                    grid_lines_korea, 
-                                                                    connections_pop_gdf)
-
-
-# Import conversion rates from p1_ember_analysis1.py
-from p1_ember_analysis1 import KOR_2023_wind_conversion_rate_jeju, KOR_2023_oilgas_conversion_rate_jeju
-
-# Rule 2: Connect each centroid to the closest node based on proximity along the lines of comprehensive_connections_gdf
-def connect_centroids_to_closest_node(energy_facilities_proj, 
-                                      population_centroids_proj, 
-                                      comprehensive_connections_gdf, 
-                                      projected_crs):
-    connections_list = []  # This will store the single shortest LineString for each centroid
-    
-    # Reproject comprehensive_connections_gdf to the desired CRS
-    comprehensive_connections_proj = comprehensive_connections_gdf.to_crs(projected_crs)
-    
-    # Ensure energy facilities and centroids are in projected CRS
-    facilities_proj = energy_facilities_proj.to_crs(projected_crs)
-    centroids_proj = population_centroids_proj.to_crs(projected_crs)
-    
-    # Loop over each centroid to find the closest facility
-    for _, centroid in centroids_proj.iterrows():
-        shortest_distance = float('inf')
-        shortest_connection = None
+    for point in centroids_gdf.geometry:
+        pop_centroid_nodes.add((point.x, point.y))
         
-        for _, facility in facilities_proj.iterrows():
-            # Create a LineString between the centroid and the energy facility
-            line = LineString([facility.geometry, centroid.geometry])
-            
-            # Calculate the direct distance between centroid and facility
-            direct_distance = centroid.geometry.distance(facility.geometry)
-            
-            # Update shortest connection if this is the shortest so far and within threshold
-            if direct_distance < shortest_distance and direct_distance <= 10000:  # 10 km threshold
-                shortest_distance = direct_distance
-                shortest_connection = line
-        
-        # If a connection was found, add it to the list
-        if shortest_connection is not None:
-            connections_list.append(shortest_connection)
-    
-    # Return the list of LineStrings (one per centroid)
-    return connections_list
+    for line in single_lines:
+        grid_line_nodes.add((line.coords[0][0], line.coords[0][1]))
+        grid_line_nodes.add((line.coords[-1][0], line.coords[-1][1]))
 
-# Generate connections and supply distribution
-connections_to_centroids = connect_centroids_to_closest_node(
-    energy_facilities_proj, 
-    population_centroids_proj,
-    comprehensive_connections_gdf,
-    projected_crs
+    # 4. Add nodes to the graph with a 'type' attribute
+    for node in facility_nodes:
+        G.add_node(node, pos=node, type='facility')
+    for node in pop_centroid_nodes:
+        G.add_node(node, pos=node, type='pop_centroid')
+    for node in grid_line_nodes:
+        G.add_node(node, pos=node, type='grid_line')
+    
+    # 5. Create edges along existing grid lines
+    for line in single_lines:
+        coords = list(line.coords)
+        for i in range(len(coords) - 1):
+            start_node = coords[i]
+            end_node = coords[i + 1]
+            G.add_edge(start_node, end_node, weight=Point(start_node).distance(Point(end_node)))
+
+    # 6. Connect facilities and centroids to the nearest grid line
+    for facility in facilities_gdf.geometry:
+        nearest_line = grid_lines_gdf.distance(facility).idxmin()
+        nearest_point = nearest_points(facility, grid_lines_gdf.loc[nearest_line].geometry)[1]
+        G.add_edge((facility.x, facility.y), (nearest_point.x, nearest_point.y), weight=facility.distance(nearest_point))
+
+    for centroid in centroids_gdf.geometry:
+        nearest_line = grid_lines_gdf.distance(centroid).idxmin()
+        nearest_point = nearest_points(centroid, grid_lines_gdf.loc[nearest_line].geometry)[1]
+        distance = centroid.distance(nearest_point)
+        if distance <= 10000:  # 50 km in meters
+            G.add_edge((centroid.x, centroid.y), (nearest_point.x, nearest_point.y), weight=distance)
+    
+    # Ensure all nodes have a 'type' attribute
+    for node, data in G.nodes(data=True):
+        if 'type' not in data:
+            data['type'] = 'grid_line'
+    
+    return G
+    
+# Create network graph
+network_graph = create_network_graph(energy_facilities_proj, grid_lines_proj, population_centroids_proj)
+
+
+# Convert network graph to GeoDataFrame for visualization and storage
+graph_nodes = gpd.GeoDataFrame(
+    {
+        'geometry': [Point(node) for node in network_graph.nodes()],
+        'type': [data['type'] for node, data in network_graph.nodes(data=True)]
+    },
+    crs=projected_crs
 )
 
-
-# Convert connections to GeoDataFrame
-connections_to_centroids_gdf = gpd.GeoDataFrame(
-    {"geometry": connections_to_centroids},
+graph_edges = gpd.GeoDataFrame(
+    {
+        'geometry': [LineString([Point(edge[0]), Point(edge[1])]) for edge in network_graph.edges()],
+        'length': [LineString([Point(edge[0]), Point(edge[1])]).length for edge in network_graph.edges()]
+    },
     crs=projected_crs
-).to_crs(common_crs)
+)
 
+# Find shortest paths from population centroids to the nearest facility
+def find_shortest_paths(network_graph, num_centroids=10):
+    shortest_paths = []
+    pop_centroid_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'pop_centroid']
+    facility_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'facility']
+    
+    for i, centroid in enumerate(pop_centroid_nodes):
+        if i >= num_centroids:
+            break
+        try:
+            # Find the shortest path to any facility node
+            lengths, paths = nx.single_source_dijkstra(network_graph, centroid)
+            nearest_facility = min(facility_nodes, key=lambda node: lengths.get(node, float('inf')))
+            shortest_paths.append((centroid, nearest_facility, paths[nearest_facility], lengths[nearest_facility]))
+        except Exception as e:
+            print(f"Error finding path for centroid {centroid}: {e}")
+    
+    return shortest_paths
+
+# Get the shortest paths for the first 20 centroids
+shortest_paths = find_shortest_paths(network_graph, num_centroids=10)
+
+# Print the shortest paths for the first 20 centroids
+for centroid, facility, path, length in shortest_paths:
+    print(f"Centroid {centroid} -> Facility {facility}: Path {path}, Length {length}")
 
 # Step 7: Save all layers to GeoPackage
+# First ensure all layers have matching CRS
 layer_data = {
-    "energy_facilities_korea": energy_facilities_korea,
-    "grid_lines_korea": grid_lines_korea,
-    "population_centroids": population_centroids_gdf,
-    "connections_energy": connections_energy_gdf,
-    "connections_pop": connections_pop_gdf,
-    "voronoi_polygons": voronoi_gdf,
-    "connections_all": comprehensive_connections_gdf,
-    "connections_to_centroids": connections_to_centroids_gdf
+    "energy_facilities_korea": energy_facilities_proj.to_crs(common_crs),
+    "grid_lines_korea": grid_lines_proj.to_crs(common_crs),
+    "population_centroids": population_centroids_proj.to_crs(common_crs),
+    "voronoi_polygons": voronoi_gdf.to_crs(common_crs),
+    "network_nodes": graph_nodes.to_crs(common_crs),
+    "network_edges": graph_edges.to_crs(common_crs),
+    # Convert shortest paths to GeoDataFrame
+    "shortest_paths": gpd.GeoDataFrame(
+        {"geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in shortest_paths]},
+        crs=projected_crs
+    ).to_crs(common_crs)
 }
 
 # Write layers to GeoPackage
