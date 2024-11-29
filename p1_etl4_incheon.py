@@ -1,3 +1,5 @@
+# 1. Initial Setup
+# 1.1 Import required libraries
 import warnings
 import geopandas as gpd
 import rasterio
@@ -13,10 +15,11 @@ import networkx as nx
 from shapely.ops import split, linemerge
 from itertools import combinations
 
-# Suppress specific user warnings
-# warnings.filterwarnings("ignore", message="You are attempting to write an empty DataFrame to file")
+# 1.2 Suppress warnings
+warnings.filterwarnings("ignore", message="You are attempting to write an empty DataFrame to file")
+warnings.filterwarnings("ignore", message="Unknown extension is not supported and will be removed")  # Add this line
 
-# File paths
+# 1.3 Define file paths
 energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format.csv"
 energy_facilities_path = r"re_data\Global-Integrated-Power-June-2024.xlsx"
 grid_lines_path = r"KOR\gridfinder\gridfinder-version_1-grid-kor.gpkg"
@@ -25,16 +28,86 @@ south_korea_boundary_path = r"GADM\gadm41_KOR.gpkg"
 # Output GeoPackage path
 output_gpkg_path = r"outputs\korea_integrated_dataset_v4_jeju.gpkg"
 
+# 2. Data Loading and Processing
+# 2.1 Load and filter energy facilities
 # Read the energy facilities data from the Excel file
 energy_facilities_df = pd.read_excel(energy_facilities_path, sheet_name="Powerfacilities")
+
+# First filter for South Korea and operating status
 filtered_energy_facilities_df = energy_facilities_df[
     (energy_facilities_df['Country/area'] == 'South Korea') &
     (energy_facilities_df['Status'] == 'operating')
 ]
 
-# Define CRS constants
+# Group by GEM location ID and merge
+def merge_facilities(group):
+    first_row = group.iloc[0].copy()
+    first_row['Capacity (MW)'] = group['Capacity (MW)'].sum()
+    first_row['Num of Merged Units'] = len(group)
+    return first_row
+
+filtered_energy_facilities_df = (filtered_energy_facilities_df
+    .groupby('GEM location ID', as_index=False)
+    .apply(merge_facilities, include_groups=False)  # Add include_groups=False
+    .reset_index(drop=True))
+
+# 2.2 Define CRS constants
 GEOGRAPHIC_CRS = "EPSG:4326"  # For input/output and geographic operations
 PROJECTED_CRS = "EPSG:3857"   # For distance calculations
+
+# 2.3 Capacity adjustment functions
+# Calculate proportion-adjusted capacity based on larger values between GEM and Ember
+def adjust_capacity_proportionally(facilities_df):
+    # Create a copy of the DataFrame to avoid SettingWithCopyWarning
+    facilities_df = facilities_df.copy()
+    
+    # Import values from p1_ember_analysis1
+    import importlib
+    ember_analysis = importlib.import_module('p1_ember_analysis1')
+    
+    # Import capacity values and conversion rates
+    target_capacities = {
+        "bioenergy": ember_analysis.larger_value_bioenergy,
+        "coal": ember_analysis.larger_value_coal,
+        "hydropower": ember_analysis.larger_value_hydro,
+        "nuclear": ember_analysis.larger_value_nuclear,
+        "solar": ember_analysis.larger_value_solar,
+        "wind": ember_analysis.larger_value_wind,
+        "geothermal": ember_analysis.larger_value_geothermal,
+        "oil/gas": ember_analysis.larger_value_oilgas
+    }
+    
+    # Import conversion rates
+    conversion_rates = {
+        "bioenergy": ember_analysis.conversion_rate_bioenergy,
+        "coal": ember_analysis.conversion_rate_coal,
+        "hydropower": ember_analysis.conversion_rate_hydro,
+        "nuclear": ember_analysis.conversion_rate_nuclear,
+        "solar": ember_analysis.conversion_rate_solar,
+        "wind": ember_analysis.conversion_rate_wind,
+        "geothermal": ember_analysis.conversion_rate_geothermal,
+        "oil/gas": ember_analysis.conversion_rate_oilgas
+    }
+
+    # Calculate scaling factors and apply adjustments (existing code)
+    type_capacities = facilities_df.groupby('Type')['Capacity (MW)'].sum()
+    scaling_factors = {}
+    for type_ in target_capacities:
+        current_capacity = type_capacities.get(type_, 0)
+        target_capacity = target_capacities[type_]
+        scaling_factors[type_] = target_capacity / current_capacity if current_capacity > 0 else 1.0
+    
+    # Apply scaling factors and calculate MWh
+    facilities_df.loc[:, 'Original_Capacity_MW'] = facilities_df['Capacity (MW)']
+    facilities_df.loc[:, 'Scaling_Factor'] = facilities_df['Type'].map(scaling_factors)
+    facilities_df.loc[:, 'Adjusted_Capacity_MW'] = facilities_df['Capacity (MW)'] * facilities_df['Type'].map(scaling_factors)
+    facilities_df.loc[:, 'Conversion_Rate'] = facilities_df['Type'].map(conversion_rates)
+    facilities_df.loc[:, 'Annual_MWh'] = facilities_df['Adjusted_Capacity_MW'] * facilities_df['Conversion_Rate'] # MW to MWh for 1 year
+    
+    return facilities_df
+
+# Apply the adjustment before converting to GeoDataFrame
+filtered_energy_facilities_df = adjust_capacity_proportionally(filtered_energy_facilities_df)
 
 # Convert the filtered DataFrame to a GeoDataFrame
 energy_facilities = gpd.GeoDataFrame(
@@ -50,6 +123,8 @@ facility_gem_ids = dict(zip(
     energy_facilities['GEM unit/phase ID']
 ))
 
+# 3. Spatial Data Processing
+# 3.1 Load and process boundary data
 # Step 1: Load grid lines and South Korea boundary
 grid_lines = gpd.read_file(grid_lines_path)
 korea_boundary = gpd.read_file(south_korea_boundary_path, layer='ADM_ADM_1')
@@ -67,8 +142,8 @@ grid_lines_clip = grid_lines.to_crs(filtered_boundary.crs)
 energy_facilities = gpd.clip(energy_facilities_clip, filtered_boundary)
 grid_lines = gpd.clip(grid_lines_clip, filtered_boundary)
 
-print(f"Total Capacity of operating facilities in South Korea: {energy_facilities['Capacity (MW)'].sum()} MW")
 
+# 3.2 Process population raster data
 # Step 3: Load population raster and extract centroids
 with rasterio.open(population_raster_path) as src:
     filtered_boundary_reproj = filtered_boundary.to_crs(src.crs)
@@ -102,6 +177,28 @@ population_centroids_gdf = gpd.GeoDataFrame(
 
 print(f"Population centroids CRS: {population_centroids_gdf.crs}")  # Debug statement
 
+# After creating population_centroids_gdf and before network graph creation, add:
+def calculate_centroid_mwh(centroids_gdf, facilities_gdf):
+    # Calculate total available MWh
+    total_available_mwh = facilities_gdf['Annual_MWh'].sum()
+    
+    # Calculate total population
+    total_population = centroids_gdf['population'].sum()
+    
+    # Calculate proportions and percentages
+    centroids_gdf['proportion'] = centroids_gdf['population'] / total_population
+    centroids_gdf['population_share_pct'] = centroids_gdf['proportion'] * 100  # Convert to percentage
+    centroids_gdf['needed_mwh'] = centroids_gdf['proportion'] * total_available_mwh
+    
+    print(f"Total available MWh: {total_available_mwh:.2f}")
+    print(f"Total population: {total_population}")
+    
+    return centroids_gdf
+
+# Apply the calculation
+population_centroids_gdf = calculate_centroid_mwh(population_centroids_gdf, energy_facilities)
+
+# 3.3 Generate Voronoi polygons
 # Step 4: Generate Voronoi polygons weighted by population values
 points = np.array([(point.x, point.y) for point in population_centroids_gdf.geometry])
 weights = np.array(values)
@@ -130,16 +227,17 @@ voronoi_gdf = gpd.GeoDataFrame(
     crs=common_crs
 )
 
-# Step 5: Reproject layers to a projected CRS for distance calculations
+# 3.4 Reproject layers for distance calculations
 energy_facilities_proj = energy_facilities.to_crs(PROJECTED_CRS)
 grid_lines_proj = grid_lines.to_crs(PROJECTED_CRS)
 population_centroids_proj = population_centroids_gdf.to_crs(PROJECTED_CRS)
 
-print(f"Energy facilities projected CRS: {energy_facilities_proj.crs}")  # Debug statement
-print(f"Grid lines projected CRS: {grid_lines_proj.crs}")  # Debug statement
-print(f"Population centroids projected CRS: {population_centroids_proj.crs}")  # Debug statement
+print(f"Energy facilities projected CRS: {energy_facilities_proj.crs}")
+print(f"Grid lines projected CRS: {grid_lines_proj.crs}")
+print(f"Population centroids projected CRS: {population_centroids_proj.crs}")
 
-
+# 4. Network Analysis
+# 4.1 Network creation functions
 from shapely.ops import unary_union
 from shapely.ops import split as split_line
 
@@ -167,6 +265,7 @@ def split_intersecting_edges(lines):
         return final_segments
     return []
 
+# 4.2 Create network graph
 def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     # Initialize empty graph
     G = nx.Graph()
@@ -230,6 +329,7 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
 network_graph = create_network_graph(energy_facilities_proj, grid_lines_proj, population_centroids_proj)
 
 
+# 4.3 Process shortest paths
 # Convert network graph to GeoDataFrame for visualization and storage
 graph_nodes = gpd.GeoDataFrame(
     {
@@ -300,19 +400,12 @@ shortest_paths_gdf = gpd.GeoDataFrame(
     crs=PROJECTED_CRS
 )
 
-# Step 7: Save all layers to GeoPackage
-# First ensure all layers have matching CRS
-layer_data = {
-    "energy_facilities": energy_facilities_proj.to_crs(common_crs),
-    "grid_lines": grid_lines_proj.to_crs(common_crs),
-    "population_centroids": population_centroids_proj.to_crs(common_crs),
-    "voronoi_polygons": voronoi_gdf.to_crs(common_crs),
-    "network_nodes": graph_nodes.to_crs(common_crs),
-    "network_edges": graph_edges.to_crs(common_crs),
-    "shortest_paths": shortest_paths_gdf.to_crs(common_crs)
-}
+# 4.4 Process energy supply mapping
 
 
+
+# 5. Data Visualization
+# 5.1 Setup visualization parameters
 # Visualization using GeoPandas and Matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -330,6 +423,7 @@ graph_nodes = graph_nodes.to_crs(visualization_crs)
 graph_edges = graph_edges.to_crs(visualization_crs)
 shortest_paths_gdf = shortest_paths_gdf.to_crs(visualization_crs)
 
+# 5.2 Create plots
 # Create a figure and axis with specific bounds
 fig, ax = plt.subplots(figsize=(12, 12))
 
@@ -386,6 +480,21 @@ plt.tight_layout()
 # Show the plot
 plt.show()
 
+# 6. Data Export
+# 6.1 Prepare layers for export
+# Step 7: Save all layers to GeoPackage
+# First ensure all layers have matching CRS
+layer_data = {
+    "energy_facilities": energy_facilities_proj.to_crs(common_crs),
+    "grid_lines": grid_lines_proj.to_crs(common_crs),
+    "population_centroids": population_centroids_proj.to_crs(common_crs),  # Now includes needed_mwh
+    "voronoi_polygons": voronoi_gdf.to_crs(common_crs),
+    "network_nodes": graph_nodes.to_crs(common_crs),
+    "network_edges": graph_edges.to_crs(common_crs),
+    "shortest_paths": shortest_paths_gdf.to_crs(common_crs)
+}
+
+# 6.2 Export to GeoPackage
 # Write layers to GeoPackage
 if os.path.exists(output_gpkg_path):
     os.remove(output_gpkg_path)
