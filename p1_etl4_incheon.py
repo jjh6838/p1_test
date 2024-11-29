@@ -330,6 +330,9 @@ network_graph = create_network_graph(energy_facilities_proj, grid_lines_proj, po
 
 
 # 4.3 Process shortest paths
+# Add index to population centroids for tracking
+population_centroids_proj['centroid_id'] = population_centroids_proj.index
+
 # Convert network graph to GeoDataFrame for visualization and storage
 graph_nodes = gpd.GeoDataFrame(
     {
@@ -390,19 +393,105 @@ def find_shortest_paths(network_graph, num_centroids=None):
 # Update the shortest paths call
 shortest_paths = find_shortest_paths(network_graph)  # Remove the num_centroids limit
 
-# Update the shortest paths GeoDataFrame creation
+# Update the shortest paths GeoDataFrame creation with centroid IDs
 shortest_paths_gdf = gpd.GeoDataFrame(
     {
         "geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in shortest_paths],
         "distance": [distance for _, _, _, distance in shortest_paths],
-        "facility_gem_id": [facility_gem_ids.get(facility, 'unknown') for _, facility, _, _ in shortest_paths]
+        "facility_gem_id": [facility_gem_ids.get(facility, 'unknown') for _, facility, _, _ in shortest_paths],
+        "centroid_coord": [centroid for centroid, _, _, _ in shortest_paths]
     }, 
     crs=PROJECTED_CRS
 )
 
+# Add centroid IDs by matching coordinates
+shortest_paths_gdf['centroid_id'] = shortest_paths_gdf.apply(
+    lambda row: population_centroids_proj[
+        population_centroids_proj.geometry.apply(
+            lambda point: (point.x, point.y) == row['centroid_coord']
+        )
+    ].index[0],
+    axis=1
+)
+
 # 4.4 Process energy supply mapping
+def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
+    # Create a copy of facilities DataFrame to track remaining MWh
+    facilities_remaining = facilities_df.copy()
+    facilities_remaining['Remaining_MWh'] = facilities_remaining['Annual_MWh']
+    
+    # Create base supply status DataFrame with only necessary columns
+    supply_status = gpd.GeoDataFrame({
+        'geometry': centroids_df.geometry,
+        'centroid_id': centroids_df.index,
+        'population': centroids_df['population'],
+        'needed_mwh': centroids_df['needed_mwh'],
+        'filled_mwh_1': 0.0,
+        'supply_status': 'not_filled',
+        'facility_id': None  # Add new column
+    }, crs=centroids_df.crs)
+    
+    # Sort paths by distance
+    sorted_paths = shortest_paths_df.sort_values('distance')
+    
+    # Process each path
+    for _, path in sorted_paths.iterrows():
+        centroid_id = path['centroid_id']
+        facility_id = path['facility_gem_id']
+        
+        # Get needed and available MWh
+        needed_mwh = float(supply_status.loc[centroid_id, 'needed_mwh'])
+        available_mwh = float(facilities_remaining.loc[
+            facilities_remaining['GEM unit/phase ID'] == facility_id, 
+            'Remaining_MWh'
+        ].iloc[0])
+        
+        if available_mwh >= needed_mwh:
+            supply_status.loc[centroid_id, 'filled_mwh_1'] = needed_mwh
+            supply_status.loc[centroid_id, 'supply_status'] = 'filled'
+            facilities_remaining.loc[
+                facilities_remaining['GEM unit/phase ID'] == facility_id, 
+                'Remaining_MWh'
+            ] -= needed_mwh
+            supply_status.loc[centroid_id, 'facility_id'] = facility_id  # Assign facility ID
+        elif available_mwh > 0:
+            supply_status.loc[centroid_id, 'filled_mwh_1'] = available_mwh
+            supply_status.loc[centroid_id, 'supply_status'] = 'partially_filled'
+            facilities_remaining.loc[
+                facilities_remaining['GEM unit/phase ID'] == facility_id, 
+                'Remaining_MWh'
+            ] = 0
+            supply_status.loc[centroid_id, 'facility_id'] = facility_id  # Assign facility ID
+    
+    return supply_status, facilities_remaining
 
+# Ensure that 'energy_supply_status' includes the 'facility_id'
+energy_supply_status, facilities_remaining = process_energy_supply(
+    shortest_paths_gdf,
+    energy_facilities_proj,
+    population_centroids_proj
+)
 
+# After processing energy supply mapping, create a filtered GeoDataFrame for supplied paths
+# Filter 'shortest_paths_gdf' to include only paths where the supply status is 'filled' or 'partially_filled'
+supplied_shortest_paths_gdf = shortest_paths_gdf[
+    shortest_paths_gdf['centroid_id'].isin(
+        energy_supply_status[
+            energy_supply_status['supply_status'].isin(['filled', 'partially_filled'])
+        ]['centroid_id']
+    )
+]
+
+# Ensure 'supplied_shortest_paths_gdf' is in the correct CRS
+supplied_shortest_paths_gdf = supplied_shortest_paths_gdf.to_crs(common_crs)
+
+# Update 'energy_facilities_proj' with 'Remaining_MWh' and calculate 'Supplied_MWh'
+energy_facilities_proj = energy_facilities_proj.merge(
+    facilities_remaining[['GEM unit/phase ID', 'Remaining_MWh']],
+    on='GEM unit/phase ID',
+    how='left'
+)
+energy_facilities_proj['Supplied_MWh'] = energy_facilities_proj['Annual_MWh'] - energy_facilities_proj['Remaining_MWh']
 
 # 5. Data Visualization
 # 5.1 Setup visualization parameters
@@ -478,7 +567,7 @@ ax.set_ylabel('Latitude', fontsize=12)
 plt.tight_layout()
 
 # Show the plot
-plt.show()
+# plt.show()
 
 # 6. Data Export
 # 6.1 Prepare layers for export
@@ -491,8 +580,25 @@ layer_data = {
     "voronoi_polygons": voronoi_gdf.to_crs(common_crs),
     "network_nodes": graph_nodes.to_crs(common_crs),
     "network_edges": graph_edges.to_crs(common_crs),
-    "shortest_paths": shortest_paths_gdf.to_crs(common_crs)
+    "shortest_paths": shortest_paths_gdf.to_crs(common_crs),
+    "energy_supply_status": energy_supply_status.to_crs(common_crs),
+    "supplied_shortest_paths": supplied_shortest_paths_gdf.to_crs(common_crs)
 }
+
+# Before exporting, clean up the GeoDataFrames to remove invalid data types
+def clean_geodataframe(gdf):
+    for column in gdf.columns:
+        if gdf[column].dtype == object:
+            # Check if the column contains tuples
+            if gdf[column].apply(lambda x: isinstance(x, tuple)).any():
+                print(f"Column '{column}' contains tuples and will be removed from {gdf.name}.")
+                gdf = gdf.drop(columns=[column])
+    return gdf
+
+# Assign names to GeoDataFrames for identification
+for layer_name, gdf in layer_data.items():
+    if isinstance(gdf, gpd.GeoDataFrame):
+        gdf.name = layer_name
 
 # 6.2 Export to GeoPackage
 # Write layers to GeoPackage
@@ -502,6 +608,8 @@ if os.path.exists(output_gpkg_path):
 try:
     for layer_name, gdf in layer_data.items():
         if isinstance(gdf, gpd.GeoDataFrame) and not gdf.empty:
+            # Clean the GeoDataFrame before writing
+            gdf = clean_geodataframe(gdf)
             print(f"Writing layer {layer_name} to GeoPackage")
             gdf.to_file(output_gpkg_path, layer=layer_name, driver="GPKG")
         else:
