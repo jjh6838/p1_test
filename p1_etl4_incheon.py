@@ -15,6 +15,8 @@ import networkx as nx
 from shapely.ops import split, linemerge
 from itertools import combinations
 from shapely.ops import split as split_line  # Corrected import
+import time
+start_time = time.time()
 
 # 1.2 Suppress warnings
 warnings.filterwarnings("ignore", message="You are attempting to write an empty DataFrame to file")
@@ -427,9 +429,13 @@ shortest_paths_gdf['centroid_id'] = shortest_paths_gdf.apply(
 def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
     # Create a copy of facilities DataFrame to track remaining MWh
     facilities_remaining = facilities_df.copy()
-    facilities_remaining['Remaining_MWh'] = facilities_remaining['Annual_MWh']
+    # If 'Remaining_MWh' already exists, use it as the starting point
+    if 'Remaining_MWh' in facilities_df.columns:
+        facilities_remaining['Remaining_MWh'] = facilities_df['Remaining_MWh']
+    else:
+        facilities_remaining['Remaining_MWh'] = facilities_remaining['Annual_MWh']
     
-    # Create base supply status DataFrame with only necessary columns
+    # Create base supply status DataFrame
     supply_status = gpd.GeoDataFrame({
         'geometry': centroids_df.geometry,
         'centroid_id': centroids_df.index,
@@ -437,7 +443,7 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
         'needed_mwh': centroids_df['needed_mwh'],
         'filled_mwh': 0.0,
         'supply_status': 'not_filled',
-        'facility_id': None  # Add new column
+        'facility_id': None
     }, crs=centroids_df.crs)
     
     # Sort paths by distance
@@ -448,29 +454,34 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
         centroid_id = path['centroid_id']
         facility_id = path['facility_gem_id']
         
+        # Skip if centroid is already filled
+        if supply_status.loc[centroid_id, 'supply_status'] == 'filled':
+            continue
+
         # Get needed and available MWh
         needed_mwh = float(supply_status.loc[centroid_id, 'needed_mwh'])
-        available_mwh = float(facilities_remaining.loc[
-            facilities_remaining['GEM unit/phase ID'] == facility_id, 
-            'Remaining_MWh'
-        ].iloc[0])
+        facility_mask = facilities_remaining['GEM unit/phase ID'] == facility_id
         
+        if not any(facility_mask):
+            continue
+            
+        available_mwh = float(facilities_remaining.loc[facility_mask, 'Remaining_MWh'].iloc[0])
+        
+        if available_mwh <= 0:
+            continue
+
         if available_mwh >= needed_mwh:
+            # Fully supply the centroid
             supply_status.loc[centroid_id, 'filled_mwh'] = needed_mwh
             supply_status.loc[centroid_id, 'supply_status'] = 'filled'
-            facilities_remaining.loc[
-                facilities_remaining['GEM unit/phase ID'] == facility_id, 
-                'Remaining_MWh'
-            ] -= needed_mwh
-            supply_status.loc[centroid_id, 'facility_id'] = facility_id  # Assign facility ID
-        elif available_mwh > 0:
+            facilities_remaining.loc[facility_mask, 'Remaining_MWh'] -= needed_mwh
+            supply_status.loc[centroid_id, 'facility_id'] = facility_id
+        else:
+            # Partially supply the centroid
             supply_status.loc[centroid_id, 'filled_mwh'] = available_mwh
             supply_status.loc[centroid_id, 'supply_status'] = 'partially_filled'
-            facilities_remaining.loc[
-                facilities_remaining['GEM unit/phase ID'] == facility_id, 
-                'Remaining_MWh'
-            ] = 0
-            supply_status.loc[centroid_id, 'facility_id'] = facility_id  # Assign facility ID
+            facilities_remaining.loc[facility_mask, 'Remaining_MWh'] = 0
+            supply_status.loc[centroid_id, 'facility_id'] = facility_id
     
     return supply_status, facilities_remaining
 
@@ -481,8 +492,7 @@ energy_supply_status, facilities_remaining = process_energy_supply(
     population_centroids_proj
 )
 
-# After processing energy supply mapping, create a filtered GeoDataFrame for supplied paths
-# Filter 'shortest_paths_gdf' to include only paths where the supply status is 'filled' or 'partially_filled'
+# Filter for supplied paths in first round
 supplied_shortest_paths_gdf = shortest_paths_gdf[
     shortest_paths_gdf['centroid_id'].isin(
         energy_supply_status[
@@ -492,15 +502,13 @@ supplied_shortest_paths_gdf = shortest_paths_gdf[
 ]
 
 # After first round process_energy_supply, fix the order of calculations
-# First update energy_facilities_proj with remaining MWh
-energy_facilities_proj = energy_facilities_proj.merge(
-    facilities_remaining[['GEM unit/phase ID', 'Remaining_MWh']],
-    on='GEM unit/phase ID',
-    how='left'
+energy_facilities_proj['Supplied_MWh'] = energy_facilities_proj.apply(
+    lambda x: energy_supply_status[
+        energy_supply_status['facility_id'] == x['GEM unit/phase ID']
+    ]['filled_mwh'].sum(),
+    axis=1
 )
-
-# Calculate first round supplied MWh
-energy_facilities_proj['Supplied_MWh'] = energy_facilities_proj['Annual_MWh'] - energy_facilities_proj['Remaining_MWh']
+energy_facilities_proj['Remaining_MWh'] = energy_facilities_proj['Annual_MWh'] - energy_facilities_proj['Supplied_MWh']
 
 # Now print the statistics
 print("\n<After first round energy supply processing>")
@@ -514,7 +522,20 @@ print(f"   Remaining MWh: {total_remaining_mwh:,.2f}")
 print(f"2. Supplied Population: {supplied_population:,.0f}")
 print(f"   Number of Supplied Centroids: {num_supplied_centroids}")
 
+# After first round energy supply mapping, add detailed print statements
+print("\n<After first round energy supply processing>")
+print("Facility level statistics:")
+for _, facility in energy_facilities_proj.iterrows():
+    facility_id = facility['GEM unit/phase ID']
+    annual_mwh = facility['Annual_MWh']
+    supplied_mwh = facility['Supplied_MWh']
+    remaining_mwh = facility['Remaining_MWh']
+    print(f"Facility {facility_id}:")
+    print(f"  Annual MWh: {annual_mwh:,.2f}")
+    print(f"  Supplied MWh: {supplied_mwh:,.2f}")
+    print(f"  Remaining MWh: {remaining_mwh:,.2f}")
 
+print("\n<Data pre-processing for second round: connecting components>")
 # 4.5 Second Round of Energy Supply Mapping
 # Create filtered copy of the network graph
 network_graph_2 = network_graph.copy()
@@ -666,23 +687,6 @@ second_energy_supply_status, second_facilities_remaining = process_energy_supply
 
 # Rename needed_mwh in second_energy_supply_status for clarity
 second_energy_supply_status.rename(columns={'needed_mwh': 'needed_mwh_after_first_processing'}, inplace=True)
-
-# Update energy_facilities_proj after second round with corrected calculations
-energy_facilities_proj = energy_facilities_proj.merge(
-    second_facilities_remaining[['GEM unit/phase ID', 'Remaining_MWh']],
-    on='GEM unit/phase ID',
-    how='left',
-    suffixes=('', '_Second')
-)
-
-# Calculate second round values
-energy_facilities_proj['Second_Supplied_MWh'] = energy_facilities_proj['Remaining_MWh'] - energy_facilities_proj['Remaining_MWh_Second']
-energy_facilities_proj['Total_Supplied_MWh'] = energy_facilities_proj['Supplied_MWh'] + energy_facilities_proj['Second_Supplied_MWh']
-
-# Update final remaining MWh
-energy_facilities_proj['Second_Remaining_MWh'] = energy_facilities_proj['Remaining_MWh_Second']
-energy_facilities_proj.drop('Remaining_MWh_Second', axis=1, inplace=True)  # Clean up redundant column
-
 # Create 'second_supplied_shortest_paths_gdf' for supplied paths in the second run
 second_supplied_shortest_paths_gdf = second_shortest_paths_gdf[
     second_shortest_paths_gdf['centroid_id'].isin(
@@ -710,31 +714,55 @@ for node, data in network_graph_2.nodes(data=True):
 
 second_graph_nodes_gdf = gpd.GeoDataFrame(second_graph_nodes, crs=PROJECTED_CRS)
 
-# After second round process_energy_supply, add these lines
+# After second round process_energy_supply, calculate Second_supplied_MWh and Second_remaining_MWh
+energy_facilities_proj['Second_supplied_MWh'] = energy_facilities_proj.apply(
+    lambda x: second_energy_supply_status[
+        second_energy_supply_status['facility_id'] == x['GEM unit/phase ID']
+    ]['filled_mwh'].sum(),
+    axis=1
+)
+energy_facilities_proj['Second_remaining_MWh'] = energy_facilities_proj['Remaining_MWh'] - energy_facilities_proj['Second_supplied_MWh']
+
 print("\n<After second round energy supply processing>")
-total_supplied_mwh = energy_facilities_proj['Total_Supplied_MWh'].sum()
-total_remaining_mwh = energy_facilities_proj['Second_Remaining_MWh'].sum()
+total_supplied_mwh_second = energy_facilities_proj['Second_supplied_MWh'].sum()
+total_remaining_mwh_final = energy_facilities_proj['Second_remaining_MWh'].sum()
 filled_centroids_second = second_energy_supply_status[second_energy_supply_status['supply_status'] == 'filled']
 supplied_population_second = filled_centroids_second['population'].sum()
 num_supplied_centroids_second = len(filled_centroids_second)
-print(f"1. Total Supplied MWh: {total_supplied_mwh:,.2f}")
-print(f"   Remaining MWh: {total_remaining_mwh:,.2f}")
+print(f"1. Second Round Supplied MWh: {total_supplied_mwh_second:,.2f}")
+print(f"   Final Remaining MWh: {total_remaining_mwh_final:,.2f}")
 print(f"2. Supplied Population: {supplied_population_second:,.0f}")
 print(f"   Number of Supplied Centroids: {num_supplied_centroids_second}")
 
+# After second round energy supply mapping, add detailed print statements
+print("\n<After second round energy supply processing>")
+print("Facility level statistics:")
+for _, facility in energy_facilities_proj.iterrows():
+    facility_id = facility['GEM unit/phase ID']
+    annual_mwh = facility['Annual_MWh']
+    first_supplied = facility['Supplied_MWh']
+    remaining_first = facility['Remaining_MWh']
+    second_supplied = facility['Second_supplied_MWh']
+    final_remaining = facility['Second_remaining_MWh']
+    print(f"Facility {facility_id}:")
+    print(f"  Annual MWh: {annual_mwh:,.2f}")
+    print(f"  First Round Supplied: {first_supplied:,.2f}")
+    print(f"  Remaining after First Round: {remaining_first:,.2f}")
+    print(f"  Second Round Supplied: {second_supplied:,.2f}")
+    print(f"  Final Remaining: {final_remaining:,.2f}")
+
 # 5. Data Export
 # 5.1 Prepare layers for export
-# First ensure all layers have matching CRS
 layer_data = {
     "energy_facilities": energy_facilities_proj.to_crs(common_crs),
     "grid_lines": grid_lines_proj.to_crs(common_crs),
-    "population_centroids": population_centroids_proj.to_crs(common_crs),  # Now includes needed_mwh
+    "population_centroids": population_centroids_proj.to_crs(common_crs),
     "voronoi_polygons": voronoi_gdf.to_crs(common_crs),
     "network_nodes": graph_nodes.to_crs(common_crs),
     "network_edges": graph_edges.to_crs(common_crs),
     "shortest_paths": shortest_paths_gdf.to_crs(common_crs),
-    "supplied_shortest_paths": supplied_shortest_paths_gdf.to_crs(common_crs),
-    "energy_supply_status": energy_supply_status.to_crs(common_crs),
+    "supplied_shortest_paths": supplied_shortest_paths_gdf.to_crs(common_crs),  # First round supplied paths
+    "first_energy_supply_status": energy_supply_status.to_crs(common_crs),
     "second_network_nodes": second_graph_nodes_gdf.to_crs(common_crs),
     "second_network_edges": second_graph_edges_gdf.to_crs(common_crs),
     "second_shortest_paths": second_shortest_paths_gdf.to_crs(common_crs),
@@ -774,3 +802,7 @@ try:
 except Exception as e:
     print(f"An error occurred: {e}")
     raise
+
+end_time = time.time()
+execution_time = end_time - start_time
+print(f"\nTotal execution time: {execution_time:.2f} seconds ({execution_time/60:.2f} minutes)")
