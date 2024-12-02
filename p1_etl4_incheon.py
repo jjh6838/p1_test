@@ -14,6 +14,7 @@ import pandas as pd
 import networkx as nx
 from shapely.ops import split, linemerge
 from itertools import combinations
+from shapely.ops import split as split_line  # Corrected import
 
 # 1.2 Suppress warnings
 warnings.filterwarnings("ignore", message="You are attempting to write an empty DataFrame to file")
@@ -190,9 +191,6 @@ def calculate_centroid_mwh(centroids_gdf, facilities_gdf):
     centroids_gdf['population_share_pct'] = centroids_gdf['proportion'] * 100  # Convert to percentage
     centroids_gdf['needed_mwh'] = centroids_gdf['proportion'] * total_available_mwh
     
-    print(f"Total available MWh: {total_available_mwh:.2f}")
-    print(f"Total population: {total_population}")
-    
     return centroids_gdf
 
 # Apply the calculation
@@ -351,10 +349,12 @@ graph_edges = gpd.GeoDataFrame(
 )
 
 # Find shortest paths from population centroids to the nearest facility
-def find_shortest_paths(network_graph, num_centroids=None):
+def find_shortest_paths(network_graph, pop_centroid_nodes=None, facility_nodes=None, num_centroids=None):
     shortest_paths = []
-    pop_centroid_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'pop_centroid']
-    facility_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'facility']
+    if pop_centroid_nodes is None:
+        pop_centroid_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'pop_centroid']
+    if facility_nodes is None:
+        facility_nodes = [node for node, data in network_graph.nodes(data=True) if data['type'] == 'facility']
     
     # Limit number of centroids if specified
     if num_centroids is not None:
@@ -389,6 +389,15 @@ def find_shortest_paths(network_graph, num_centroids=None):
     
     print(f"Successfully found {len(shortest_paths)} paths")
     return shortest_paths
+
+# Before process_energy_supply call, add initial statistics
+print("\n<Before Processing>")
+total_available_mwh = energy_facilities_proj['Annual_MWh'].sum()
+total_population = population_centroids_proj['population'].sum()
+num_centroids = len(population_centroids_proj)
+print(f"1. Total available MWh from Facilities: {total_available_mwh:,.2f}")
+print(f"2. Total population: {total_population:,.0f}")
+print(f"   Number of Centroids: {num_centroids}")
 
 # Update the shortest paths call
 shortest_paths = find_shortest_paths(network_graph)  # Remove the num_centroids limit
@@ -426,7 +435,7 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
         'centroid_id': centroids_df.index,
         'population': centroids_df['population'],
         'needed_mwh': centroids_df['needed_mwh'],
-        'filled_mwh_1': 0.0,
+        'filled_mwh': 0.0,
         'supply_status': 'not_filled',
         'facility_id': None  # Add new column
     }, crs=centroids_df.crs)
@@ -447,7 +456,7 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
         ].iloc[0])
         
         if available_mwh >= needed_mwh:
-            supply_status.loc[centroid_id, 'filled_mwh_1'] = needed_mwh
+            supply_status.loc[centroid_id, 'filled_mwh'] = needed_mwh
             supply_status.loc[centroid_id, 'supply_status'] = 'filled'
             facilities_remaining.loc[
                 facilities_remaining['GEM unit/phase ID'] == facility_id, 
@@ -455,7 +464,7 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
             ] -= needed_mwh
             supply_status.loc[centroid_id, 'facility_id'] = facility_id  # Assign facility ID
         elif available_mwh > 0:
-            supply_status.loc[centroid_id, 'filled_mwh_1'] = available_mwh
+            supply_status.loc[centroid_id, 'filled_mwh'] = available_mwh
             supply_status.loc[centroid_id, 'supply_status'] = 'partially_filled'
             facilities_remaining.loc[
                 facilities_remaining['GEM unit/phase ID'] == facility_id, 
@@ -482,96 +491,239 @@ supplied_shortest_paths_gdf = shortest_paths_gdf[
     )
 ]
 
-# Ensure 'supplied_shortest_paths_gdf' is in the correct CRS
-supplied_shortest_paths_gdf = supplied_shortest_paths_gdf.to_crs(common_crs)
-
-# Update 'energy_facilities_proj' with 'Remaining_MWh' and calculate 'Supplied_MWh'
+# After first round process_energy_supply, fix the order of calculations
+# First update energy_facilities_proj with remaining MWh
 energy_facilities_proj = energy_facilities_proj.merge(
     facilities_remaining[['GEM unit/phase ID', 'Remaining_MWh']],
     on='GEM unit/phase ID',
     how='left'
 )
+
+# Calculate first round supplied MWh
 energy_facilities_proj['Supplied_MWh'] = energy_facilities_proj['Annual_MWh'] - energy_facilities_proj['Remaining_MWh']
 
-# 5. Data Visualization
-# 5.1 Setup visualization parameters
-# Visualization using GeoPandas and Matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch  # Add this import
+# Now print the statistics
+print("\n<After first round energy supply processing>")
+total_supplied_mwh = energy_facilities_proj['Supplied_MWh'].sum()
+total_remaining_mwh = energy_facilities_proj['Remaining_MWh'].sum()
+filled_centroids = energy_supply_status[energy_supply_status['supply_status'] == 'filled']
+supplied_population = filled_centroids['population'].sum()
+num_supplied_centroids = len(filled_centroids)
+print(f"1. Total Supplied MWh: {total_supplied_mwh:,.2f}")
+print(f"   Remaining MWh: {total_remaining_mwh:,.2f}")
+print(f"2. Supplied Population: {supplied_population:,.0f}")
+print(f"   Number of Supplied Centroids: {num_supplied_centroids}")
 
-# Before visualization, ensure all layers are in the same CRS (use common_crs for visualization)
-visualization_crs = common_crs
 
-# Convert all layers to visualization CRS
-voronoi_gdf = voronoi_gdf.to_crs(visualization_crs)
-grid_lines_proj = grid_lines_proj.to_crs(visualization_crs)
-energy_facilities_proj = energy_facilities_proj.to_crs(visualization_crs)
-population_centroids_proj = population_centroids_proj.to_crs(visualization_crs)
-graph_nodes = graph_nodes.to_crs(visualization_crs)
-graph_edges = graph_edges.to_crs(visualization_crs)
-shortest_paths_gdf = shortest_paths_gdf.to_crs(visualization_crs)
+# 4.5 Second Round of Energy Supply Mapping
+# Create filtered copy of the network graph
+network_graph_2 = network_graph.copy()
 
-# 5.2 Create plots
-# Create a figure and axis with specific bounds
-fig, ax = plt.subplots(figsize=(12, 12))
+# Filter nodes for second round of path finding
+unfilled_centroid_ids = energy_supply_status[energy_supply_status['supply_status'] != 'filled']['centroid_id']
+unfilled_centroids_proj = population_centroids_proj[population_centroids_proj['centroid_id'].isin(unfilled_centroid_ids)]
+remaining_facilities = facilities_remaining[facilities_remaining['Remaining_MWh'] > 0]
+remaining_facilities_proj = energy_facilities_proj[energy_facilities_proj['GEM unit/phase ID'].isin(remaining_facilities['GEM unit/phase ID'])]
 
-# Get the bounds from filtered_boundary
-bounds = filtered_boundary.to_crs(visualization_crs).total_bounds
+# Get coordinates for filtered nodes
+unfilled_centroid_nodes = [(point.x, point.y) for point in unfilled_centroids_proj.geometry]
+facilities_remaining_nodes = [(point.x, point.y) for point in remaining_facilities_proj.geometry]
 
-# Plot Voronoi polygons
-voronoi_gdf.plot(ax=ax, color='lightblue', edgecolor='none', alpha=0.5, label='Voronoi Polygons')
+# Remove nodes that aren't grid nodes, unfilled centroids, or facilities with remaining energy
+nodes_to_keep = set()
+for node, data in network_graph_2.nodes(data=True):
+    if (data['type'] == 'grid_line' or
+        (data['type'] == 'pop_centroid' and node in unfilled_centroid_nodes) or
+        (data['type'] == 'facility' and node in facilities_remaining_nodes)):
+        nodes_to_keep.add(node)
 
-# Plot grid lines
-grid_lines_proj.plot(ax=ax, color='gray', linewidth=1, label='Grid Lines')
+# Remove nodes not in nodes_to_keep
+nodes_to_remove = set(network_graph_2.nodes()) - nodes_to_keep
+network_graph_2.remove_nodes_from(nodes_to_remove)
 
-# Plot energy facilities
-energy_facilities_proj.plot(ax=ax, color='red', markersize=50, marker='^', label='Facilities')
+# Identify connected components before connecting
+components_before = list(nx.connected_components(network_graph_2))
+num_components_before = len(components_before)
+print(f"Number of connected components before connecting: {num_components_before}")
 
-# Plot population centroids
-population_centroids_proj.plot(ax=ax, color='green', markersize=20, marker='o', label='Centroids')
+# Convert component sets to lists for indexing
+components = [list(comp) for comp in components_before]
 
-# Plot network edges
-graph_edges.plot(ax=ax, color='blue', linewidth=0.5, alpha=0.7, label='Network Connections')
+# Initialize a list to store edges to be added
+edges_to_add = []
 
-# Plot network nodes
-graph_nodes[graph_nodes['type'] == 'grid_line'].plot(ax=ax, color='blue', markersize=10, marker='.', label='Grid Line Nodes')
-graph_nodes[graph_nodes['type'] == 'facility'].plot(ax=ax, color='red', markersize=50, marker='^', label='Facility Nodes')
-graph_nodes[graph_nodes['type'] == 'pop_centroid'].plot(ax=ax, color='green', markersize=20, marker='o', label='Centroid Nodes')
+# For each pair of components, find the shortest connecting edge
+for i in range(len(components)):
+    for j in range(i + 1, len(components)):
+        component_1 = components[i]
+        component_2 = components[j]
 
-# Plot shortest paths
-shortest_paths_gdf.plot(ax=ax, color='red', linewidth=2, linestyle='--', alpha=0.7, label='Shortest Paths')
+        min_distance = float('inf')
+        closest_pair = None
 
-# Customize the legend
-legend_elements = [
-    Line2D([0], [0], marker='^', color='w', label='Facilities', markerfacecolor='red', markersize=15),
-    Line2D([0], [0], marker='o', color='w', label='Centroids', markerfacecolor='green', markersize=10),
-    Line2D([0], [0], marker='.', color='w', label='Grid Line Nodes', markerfacecolor='blue', markersize=10),
-    Line2D([0], [0], color='blue', lw=1, label='Network Connections'),
-    Line2D([0], [0], color='red', lw=2, linestyle='--', label='Shortest Paths'),
-    Patch(facecolor='lightblue', edgecolor='none', label='Voronoi Polygons'),
-    Patch(facecolor='gray', edgecolor='none', label='Grid Lines')
+        # Find the closest pair of nodes between components
+        for node1 in component_1:
+            for node2 in component_2:
+                distance = Point(node1).distance(Point(node2))
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_pair = (node1, node2)
+
+        # If the distance is less than 10 km, add an edge
+        if min_distance < 10000:  # 10 km in meters
+            edges_to_add.append((closest_pair[0], closest_pair[1], {'weight': min_distance, 'edge_type': 'added'}))
+            print(f"Connecting components {i} and {j} with edge length {min_distance:.2f} meters")
+
+# Add the new edges to the graph with 'edge_type' attribute
+network_graph_2.add_edges_from(edges_to_add)
+
+# Recalculate connected components after connecting
+components_after = list(nx.connected_components(network_graph_2))
+num_components_after = len(components_after)
+print(f"Number of connected components after connecting: {num_components_after}")
+
+# Calculate number of components still unconnected
+num_unconnected_components = num_components_after if num_components_after > 1 else 0
+print(f"Number of still unconnected components after connecting: {num_unconnected_components}")
+
+# Add new function for second round path finding
+def find_all_facility_paths(network_graph, pop_centroid_nodes, facility_nodes):
+    all_paths = []
+    print(f"Processing {len(pop_centroid_nodes)} centroids and {len(facility_nodes)} facilities...")
+    
+    for i, centroid in enumerate(pop_centroid_nodes):
+        try:
+            # Find paths to all facilities
+            for facility in facility_nodes:
+                try:
+                    path_length = nx.shortest_path_length(network_graph, centroid, facility, weight='weight')
+                    path = nx.shortest_path(network_graph, centroid, facility, weight='weight')
+                    all_paths.append((centroid, facility, path, path_length))
+                except nx.NetworkXNoPath:
+                    continue
+            
+            if i % 500 == 0:  # Progress update
+                print(f"Processed {i+1}/{len(pop_centroid_nodes)} centroids")
+        except Exception as e:
+            print(f"Error finding paths for centroid {centroid}: {e}")
+    
+    print(f"Successfully found {len(all_paths)} paths")
+    return all_paths
+
+# Replace the second round path finding with all-facilities approach
+second_shortest_paths = find_all_facility_paths(
+    network_graph_2,
+    pop_centroid_nodes=unfilled_centroid_nodes,
+    facility_nodes=facilities_remaining_nodes
+)
+
+# Convert second shortest paths to GeoDataFrame (modified to handle multiple paths per centroid)
+second_shortest_paths_gdf = gpd.GeoDataFrame(
+    {
+        "geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in second_shortest_paths],
+        "distance": [distance for _, _, _, distance in second_shortest_paths],
+        "facility_gem_id": [facility_gem_ids.get(facility, 'unknown') for _, facility, _, _ in second_shortest_paths],
+        "centroid_coord": [centroid for centroid, _, _, _ in second_shortest_paths]
+    },
+    crs=PROJECTED_CRS
+)
+
+# Add centroid IDs by matching coordinates with unfilled_centroids_proj
+second_shortest_paths_gdf['centroid_id'] = second_shortest_paths_gdf.apply(
+    lambda row: unfilled_centroids_proj[
+        unfilled_centroids_proj.geometry.apply(
+            lambda point: (point.x, point.y) == row['centroid_coord']
+        )
+    ].index[0],
+    axis=1
+)
+
+# Sort paths by distance to prioritize shorter connections
+second_shortest_paths_gdf = second_shortest_paths_gdf.sort_values('distance')
+
+# Update before second energy supply processing
+unfilled_centroids_proj = population_centroids_proj[population_centroids_proj['centroid_id'].isin(unfilled_centroid_ids)].copy()
+
+# Get the filled_mwh from first round energy supply status
+first_round_filled = energy_supply_status[['centroid_id', 'needed_mwh', 'filled_mwh']].copy()
+first_round_filled.rename(columns={'needed_mwh': 'needed_mwh_first_round'}, inplace=True)
+
+# Update unfilled_centroids_proj with remaining needed_mwh
+unfilled_centroids_proj = unfilled_centroids_proj.merge(
+    first_round_filled,
+    left_index=True,
+    right_on='centroid_id',
+    how='left'
+)
+unfilled_centroids_proj['needed_mwh'] = unfilled_centroids_proj['needed_mwh_first_round'] - unfilled_centroids_proj['filled_mwh']
+
+# Process energy supply mapping with second shortest paths
+second_energy_supply_status, second_facilities_remaining = process_energy_supply(
+    second_shortest_paths_gdf,
+    remaining_facilities,
+    unfilled_centroids_proj
+)
+
+# Rename needed_mwh in second_energy_supply_status for clarity
+second_energy_supply_status.rename(columns={'needed_mwh': 'needed_mwh_after_first_processing'}, inplace=True)
+
+# Update energy_facilities_proj after second round with corrected calculations
+energy_facilities_proj = energy_facilities_proj.merge(
+    second_facilities_remaining[['GEM unit/phase ID', 'Remaining_MWh']],
+    on='GEM unit/phase ID',
+    how='left',
+    suffixes=('', '_Second')
+)
+
+# Calculate second round values
+energy_facilities_proj['Second_Supplied_MWh'] = energy_facilities_proj['Remaining_MWh'] - energy_facilities_proj['Remaining_MWh_Second']
+energy_facilities_proj['Total_Supplied_MWh'] = energy_facilities_proj['Supplied_MWh'] + energy_facilities_proj['Second_Supplied_MWh']
+
+# Update final remaining MWh
+energy_facilities_proj['Second_Remaining_MWh'] = energy_facilities_proj['Remaining_MWh_Second']
+energy_facilities_proj.drop('Remaining_MWh_Second', axis=1, inplace=True)  # Clean up redundant column
+
+# Create 'second_supplied_shortest_paths_gdf' for supplied paths in the second run
+second_supplied_shortest_paths_gdf = second_shortest_paths_gdf[
+    second_shortest_paths_gdf['centroid_id'].isin(
+        second_energy_supply_status[
+            second_energy_supply_status['supply_status'].isin(['filled', 'partially_filled'])
+        ]['centroid_id']
+    )
 ]
-ax.legend(handles=legend_elements, loc='upper right')
 
-# Set the plot bounds
-ax.set_xlim([bounds[0], bounds[2]])
-ax.set_ylim([bounds[1], bounds[3]])
+# Create a GeoDataFrame for the edges of the second network
+second_graph_edges = []
+for u, v, data in network_graph_2.edges(data=True):
+    edge_geom = LineString([Point(u), Point(v)])
+    edge_type = data.get('edge_type', 'existing')
+    second_graph_edges.append({'geometry': edge_geom, 'edge_type': edge_type})
 
-# Add titles and labels
-ax.set_title('Comprehensive Network Visualization', fontsize=16)
-ax.set_xlabel('Longitude', fontsize=12)
-ax.set_ylabel('Latitude', fontsize=12)
+second_graph_edges_gdf = gpd.GeoDataFrame(second_graph_edges, crs=PROJECTED_CRS)
 
-# Adjust layout for better spacing
-plt.tight_layout()
+# Create a GeoDataFrame for the nodes of the second network
+second_graph_nodes = []
+for node, data in network_graph_2.nodes(data=True):
+    node_geom = Point(node)
+    node_type = data.get('type', 'unknown')
+    second_graph_nodes.append({'geometry': node_geom, 'type': node_type})
 
-# Show the plot
-# plt.show()
+second_graph_nodes_gdf = gpd.GeoDataFrame(second_graph_nodes, crs=PROJECTED_CRS)
 
-# 6. Data Export
-# 6.1 Prepare layers for export
-# Step 7: Save all layers to GeoPackage
+# After second round process_energy_supply, add these lines
+print("\n<After second round energy supply processing>")
+total_supplied_mwh = energy_facilities_proj['Total_Supplied_MWh'].sum()
+total_remaining_mwh = energy_facilities_proj['Second_Remaining_MWh'].sum()
+filled_centroids_second = second_energy_supply_status[second_energy_supply_status['supply_status'] == 'filled']
+supplied_population_second = filled_centroids_second['population'].sum()
+num_supplied_centroids_second = len(filled_centroids_second)
+print(f"1. Total Supplied MWh: {total_supplied_mwh:,.2f}")
+print(f"   Remaining MWh: {total_remaining_mwh:,.2f}")
+print(f"2. Supplied Population: {supplied_population_second:,.0f}")
+print(f"   Number of Supplied Centroids: {num_supplied_centroids_second}")
+
+# 5. Data Export
+# 5.1 Prepare layers for export
 # First ensure all layers have matching CRS
 layer_data = {
     "energy_facilities": energy_facilities_proj.to_crs(common_crs),
@@ -581,8 +733,13 @@ layer_data = {
     "network_nodes": graph_nodes.to_crs(common_crs),
     "network_edges": graph_edges.to_crs(common_crs),
     "shortest_paths": shortest_paths_gdf.to_crs(common_crs),
+    "supplied_shortest_paths": supplied_shortest_paths_gdf.to_crs(common_crs),
     "energy_supply_status": energy_supply_status.to_crs(common_crs),
-    "supplied_shortest_paths": supplied_shortest_paths_gdf.to_crs(common_crs)
+    "second_network_nodes": second_graph_nodes_gdf.to_crs(common_crs),
+    "second_network_edges": second_graph_edges_gdf.to_crs(common_crs),
+    "second_shortest_paths": second_shortest_paths_gdf.to_crs(common_crs),
+    "second_supplied_shortest_paths": second_supplied_shortest_paths_gdf.to_crs(common_crs),
+    "second_energy_supply_status": second_energy_supply_status.to_crs(common_crs),
 }
 
 # Before exporting, clean up the GeoDataFrames to remove invalid data types
@@ -600,7 +757,7 @@ for layer_name, gdf in layer_data.items():
     if isinstance(gdf, gpd.GeoDataFrame):
         gdf.name = layer_name
 
-# 6.2 Export to GeoPackage
+# 5.2 Export to GeoPackage
 # Write layers to GeoPackage
 if os.path.exists(output_gpkg_path):
     os.remove(output_gpkg_path)
