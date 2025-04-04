@@ -29,7 +29,7 @@ grid_lines_path = r"KOR\gridfinder\gridfinder-version_1-grid-kor.gpkg"
 population_raster_path = r"KOR\jrc_ghsl\GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0__KOR.tif"
 south_korea_boundary_path = r"GADM\gadm41_KOR.gpkg"
 # Output GeoPackage path
-output_gpkg_path = r"outputs\korea_integrated_dataset_v4_jeju.gpkg"
+output_gpkg_path = r"outputs\korea_integrated_dataset_v4_seoulplus.gpkg"
 
 # 2. Data Loading and Processing
 # 2.1 Load and filter energy facilities
@@ -66,7 +66,7 @@ def adjust_capacity_proportionally(facilities_df):
     
     # Import values from p1_ember_analysis1
     import importlib
-    ember_analysis = importlib.import_module('p1_ember_analysis1')
+    ember_analysis = importlib.import_module('p1_b_ember_analysis')
     
     # Import capacity values and conversion rates
     target_capacities = {
@@ -126,6 +126,13 @@ facility_gem_ids = dict(zip(
     energy_facilities['GEM unit/phase ID']
 ))
 
+# Add this helper function after the facility_gem_ids creation
+def get_facility_type(facility_id, facilities_df):
+    if facility_id == 'unknown':
+        return 'unknown'
+    facility_mask = facilities_df['GEM unit/phase ID'] == facility_id
+    return facilities_df.loc[facility_mask, 'Type'].iloc[0] if any(facility_mask) else 'unknown'
+
 # 3. Spatial Data Processing
 # 3.1 Load and process boundary data
 # Step 1: Load grid lines and South Korea boundary
@@ -133,7 +140,14 @@ grid_lines = gpd.read_file(grid_lines_path)
 korea_boundary = gpd.read_file(south_korea_boundary_path, layer='ADM_ADM_1')
 
 # Filter the boundary data and set common CRS
-regions_of_interest = ['Jeju']
+# regions_of_interest = ['Busan', 'Chungcheongbuk-do', 'Chungcheongnam-do', 'Daegu', 
+#                        'Daejeon', 'Gangwon-do','Gwangju', 'Gyeonggi-do', 'Gyeongsangbuk-do', 
+#                        'Gyeongsangnam-do', 'Incheon', 'Jeju','Jeollabuk-do', 'Jeollanam-do', 
+#                        'Sejong', 'Seoul', 'Ulsan']
+
+regions_of_interest = ['Seoul', 'Gyeonggi-do', 'Incheon']
+
+
 filtered_boundary = korea_boundary[korea_boundary['NAME_1'].isin(regions_of_interest)]
 common_crs = korea_boundary.crs
 
@@ -404,12 +418,13 @@ print(f"   Number of Centroids: {num_centroids}")
 # Update the shortest paths call
 shortest_paths = find_shortest_paths(network_graph)  # Remove the num_centroids limit
 
-# Update the shortest paths GeoDataFrame creation with centroid IDs
+# Update shortest_paths_gdf creation
 shortest_paths_gdf = gpd.GeoDataFrame(
     {
         "geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in shortest_paths],
         "distance": [distance for _, _, _, distance in shortest_paths],
         "facility_gem_id": [facility_gem_ids.get(facility, 'unknown') for _, facility, _, _ in shortest_paths],
+        "facility_type": [get_facility_type(facility_gem_ids.get(facility, 'unknown'), energy_facilities_proj) for _, facility, _, _ in shortest_paths],
         "centroid_coord": [centroid for centroid, _, _, _ in shortest_paths]
     }, 
     crs=PROJECTED_CRS
@@ -443,7 +458,8 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
         'needed_mwh': centroids_df['needed_mwh'],
         'filled_mwh': 0.0,
         'supply_status': 'not_filled',
-        'facility_id': None
+        'facility_id': None,
+        'facility_type': None  # Add this line
     }, crs=centroids_df.crs)
     
     # Sort paths by distance
@@ -476,12 +492,14 @@ def process_energy_supply(shortest_paths_df, facilities_df, centroids_df):
             supply_status.loc[centroid_id, 'supply_status'] = 'filled'
             facilities_remaining.loc[facility_mask, 'Remaining_MWh'] -= needed_mwh
             supply_status.loc[centroid_id, 'facility_id'] = facility_id
+            supply_status.loc[centroid_id, 'facility_type'] = facilities_df.loc[facility_mask, 'Type'].iloc[0]  # Add this line
         else:
             # Partially supply the centroid
             supply_status.loc[centroid_id, 'filled_mwh'] = available_mwh
             supply_status.loc[centroid_id, 'supply_status'] = 'partially_filled'
             facilities_remaining.loc[facility_mask, 'Remaining_MWh'] = 0
             supply_status.loc[centroid_id, 'facility_id'] = facility_id
+            supply_status.loc[centroid_id, 'facility_type'] = facilities_df.loc[facility_mask, 'Type'].iloc[0]  # Add this line
     
     return supply_status, facilities_remaining
 
@@ -644,6 +662,7 @@ second_shortest_paths_gdf = gpd.GeoDataFrame(
         "geometry": [LineString([Point(coord) for coord in path]) for _, _, path, _ in second_shortest_paths],
         "distance": [distance for _, _, _, distance in second_shortest_paths],
         "facility_gem_id": [facility_gem_ids.get(facility, 'unknown') for _, facility, _, _ in second_shortest_paths],
+        "facility_type": [get_facility_type(facility_gem_ids.get(facility, 'unknown'), energy_facilities_proj) for _, facility, _, _ in second_shortest_paths],
         "centroid_coord": [centroid for centroid, _, _, _ in second_shortest_paths]
     },
     crs=PROJECTED_CRS
