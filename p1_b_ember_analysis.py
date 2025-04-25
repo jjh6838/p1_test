@@ -1,15 +1,35 @@
 import pandas as pd
 import warnings
+try:
+    from pycountry import countries
+except ImportError:
+    countries = None
 
 # Suppress openpyxl warning
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 # File paths
-energy_facilities_path = r"re_data\Global-Integrated-Power-June-2024.xlsx"
+energy_facilities_path = r"re_data\Global-Integrated-Power-February-2025-update-II.xlsx"
 energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format.csv"
+output_path = r"ember_energy_data\gem_ember_analysis_all_countries.xlsx"
 
-# Define GEM types as primary reference with corresponding Ember mappings
-gem_to_ember_dict = {
+# Define granular and grouped energy categories
+granular_categories = [
+    "Bioenergy", "Coal", "Hydro", "Nuclear", "Solar", "Wind", 
+    "Other Renewables", "Gas", "Other Fossil"
+]
+
+grouped_categories = {
+    "Fossil": ["Coal", "Gas", "Other Fossil"],
+    "Other Renewables": ["Bioenergy", "Other Renewables"],
+    "Hydro": ["Hydro"],
+    "Nuclear": ["Nuclear"],
+    "Solar": ["Solar"],
+    "Wind": ["Wind"]
+}
+
+# GEM to Ember category mapping
+gem_to_ember_mapping = {
     "bioenergy": "Bioenergy",
     "coal": "Coal",
     "hydropower": "Hydro",
@@ -17,115 +37,278 @@ gem_to_ember_dict = {
     "solar": "Solar",
     "wind": "Wind",
     "geothermal": "Other Renewables",
-    "oil/gas": ["Gas", "Other Fossil"]  # Combined categories in Ember
+    "oil/gas": ["Gas", "Other Fossil"]  # Split proportionally
 }
 
-# 1. Ember data: MW, MWh, and Conversion rates (MWh/MW) by Type
-def get_ember_data(data, category, unit):
-    filtered_data = data[
-        (data['Country code'] == 'KOR') &
-        (data['Year'] == 2023) &
-        (data['Category'] == category) &
-        (data['Subcategory'] == 'Fuel') &
-        (data['Unit'] == unit)
-    ]
-    
-    # Get initial groupby result
-    ember_values = filtered_data.groupby('Variable')['Value'].sum()
-    
-    # Create new dictionary with GEM types
-    mapped_values = {}
-    for gem_type, ember_type in gem_to_ember_dict.items():
-        if isinstance(ember_type, list):
-            # Sum values for combined categories (like oil/gas)
-            mapped_values[gem_type] = sum(ember_values.get(t, 0) for t in ember_type)
-        else:
-            mapped_values[gem_type] = ember_values.get(ember_type, 0)
-    
-    return pd.Series(mapped_values)
+# Manual mapping for non-standardized country names
+manual_mapping = {
+    "Bolivia": "BOL",
+    "Bonaire, Sint Eustatius, and Saba": "BES",
+    "Brunei": "BRN",
+    "Czech Republic": "CZE",
+    "DR Congo": "COD",
+    "Holy See": "VAT",
+    "Iran": "IRN",
+    "Kosovo": "XKX",
+    "Laos": "LAO",
+    "Micronesia": "FSM",
+    "Moldova": "MDA",
+    "North Korea": "PRK",
+    "Palestine": "PSE",
+    "Republic of the Congo": "COG",
+    "Russia": "RUS",
+    "South Korea": "KOR",
+    "Syria": "SYR",
+    "Taiwan": "TWN",
+    "Tanzania": "TZA",
+    "The Gambia": "GMB",
+    "Venezuela": "VEN",
+    "Vietnam": "VNM",
+    "Virgin Islands (U.S.)": "VIR"
+}
 
-# Calculate actual generation and conversion rates from Ember data
+def map_country_to_iso3(country_name):
+    """
+    Map a country name to its ISO3 code using pycountry or manual mapping.
+    """
+    if countries:
+        try:
+            return countries.lookup(country_name).alpha_3
+        except LookupError:
+            return manual_mapping.get(country_name, "unknown")
+    else:
+        return manual_mapping.get(country_name, "unknown")
+
+# Load Ember data
 energy_data = pd.read_csv(energy_data_csv_path)
-ember_generation = get_ember_data(energy_data, 'Electricity generation', 'TWh') * 1000000  # TWh to MWh
-ember_capacity = get_ember_data(energy_data, 'Capacity', 'GW') * 1000  # GW to MW
 
-# Calculate conversion rates based on Ember's actual generation and capacity
-conversion_rates = {}
-for gem_type in gem_to_ember_dict.keys():
-    generation = ember_generation.get(gem_type, 0)  
-    capacity = ember_capacity.get(gem_type, 0)      
-    rate = generation / capacity if capacity > 0 else 0
-    conversion_rates[gem_type] = rate
+# Separate filtering for Capacity and Electricity generation
+years = [2023, 2022, 2021, 2020, 2019]
 
-# 2. GEM data processing: Total capacity and capacity per type
-energy_facilities_df = pd.read_excel(energy_facilities_path, sheet_name="Powerfacilities")
-filtered_gem_df = energy_facilities_df[
-    (energy_facilities_df['Country/area'] == 'South Korea') &
-    (energy_facilities_df['Status'] == 'operating')
-].copy()
+# Filter for Capacity data
+capacity_data = energy_data[
+    (energy_data["Year"].isin(years)) &
+    (energy_data["Category"] == "Capacity") &
+    (energy_data["Subcategory"] == "Fuel") &
+    (energy_data["Unit"] == "GW") &
+    (energy_data["Variable"].isin(granular_categories))
+]
 
-gem_capacity = filtered_gem_df.groupby('Type')['Capacity (MW)'].sum()
-total_gem_capacity = gem_capacity.sum()
+# Filter for Electricity generation data
+generation_data = energy_data[
+    (energy_data["Year"].isin(years)) &
+    (energy_data["Category"] == "Electricity generation") &
+    (energy_data["Subcategory"] == "Fuel") &
+    (energy_data["Unit"] == "TWh") &
+    (energy_data["Variable"].isin(granular_categories))
+]
 
-# Process Ember data and map to GEM types
-total_ember_capacity = ember_capacity.sum()
+# Prioritize the most recent year for each country and variable in both datasets
+capacity_data = capacity_data.sort_values(by="Year", ascending=False).drop_duplicates(subset=["Country code", "Variable"], keep="first")
+generation_data = generation_data.sort_values(by="Year", ascending=False).drop_duplicates(subset=["Country code", "Variable"], keep="first")
 
-# Compare capacities and find larger values and differences
-capacity_differences = {}
-larger_capacities = {}
+# Load GEM data
+gem_data = pd.read_excel(energy_facilities_path, sheet_name="Powerfacilities")
 
-for gem_type in gem_to_ember_dict.keys():
-    gem_value = gem_capacity.get(gem_type, 0)
-    ember_value = ember_capacity.get(gem_type, 0)
-    difference = ember_value - gem_value  # Positive means Ember is larger
-    larger_value = max(gem_value, ember_value)
-    capacity_differences[gem_type] = difference
-    larger_capacities[gem_type] = larger_value
+# Filter GEM data for operating facilities
 
-# Calculate potential generation using larger capacities and Ember conversion rates
-potential_generation = {}
-for fuel_type, capacity in larger_capacities.items():
-    potential_mwh = capacity * conversion_rates.get(fuel_type, 0)
-    potential_generation[fuel_type] = potential_mwh
+# Add ISO3 codes to GEM data
+gem_data['ISO3'] = gem_data['Country/area'].apply(map_country_to_iso3)
 
-# Export larger capacity values for other scripts
-larger_value_bioenergy = larger_capacities.get('bioenergy', 0)
-larger_value_coal = larger_capacities.get('coal', 0)
-larger_value_hydro = larger_capacities.get('hydropower', 0)
-larger_value_nuclear = larger_capacities.get('nuclear', 0)
-larger_value_solar = larger_capacities.get('solar', 0)
-larger_value_wind = larger_capacities.get('wind', 0)
-larger_value_geothermal = larger_capacities.get('geothermal', 0)
-larger_value_oilgas = larger_capacities.get('oil/gas', 0)
-# Export conversion rates for other scripts
-conversion_rate_bioenergy = conversion_rates.get('bioenergy', 0)
-conversion_rate_coal = conversion_rates.get('coal', 0)
-conversion_rate_hydro = conversion_rates.get('hydropower', 0)
-conversion_rate_nuclear = conversion_rates.get('nuclear', 0)
-conversion_rate_solar = conversion_rates.get('solar', 0)
-conversion_rate_wind = conversion_rates.get('wind', 0)
-conversion_rate_geothermal = conversion_rates.get('geothermal', 0)
-conversion_rate_oilgas = conversion_rates.get('oil/gas', 0)
+# Filter GEM data to exclude rows with unknown ISO3 codes
+gem_data = gem_data[gem_data['ISO3'] != "unknown"]
 
-if __name__ == '__main__':
-    print("\n=== Capacity Comparison ===")
-    print(f"GEM - Total Capacity in KOR (MW): {total_gem_capacity:,.0f}")
-    print(f"Ember - Total Capacity in KOR (MW): {total_ember_capacity:,.0f}")
-    print(f"Total Difference (Ember - GEM) (MW): {total_ember_capacity - total_gem_capacity:,.0f}")
+# Get all unique country codes from Ember data
+ember_country_codes = set(energy_data['Country code'].dropna().unique())
+
+# Get all unique ISO3 codes from GEM data
+gem_iso3_codes = set(gem_data['ISO3'].unique())
+
+# Keep only the matching ISO3 codes between Ember and GEM data
+matching_country_codes = ember_country_codes.intersection(gem_iso3_codes)
+
+# Check for missing countries
+missing_in_gem = ember_country_codes - gem_iso3_codes
+missing_in_ember = gem_iso3_codes - ember_country_codes
+
+print("Countries in Ember but not in GEM:", sorted(missing_in_gem))
+print("Countries in GEM but not in Ember:", sorted(missing_in_ember))
+
+# Check for unmapped countries in GEM
+unmapped_countries_gem = gem_data[gem_data['ISO3'] == "unknown"]['Country/area'].unique()
+print("Unmapped countries in GEM:", unmapped_countries_gem)
+
+# Check for missing or invalid ISO3 codes
+print("Missing or invalid ISO3 codes in Ember:", energy_data['Country code'].isna().sum())
+print("Missing or invalid ISO3 codes in GEM:", gem_data['ISO3'].isna().sum())
+
+# Check total counts
+print("Total countries in GEM:", len(gem_iso3_codes))
+print("Total countries in Ember:", len(ember_country_codes))
+print("Matching countries:", len(matching_country_codes))
+
+# List all matching countries
+print("Matching countries available in both Ember and GEM datasets:")
+print(sorted(matching_country_codes))
+
+# Initialize result DataFrames
+granular_df = pd.DataFrame()
+grouped_df = pd.DataFrame()
+
+# Process data for each matching country
+for country_code in matching_country_codes:
     
-    print("\n=== Detailed Comparison by Type ===")
-    for gem_type in gem_to_ember_dict.keys():
-        gem_value = gem_capacity.get(gem_type, 0)
-        ember_value = ember_capacity.get(gem_type, 0)
-        difference = capacity_differences[gem_type]
-        larger_value = larger_capacities[gem_type]
-        
-        print(f"\n{gem_type}:")
-        print(f"  GEM Capacity (MW): {gem_value:,.0f}")
-        print(f"  Ember Capacity (MW): {ember_value:,.0f}")
-        print(f"  Difference (Ember - GEM) (MW): {difference:,.0f}")
-        print(f"  Larger Capacity (MW): {larger_value:,.0f}")
-        print(f"  Ember Actual Generation (MWh): {ember_generation.get(gem_type, 0):,.0f}")
-        print(f"  Conversion Rate from Ember (MWh/MW): {conversion_rates.get(gem_type, 0):,.0f}")
-        print(f"  Potential Generation using Larger Capacity (MWh): {potential_generation.get(gem_type, 0):,.0f}")
+    gem_data = gem_data[gem_data['Status'] == 'operating'] # for the latest year 2023 or 2024..
+
+    # Filter generation data for the current country
+    filtered_generation_data = generation_data[generation_data['Country code'] == country_code]
+    if filtered_generation_data.empty:
+        print(f"No generation data found for country {country_code}.")
+    else:
+        print(f"Filtered Generation Data for {country_code}:")
+        print(filtered_generation_data)
+
+    # Calculate ember_generation
+    ember_generation = filtered_generation_data.groupby('Variable')['Value'].sum() * 1000000  # Convert TWh to MWh
+    print(f"Ember Generation for {country_code}: {ember_generation}")
+
+    # Filter capacity data for the current country
+    filtered_capacity_data = capacity_data[capacity_data['Country code'] == country_code]
+    ember_capacity = filtered_capacity_data.groupby('Variable')['Value'].sum() * 1000  # Convert GW to MW
+
+    # Filter GEM data for the current country
+    gem_country_data = gem_data[gem_data['ISO3'] == country_code]
+    gem_capacity = gem_country_data.groupby('Type')['Capacity (MW)'].sum()
+
+    # Calculate granular conversion rates for Ember data
+    granular_conversion_rates = {}
+    for category in granular_categories:
+        generation = ember_generation.get(category, 0)
+        capacity = ember_capacity.get(category, 0)
+        granular_conversion_rates[category] = generation / capacity if capacity > 0 else 0
+
+    # Initialize granular data for the current country
+    granular_data = {'Country Code': country_code}
+
+    # Process each GEM type and its corresponding Ember type
+    for gem_type, ember_type in gem_to_ember_mapping.items():
+        gem_cap = gem_capacity.get(gem_type, 0)
+        if isinstance(ember_type, list):  # Handle "oil/gas" split into "Gas" and "Other Fossil"
+            ember_gas = ember_capacity.get("Gas", 0)
+            ember_other_fossil = ember_capacity.get("Other Fossil", 0)
+            ember_gas_and_other_fossil = ember_gas + ember_other_fossil
+
+            # Determine proportions
+            if ember_gas_and_other_fossil > 0:
+                # Use Ember data to calculate proportions
+                gas_ratio = ember_gas / ember_gas_and_other_fossil
+                other_fossil_ratio = ember_other_fossil / ember_gas_and_other_fossil
+            else:
+                # No data in Ember, fallback to 5:5 split
+                gas_ratio = 0.5
+                other_fossil_ratio = 0.5
+
+            # Debugging: Print the calculated ratios
+            print(f"Country: {country_code}")
+            print(f"GEM oil/gas MW: {gem_cap}")
+            print(f"Ember Gas MW: {ember_gas}, Ember Other Fossil MW: {ember_other_fossil}")
+            print(f"Gas Ratio: {gas_ratio}, Other Fossil Ratio: {other_fossil_ratio}")
+
+            if gem_cap > ember_gas_and_other_fossil:
+                # GEM is larger: Split GEM's oil/gas proportionally
+                print("GEM oil/gas is larger. Splitting proportionally.")
+                gas_gem_cap = gem_cap * gas_ratio
+                other_fossil_gem_cap = gem_cap * other_fossil_ratio
+
+                granular_data["Gas_GEM_MW"] = gas_gem_cap
+                granular_data["Gas_Ember_MW"] = ember_gas
+                granular_data["Gas_Larger_MW"] = max(gas_gem_cap, ember_gas)
+                granular_data["Gas_ConvRate"] = granular_conversion_rates.get("Gas", 0)
+                granular_data["Gas_Potential_MWh"] = gas_gem_cap * granular_conversion_rates.get("Gas", 0)
+
+                granular_data["Other Fossil_GEM_MW"] = other_fossil_gem_cap
+                granular_data["Other Fossil_Ember_MW"] = ember_other_fossil
+                granular_data["Other Fossil_Larger_MW"] = max(other_fossil_gem_cap, ember_other_fossil)
+                granular_data["Other Fossil_ConvRate"] = granular_conversion_rates.get("Other Fossil", 0)
+                granular_data["Other Fossil_Potential_MWh"] = other_fossil_gem_cap * granular_conversion_rates.get("Other Fossil", 0)
+            else:
+                # Ember is larger: Use Ember's granular data directly
+                print("Ember Gas + Other Fossil is larger. Using Ember's data.")
+                granular_data["Gas_GEM_MW"] = 0  # GEM does not contribute to Gas
+                granular_data["Gas_Ember_MW"] = ember_gas
+                granular_data["Gas_Larger_MW"] = ember_gas
+                granular_data["Gas_ConvRate"] = granular_conversion_rates.get("Gas", 0)
+                granular_data["Gas_Potential_MWh"] = ember_generation.get("Gas", 0)  # Use Ember's MWh directly
+
+                granular_data["Other Fossil_GEM_MW"] = 0  # GEM does not contribute to Other Fossil
+                granular_data["Other Fossil_Ember_MW"] = ember_other_fossil
+                granular_data["Other Fossil_Larger_MW"] = ember_other_fossil
+                granular_data["Other Fossil_ConvRate"] = granular_conversion_rates.get("Other Fossil", 0)
+                granular_data["Other Fossil_Potential_MWh"] = ember_generation.get("Other Fossil", 0)  # Use Ember's MWh directly
+        else:
+            ember_cap = ember_capacity.get(ember_type, 0)
+            larger_cap = max(ember_cap, gem_cap)
+
+            granular_data[f'{ember_type}_GEM_MW'] = gem_cap
+            granular_data[f'{ember_type}_Ember_MW'] = ember_cap
+            granular_data[f'{ember_type}_Larger_MW'] = larger_cap
+            granular_data[f'{ember_type}_ConvRate'] = granular_conversion_rates.get(ember_type, 0)
+
+            if gem_cap > ember_cap:
+                # GEM is larger: Calculate MWh using conversion rate
+                granular_data[f'{ember_type}_Potential_MWh'] = larger_cap * granular_conversion_rates.get(ember_type, 0)
+            else:
+                # Ember is larger: Use Ember's MWh directly
+                granular_data[f'{ember_type}_Potential_MWh'] = ember_generation.get(ember_type, 0)
+
+    granular_df = pd.concat([granular_df, pd.DataFrame([granular_data])], ignore_index=True)
+
+    # Calculate grouped conversion rates, capacity, and potential generation
+    grouped_data = {'Country Code': country_code}
+    for group, subcategories in grouped_categories.items():
+        total_capacity = sum(granular_data.get(f'{sub}_Larger_MW', 0) for sub in subcategories)
+        weighted_sum = sum(
+            granular_data.get(f'{sub}_Larger_MW', 0) * granular_conversion_rates.get(sub, 0) for sub in subcategories
+        )
+        grouped_conversion_rate = weighted_sum / total_capacity if total_capacity > 0 else 0
+        grouped_data[f'{group}_Capacity_MW'] = total_capacity
+        grouped_data[f'{group}_ConvRate'] = grouped_conversion_rate
+        grouped_data[f'{group}_Potential_MWh'] = total_capacity * grouped_conversion_rate
+
+    grouped_df = pd.concat([grouped_df, pd.DataFrame([grouped_data])], ignore_index=True)
+
+# Add "Country/area (GEM)" from GEM and "Area (Ember)" from Ember to the matching countries
+gem_country_mapping = gem_data[['ISO3', 'Country/area']].drop_duplicates()
+ember_country_mapping = energy_data[['Country code', 'Area']].drop_duplicates()
+
+# Rename columns for clarity
+gem_country_mapping.rename(columns={'Country/area': 'Country/area (GEM)'}, inplace=True)
+ember_country_mapping.rename(columns={'Area': 'Area (Ember)'}, inplace=True)
+
+# Merge GEM and Ember country mappings independently
+granular_df = pd.merge(
+    granular_df,
+    gem_country_mapping[['ISO3', 'Country/area (GEM)']],
+    left_on='Country Code',
+    right_on='ISO3',
+    how='left'
+)
+
+granular_df = pd.merge(
+    granular_df,
+    ember_country_mapping[['Country code', 'Area (Ember)']],
+    left_on='Country Code',
+    right_on='Country code',
+    how='left'
+)
+
+# Drop redundant columns after merging
+granular_df.drop(columns=['ISO3', 'Country code'], inplace=True)
+
+# Save the results to an Excel file with two sheets
+with pd.ExcelWriter(output_path) as writer:
+    granular_df.to_excel(writer, sheet_name='Granular_cur', index=False)
+    grouped_df.to_excel(writer, sheet_name='Grouped_cur', index=False)
+
+print(f"Analysis saved to {output_path} with two sheets: 'Granular_cur' and 'Grouped_cur'")
 

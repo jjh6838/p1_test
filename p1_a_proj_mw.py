@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load the first dataset
-file_path1 = "un_pop/WPP2024_TotalPopulationBySex.csv"
+file_path1 = "un_pop/WPP2024_TotalPopulationBySex.csv" # updated 4/18/2025
 df1 = pd.read_csv(file_path1, low_memory=False)
 
 # Filter the first dataset for "Medium" variant and years 2023, 2030, and 2050
@@ -20,13 +20,14 @@ pivot_df1 = filtered_df1.pivot(index=["ISO3_code", "ISO2_code"], columns="Time",
 # Rename columns for clarity in the first dataset
 pivot_df1.columns = ["ISO3_code", "ISO2_code", "PopTotal_2023", "PopTotal_2030", "PopTotal_2050"]
 
-# Calculate the population growth factor from 2023 to 2030
+# Calculate the population growth factor from 2023 to 2030 and 2050
 pivot_df1["Growth_Factor_2023_2030"] = pivot_df1["PopTotal_2030"] / pivot_df1["PopTotal_2023"]
+pivot_df1["Growth_Factor_2023_2050"] = pivot_df1["PopTotal_2050"] / pivot_df1["PopTotal_2023"]
 
 
 
 # Load the second dataset
-file_path2 = "ember_energy_data/yearly_full_release_long_format.csv"
+file_path2 = "ember_energy_data/yearly_full_release_long_format.csv" # updated 4/18/2025
 df2 = pd.read_csv(file_path2)
 
 # Filter the second dataset for years 2023 through 2019
@@ -67,16 +68,35 @@ pivot_df2.columns = ["Country code"] + [f"{col}_2023" for col in pivot_df2.colum
 # Merge the two datasets by "Country code"
 merged_df = pd.merge(pivot_df1, pivot_df2, left_on="ISO3_code", right_on="Country code", how="inner")
 
-# Extrapolate the 2023 data to 2030 using the population growth factor for countries without 2030 data
+# Extrapolate the 2023 data to 2030/2050 using the population growth factors
 for col in pivot_df2.columns[1:]:
     merged_df[f"{col.replace('_2023', '')}_2030_extrapolated"] = merged_df[col] * merged_df["Growth_Factor_2023_2030"]
-
+for col in pivot_df2.columns[1:]:
+    merged_df[f"{col.replace('_2023', '')}_2050_extrapolated"] = merged_df[col] * merged_df["Growth_Factor_2023_2050"]
 
 
 # Load the third dataset
-file_path3 = "ember_energy_data/targets_download2024-10-24.xlsx"
-df3 = pd.read_excel(file_path3, sheet_name="capacity_target_wide_2")
+file_path3 = "ember_energy_data/targets_download2024-10-24.xlsx" # updated 4/18/2025
+df3_original = pd.read_excel(file_path3, sheet_name="capacity_target_wide")
+
+# Duplicate the sheet to create "capacity_target_wide_2"
+df3 = df3_original.copy()
+
+# Clean up the data in "capacity_target_wide_2"
+# 1. Add "Offshore Wind" and "Onshore Wind" values to the existing "Wind" column
+df3["Wind"] = df3.get("Wind", 0) + df3.get("Offshore Wind", 0) + df3.get("Onshore Wind", 0)
+
+# 2. Merge "Bioenergy" and "Other Renewables" into "Other Renewables"
+df3["Other Renewables"] = df3.get("Bioenergy", 0) + df3.get("Other Renewables", 0)
+
+# 3. Drop "Offshore Wind", "Onshore Wind", and "Bioenergy" columns
+df3.drop(columns=["Offshore Wind", "Onshore Wind", "Bioenergy"], inplace=True)
+
 df3 = df3[df3["country_code"] != "EU"]
+
+
+### working from here ###
+
 
 # Print the unique country codes in df3
 print("Unique country codes in df3:", df3["country_code"].unique())
