@@ -66,9 +66,9 @@ def adjust_capacity_proportionally(facilities_df):
     # Create a copy of the DataFrame to avoid SettingWithCopyWarning
     facilities_df = facilities_df.copy()
     
-    # Import values from p1_ember_analysis1
+    # Import values from p1_c_ember_gem_2030_50.py
     import importlib
-    ember_analysis = importlib.import_module('p1_b_ember_analysis')
+    ember_analysis = importlib.import_module('p1_c_ember_gem_2030') ###########################################
     
     # Import capacity values and conversion rates
     target_capacities = {
