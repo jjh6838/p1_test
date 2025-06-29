@@ -1,6 +1,7 @@
 import pandas as pd
+# 6/29/2025 at home
 
-# Load the first dataset
+# Load the first dataset 
 file_path1 = "un_pop/WPP2024_TotalPopulationBySex2025-05-02.csv" # updated 5/2/2025 
 # https://population.un.org/wpp/downloads?folder=Standard%20Projections&group=CSV%20format
 
