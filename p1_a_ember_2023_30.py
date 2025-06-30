@@ -1,5 +1,6 @@
+# 6/30/2025 at work
+
 import pandas as pd
-# 6/29/2025 at home
 
 # Load the first dataset 
 file_path1 = "un_pop/WPP2024_TotalPopulationBySex2025-05-02.csv" # updated 5/2/2025 
@@ -11,17 +12,17 @@ df1 = pd.read_csv(file_path1, low_memory=False)
 filtered_df1 = df1[(df1["Variant"] == "Medium") & (df1["Time"].isin([2023, 2030, 2050]))]
 
 # Select required columns from the first dataset
-selected_columns1 = ["ISO3_code", "ISO2_code", "Time", "PopTotal"]
+selected_columns1 = ["ISO3_code", "Time", "PopTotal"]
 filtered_df1 = filtered_df1[selected_columns1]
 
 # Remove rows with missing ISO codes from the first dataset
-filtered_df1 = filtered_df1.dropna(subset=["ISO3_code", "ISO2_code"])
+filtered_df1 = filtered_df1.dropna(subset="ISO3_code")
 
 # Pivot the first dataset to have years as columns
-pivot_df1 = filtered_df1.pivot(index=["ISO3_code", "ISO2_code"], columns="Time", values="PopTotal").reset_index()
+pivot_df1 = filtered_df1.pivot(index="ISO3_code", columns="Time", values="PopTotal").reset_index()
 
 # Rename columns for clarity in the first dataset
-pivot_df1.columns = ["ISO3_code", "ISO2_code", "PopTotal_2023", "PopTotal_2030", "PopTotal_2050"]
+pivot_df1.columns = ["ISO3_code", "PopTotal_2023", "PopTotal_2030", "PopTotal_2050"]
 
 # Calculate the population growth factor from 2023 to 2030 and 2050
 pivot_df1["Growth_Factor_2023_2030"] = pivot_df1["PopTotal_2030"] / pivot_df1["PopTotal_2023"]
@@ -29,53 +30,31 @@ pivot_df1["Growth_Factor_2023_2050"] = pivot_df1["PopTotal_2050"] / pivot_df1["P
 
 
 
-# Load the second dataset
-file_path2 = "ember_energy_data/yearly_full_release_long_format2025-05-02.csv" # updated 5/2/2025
-df2 = pd.read_csv(file_path2)
+# Load the processed data from p1_b_ember_gem_2023.py (# 2nd dataset)
+p1_b_output_path = r"outputs_processed_data\p1_b_ember_gem_2023.xlsx"
+granular_df = pd.read_excel(p1_b_output_path, sheet_name="Grouped_cur")
 
-# Filter the second dataset for years 2023 through 2019
-years = [2023, 2022, 2021, 2020, 2019]
-filtered_df2 = df2[
-    (df2["Year"].isin(years)) &
-    (df2["Category"] == "Capacity") &
-    (df2["Subcategory"] == "Fuel") &
-    (df2["Unit"] == "GW") &
-    (df2["Variable"].isin(["Bioenergy", "Coal", "Gas", "Hydro", "Nuclear", "Other Fossil", 
-                           "Other Renewables", "Solar", "Wind"]))
-]
+# Extract relevant columns for merging
+granular_columns = ["Country Code", "Total_Potential_MWh"] + [col for col in granular_df.columns if "_Larger_MW" in col]
+granular_df = granular_df[granular_columns]
 
-# Prioritize the most recent year for each country and variable
-filtered_df2 = filtered_df2.sort_values(by="Year", ascending=False).drop_duplicates(subset=["Country code", "Variable"], keep='first')
+# Rename columns for clarity
+granular_df.rename(columns={"Country Code": "ISO3_code"}, inplace=True)
+granular_df.rename(columns={"Total_Potential_MWh": "Total_MWh_2023"}, inplace=True)
 
-# Group "Coal", "Gas", "Other Fossil" into "Fossil" in the second dataset
-filtered_df2.loc[filtered_df2["Variable"].isin(["Coal", "Gas", "Other Fossil"]), "Variable"] = "Fossil"
+# Rename columns to follow the {type}_2023 naming convention
+granular_df.rename(columns={col: col.replace("_Larger_MW", "_2023") for col in granular_df.columns if "_Larger_MW" in col}, inplace=True)
 
-# Merge "Bioenergy" with "Other Renewables" in the second dataset
-filtered_df2.loc[filtered_df2["Variable"] == "Bioenergy", "Variable"] = "Other Renewables"
+# Merge the two datasets by "ISO3_code"
+merged_df = pd.merge(pivot_df1, granular_df, on="ISO3_code", how="inner")
 
-# Remove rows where "Country code" is NaN in the second dataset
-filtered_df2 = filtered_df2.dropna(subset=["Country code"])
+#Calcluate "per capita MWh 2023"
+merged_df["Per_Capita_MWh_2023"] = merged_df["Total_MWh_2023"] / merged_df["PopTotal_2023"]
 
-# Aggregate duplicate entries by summing their values in the second dataset
-filtered_df2 = filtered_df2.groupby(["Country code", "Variable"], as_index=False)["Value"].sum()
+# Extrapolate the 2023 data to 2030/2050 using the population growth factors for Total_MWh_2023
+merged_df["Total_MWh_2030"] = merged_df["Total_MWh_2023"] * merged_df["Growth_Factor_2023_2030"] * 1.2  # energy consumption 20% up for 2030
+merged_df["Total_MWh_2050"] = merged_df["Total_MWh_2023"] * merged_df["Growth_Factor_2023_2050"] * 1.5  # energy consumption 50% up for 2050
 
-# Pivot the cleaned second dataset
-pivot_df2 = filtered_df2.pivot(index="Country code", columns="Variable", values="Value").reset_index()
-
-# Fill NaN values with zero
-pivot_df2 = pivot_df2.fillna(0)
-
-# Rename columns by adding "_2023" except for "Country code" in the second dataset
-pivot_df2.columns = ["Country code"] + [f"{col}_2023" for col in pivot_df2.columns[1:]]
-
-# Merge the two datasets by "Country code"
-merged_df = pd.merge(pivot_df1, pivot_df2, left_on="ISO3_code", right_on="Country code", how="inner")
-
-# Extrapolate the 2023 data to 2030/2050 using the population growth factors
-for col in pivot_df2.columns[1:]:
-    merged_df[f"{col.replace('_2023', '')}_2030_extrapolated"] = merged_df[col] * merged_df["Growth_Factor_2023_2030"]
-for col in pivot_df2.columns[1:]:
-    merged_df[f"{col.replace('_2023', '')}_2050_extrapolated"] = merged_df[col] * merged_df["Growth_Factor_2023_2050"]
 
 
 # Load the third dataset
@@ -112,24 +91,82 @@ def determine_category(row):
 
 df3["Category"] = df3.apply(determine_category, axis=1)
 
-# Print the unique country codes in df3
-print("Unique country codes in df3:", df3["country_code"].unique())
+# Print the number of unique country codes in df3
+print("Number of unique country codes in df3:", df3["country_code"].nunique())
 
-# Print the unique country codes in merged_df
-print("Unique country codes in merged_df:", merged_df["ISO3_code"].unique())
+# Print the number of unique country codes in merged_df
+print("Number of unique country codes in merged_df:", merged_df["ISO3_code"].nunique())
 
 # Define a function to disaggregate based on 2023 data
 def disaggregate(row, merged_df, categories, column_name):
+    """
+    Disaggregate the values in the specified column into the given categories based on proportions derived from 2023 data.
+
+    Args:
+        row (pd.Series): A row from the dataframe containing the data to be disaggregated.
+        merged_df (pd.DataFrame): The dataframe containing the reference data for proportions.
+        categories (list): List of category names to disaggregate into.
+        column_name (str): The name of the column to disaggregate.
+
+    Returns:
+        dict: A dictionary with the disaggregated values for each category.
+    """
+    # Ensure required columns exist in merged_df
+    missing_columns = [f"{cat}_2023" for cat in categories if f"{cat}_2023" not in merged_df.columns]
+    if missing_columns:
+        print(f"Missing columns in merged_df: {missing_columns}")
+
+    # Extract the country code from the row
     country_code = row["country_code"]
-    if country_code not in merged_df["ISO3_code"].values:
+
+    # Filter merged_df for the specific country code
+    filtered_merged_df = merged_df[merged_df["ISO3_code"] == country_code]
+
+    # Check if the country code exists in merged_df
+    if filtered_merged_df.empty:
         print(f"Country code {country_code} not found in merged_df")
         return {cat: 0 for cat in categories}
-    total_2023 = sum(merged_df.loc[merged_df["ISO3_code"] == country_code, f"{cat}_2023"].fillna(0).values[0] for cat in categories)
+
+    # Calculate the total 2023 values for the categories
+    total_2023 = filtered_merged_df[[f"{cat}_2023" for cat in categories]].fillna(0).sum(axis=1).values[0]
+
+    # Handle cases where total_2023 is zero
     if total_2023 == 0:
         print(f"Total 2023 for country code {country_code} is 0")
         return {cat: 0 for cat in categories}
-    proportions = {cat: merged_df.loc[merged_df["ISO3_code"] == country_code, f"{cat}_2023"].fillna(0).values[0] / total_2023 for cat in categories}
+
+    # Calculate proportions for each category based on 2023 data
+    proportions = {
+        cat: filtered_merged_df[f"{cat}_2023"].fillna(0).values[0] / total_2023
+        for cat in categories
+    }
+
+    # Log the calculated proportions for debugging purposes
     print(f"Proportions for country code {country_code}: {proportions}")
+    
+    # Disaggregate the values in the specified column based on the calculated proportions
+    return {cat: row[column_name] * proportions[cat] for cat in categories}
+
+    # Handle cases where total_2023 is zero
+    if total_2023 == 0:
+        print(f"Total 2023 for country code {country_code} is 0")
+
+    # Calculate proportions for each category based on 2023 data
+    proportions = {
+        cat: (
+            merged_df.loc[merged_df["ISO3_code"] == country_code, f"{cat}_2023"].fillna(0).values[0]
+            / total_2023
+        )
+        if total_2023 != 0
+        else 0
+        for cat in categories
+    }
+
+    # Log the calculated proportions for debugging purposes
+    import logging
+    logging.debug(f"Proportions for country code {country_code}: {proportions}")
+
+    # Disaggregate the values in the specified column based on the calculated proportions
     return {cat: row[column_name] * proportions[cat] for cat in categories}
 
 # Disaggregate [Rest of renewables] for Category 1
@@ -169,13 +206,16 @@ df3.rename(columns={"Country code": "country_code"}, inplace=True)
 # Merge the third dataset with the previously merged dataset
 final_merged_df = pd.merge(merged_df, df3, left_on="ISO3_code", right_on="country_code", how="left")
 
-# Use extrapolated 2030 data for countries without 2030 data
+# Ensure extrapolated columns exist before using them
 for col in ["Solar", "Wind", "Hydro", "Other Renewables"]:
-    final_merged_df[f"{col}_2030"] = final_merged_df[f"{col}_2030"].fillna(final_merged_df[f"{col}_2030_extrapolated"])
+    extrapolated_col = f"{col}_2030_extrapolated"
+    if extrapolated_col not in final_merged_df.columns:
+        print(f"Warning: Column '{extrapolated_col}' not found in final_merged_df. Skipping extrapolation for '{col}_2030'.")
+        continue
+    final_merged_df[f"{col}_2030"] = final_merged_df[f"{col}_2030"].fillna(final_merged_df[extrapolated_col])
 
-# Drop the extrapolated columns
-final_merged_df.drop(columns=[f"{col}_2030_extrapolated" for col in ["Solar", "Wind", "Hydro", "Other Renewables"]], inplace=True)
+# Drop the extrapolated columns after use
+final_merged_df.drop(columns=[f"{col}_2030_extrapolated" for col in ["Solar", "Wind", "Hydro", "Other Renewables"] if f"{col}_2030_extrapolated" in final_merged_df.columns], inplace=True)
 
 # Save the final merged dataset to a CSV file
-save_path_final = "outputs_processed_data/p1_a_ember_2023_30.csv"
-final_merged_df.to_csv(save_path_final, index=False)
+final_merged_df.to_excel("outputs_processed_data/p1_a_ember_2023_30.xlsx", index=False)

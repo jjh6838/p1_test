@@ -1,3 +1,5 @@
+# 6/30/2025 at work
+
 import pandas as pd
 import warnings
 try:
@@ -145,31 +147,29 @@ grouped_df = pd.DataFrame()
 
 # Process data for each matching country
 for country_code in matching_country_codes:
-    
-    gem_data = gem_data[gem_data['Status'] == 'operating'] # for the latest year 2023 or 2024..
+    gem_data = gem_data[gem_data['Status'] == 'operating']  # for the current year (i.e., 2024)
 
-    # Filter generation data for the current country
+    # Filter Ember generation data for the current country
     filtered_generation_data = generation_data[generation_data['Country code'] == country_code]
     if filtered_generation_data.empty:
-        print(f"No generation data found for country {country_code}.")
-        continue
-
-    # Filter GEM data for the current country
-    gem_country_data = gem_data[gem_data['ISO3'] == country_code]
-    if gem_country_data.empty:
-        print(f"No GEM data found for country {country_code}.")
+        print(f"No Ember generation data found for country {country_code}.")
         continue
 
     # Calculate ember_generation
     ember_generation = filtered_generation_data.groupby('Variable')['Value'].sum() * 1000000  # Convert TWh to MWh
 
-    # Filter capacity data for the current country
+    # Filter Ember capacity data for the current country
     filtered_capacity_data = capacity_data[capacity_data['Country code'] == country_code]
     ember_capacity = filtered_capacity_data.groupby('Variable')['Value'].sum() * 1000  # Convert GW to MW
 
-    # Filter GEM data for the current country
+    # Filter GEM data for the current country (already in MW)
     gem_country_data = gem_data[gem_data['ISO3'] == country_code]
     gem_capacity = gem_country_data.groupby('Type')['Capacity (MW)'].sum()
+
+    # Use Ember capacity data if GEM capacity data is missing or zero
+    if gem_capacity.empty or gem_capacity.sum() == 0:
+        print(f"No GEM capacity data found for country {country_code}.")
+        
 
     # Calculate granular conversion rates for Ember data
     granular_conversion_rates = {}
@@ -230,7 +230,7 @@ for country_code in matching_country_codes:
                 granular_data["Other Fossil_Potential_MWh"] = ember_generation.get("Other Fossil", 0)  # Use Ember's MWh directly
         else:
             ember_cap = ember_capacity.get(ember_type, 0)
-            larger_cap = max(ember_cap, gem_cap)
+            larger_cap = ember_cap if gem_cap == 0 or pd.isna(gem_cap) else gem_cap if ember_cap == 0 or pd.isna(ember_cap) else max(ember_cap, gem_cap)
 
             granular_data[f'{ember_type}_GEM_MW'] = gem_cap
             granular_data[f'{ember_type}_Ember_MW'] = ember_cap
@@ -254,7 +254,7 @@ for country_code in matching_country_codes:
             granular_data.get(f'{sub}_Larger_MW', 0) * granular_conversion_rates.get(sub, 0) for sub in subcategories
         )
         grouped_conversion_rate = weighted_sum / total_capacity if total_capacity > 0 else 0
-        grouped_data[f'{group}_Capacity_MW'] = total_capacity
+        grouped_data[f'{group}_Larger_MW'] = total_capacity
         grouped_data[f'{group}_ConvRate'] = grouped_conversion_rate
         grouped_data[f'{group}_Potential_MWh'] = total_capacity * grouped_conversion_rate
 
