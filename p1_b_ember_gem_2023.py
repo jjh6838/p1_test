@@ -66,15 +66,40 @@ manual_mapping = {
 
 def map_country_to_iso3(country_name):
     """
-    Map a country name to its ISO3 code using pycountry or manual mapping.
+    Map a country name to its ISO3 code using manual mapping first, then pycountry.
     """
+    # Check manual mapping first
+    if country_name in manual_mapping:
+        return manual_mapping[country_name]
+    
+    # If not found in manual mapping, try pycountry
     if countries:
         try:
             return countries.lookup(country_name).alpha_3
         except LookupError:
-            return manual_mapping.get(country_name, "unknown")
+            return "unknown"
     else:
-        return manual_mapping.get(country_name, "unknown")
+        return "unknown"
+
+def map_iso3_to_country_name(iso3_code):
+    """
+    Map an ISO3 code to a country name using manual mapping first, then pycountry.
+    """
+    # Create reverse mapping from manual_mapping (prioritize these names)
+    reverse_manual_mapping = {v: k for k, v in manual_mapping.items()}
+    
+    # Check reverse manual mapping first
+    if iso3_code in reverse_manual_mapping:
+        return reverse_manual_mapping[iso3_code]
+    
+    # If not found in manual mapping, try pycountry
+    if countries:
+        try:
+            return countries.lookup(iso3_code).name
+        except LookupError:
+            return iso3_code  # Return ISO3 code if no name found
+    else:
+        return iso3_code  # Return ISO3 code if no name found
 
 # Load Ember data
 energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format2025-05-02.csv" #updated on May 2, 2025
@@ -179,7 +204,7 @@ for country_code in matching_country_codes:
         granular_conversion_rates[category] = generation / capacity if capacity > 0 else 0
 
     # Initialize granular data for the current country
-    granular_data = {'Country Code': country_code}
+    granular_data = {'Country Code': country_code, 'Country Name': map_iso3_to_country_name(country_code)}
 
     # Process each GEM type and its corresponding Ember type
     for gem_type, ember_type in gem_to_ember_mapping.items():
@@ -247,7 +272,7 @@ for country_code in matching_country_codes:
     granular_df = pd.concat([granular_df, pd.DataFrame([granular_data])], ignore_index=True)
 
     # Calculate grouped conversion rates, capacity, and potential generation
-    grouped_data = {'Country Code': country_code}
+    grouped_data = {'Country Code': country_code, 'Country Name': map_iso3_to_country_name(country_code)}
     for group, subcategories in grouped_categories.items():
         total_capacity = sum(granular_data.get(f'{sub}_Larger_MW', 0) for sub in subcategories)
         weighted_sum = sum(
@@ -293,6 +318,13 @@ granular_df["Total_Potential_MWh"] = granular_df.filter(like="_Potential_MWh").s
 
 # Add "total_MWh" column to the grouped DataFrame
 grouped_df["Total_Potential_MWh"] = grouped_df.filter(like="_Potential_MWh").sum(axis=1)
+
+# Reorder columns to have Country Name first
+granular_columns = ['Country Name'] + [col for col in granular_df.columns if col != 'Country Name']
+granular_df = granular_df[granular_columns]
+
+grouped_columns = ['Country Name'] + [col for col in grouped_df.columns if col != 'Country Name']
+grouped_df = grouped_df[grouped_columns]
 
 # Save the results to an Excel file with two sheets
 output_path = r"outputs_processed_data\p1_b_ember_gem_2023.xlsx"

@@ -2,6 +2,7 @@
 
 import pandas as pd
 
+# Task 1
 # Load the first dataset 
 file_path1 = "un_pop/WPP2024_TotalPopulationBySex2025-05-02.csv" # updated 5/2/2025 
 # https://population.un.org/wpp/downloads?folder=Standard%20Projections&group=CSV%20format
@@ -29,24 +30,24 @@ pivot_df1["Growth_Factor_2023_2030"] = pivot_df1["PopTotal_2030"] / pivot_df1["P
 pivot_df1["Growth_Factor_2023_2050"] = pivot_df1["PopTotal_2050"] / pivot_df1["PopTotal_2023"]
 
 
-
+### Task 2
 # Load the processed data from p1_b_ember_gem_2023.py (# 2nd dataset)
 p1_b_output_path = r"outputs_processed_data\p1_b_ember_gem_2023.xlsx"
-granular_df = pd.read_excel(p1_b_output_path, sheet_name="Grouped_cur")
+grouped_df = pd.read_excel(p1_b_output_path, sheet_name="Grouped_cur")
 
 # Extract relevant columns for merging
-granular_columns = ["Country Code", "Total_Potential_MWh"] + [col for col in granular_df.columns if "_Larger_MW" in col]
-granular_df = granular_df[granular_columns]
+granular_columns = ["Country Name", "Country Code", "Total_Potential_MWh"] + [col for col in grouped_df.columns if "_Larger_MW" in col]
+grouped_df = grouped_df[granular_columns]
 
 # Rename columns for clarity
-granular_df.rename(columns={"Country Code": "ISO3_code"}, inplace=True)
-granular_df.rename(columns={"Total_Potential_MWh": "Total_MWh_2023"}, inplace=True)
+grouped_df.rename(columns={"Country Code": "ISO3_code"}, inplace=True)
+grouped_df.rename(columns={"Total_Potential_MWh": "Total_MWh_2023"}, inplace=True)
 
 # Rename columns to follow the {type}_2023 naming convention
-granular_df.rename(columns={col: col.replace("_Larger_MW", "_2023") for col in granular_df.columns if "_Larger_MW" in col}, inplace=True)
+grouped_df.rename(columns={col: col.replace("_Larger_MW", "_2023") for col in grouped_df.columns if "_Larger_MW" in col}, inplace=True)
 
 # Merge the two datasets by "ISO3_code"
-merged_df = pd.merge(pivot_df1, granular_df, on="ISO3_code", how="inner")
+merged_df = pd.merge(pivot_df1, grouped_df, on="ISO3_code", how="inner")
 
 #Calcluate "per capita MWh 2023"
 merged_df["Per_Capita_MWh_2023"] = merged_df["Total_MWh_2023"] / merged_df["PopTotal_2023"]
@@ -56,7 +57,7 @@ merged_df["Total_MWh_2030"] = merged_df["Total_MWh_2023"] * merged_df["Growth_Fa
 merged_df["Total_MWh_2050"] = merged_df["Total_MWh_2023"] * merged_df["Growth_Factor_2023_2050"] * 1.5  # energy consumption 50% up for 2050
 
 
-
+### Task 3
 # Load the third dataset
 file_path3 = "ember_energy_data/targets_download2025-05-02.xlsx" # updated 5/2/2025
 df3_original = pd.read_excel(file_path3, sheet_name="capacity_target_wide")
@@ -97,7 +98,7 @@ print("Number of unique country codes in df3:", df3["country_code"].nunique())
 # Print the number of unique country codes in merged_df
 print("Number of unique country codes in merged_df:", merged_df["ISO3_code"].nunique())
 
-# Define a function to disaggregate based on 2023 data
+# Define a function to disaggregate based on 2023 data: only for 80+ countries with 2030 NDCs targets 
 def disaggregate(row, merged_df, categories, column_name):
     """
     Disaggregate the values in the specified column into the given categories based on proportions derived from 2023 data.
@@ -127,7 +128,7 @@ def disaggregate(row, merged_df, categories, column_name):
         print(f"Country code {country_code} not found in merged_df")
         return {cat: 0 for cat in categories}
 
-    # Calculate the total 2023 values for the categories
+    # Calculate the total 2023 Ember capacity for the categories
     total_2023 = filtered_merged_df[[f"{cat}_2023" for cat in categories]].fillna(0).sum(axis=1).values[0]
 
     # Handle cases where total_2023 is zero
@@ -135,17 +136,11 @@ def disaggregate(row, merged_df, categories, column_name):
         print(f"Total 2023 for country code {country_code} is 0")
         return {cat: 0 for cat in categories}
 
-    # Calculate proportions for each category based on 2023 data
+    # Calculate proportions for each category based on 2023 Ember capacity data
     proportions = {
         cat: filtered_merged_df[f"{cat}_2023"].fillna(0).values[0] / total_2023
         for cat in categories
     }
-
-    # Log the calculated proportions for debugging purposes
-    print(f"Proportions for country code {country_code}: {proportions}")
-    
-    # Disaggregate the values in the specified column based on the calculated proportions
-    return {cat: row[column_name] * proportions[cat] for cat in categories}
 
     # Handle cases where total_2023 is zero
     if total_2023 == 0:
@@ -162,35 +157,35 @@ def disaggregate(row, merged_df, categories, column_name):
         for cat in categories
     }
 
-    # Log the calculated proportions for debugging purposes
-    import logging
-    logging.debug(f"Proportions for country code {country_code}: {proportions}")
-
     # Disaggregate the values in the specified column based on the calculated proportions
-    return {cat: row[column_name] * proportions[cat] for cat in categories}
+    return {cat: row[column_name] * proportions[cat] for cat in categories} # * 1000 to convert from GWh to MWh
 
 # Disaggregate [Rest of renewables] for Category 1
 df3.loc[df3["Category"] == 1, ["Solar", "Wind", "Other Renewables"]] = df3[df3["Category"] == 1].apply(
     lambda row: pd.Series(disaggregate(row, merged_df, ["Solar", "Wind", "Other Renewables"], "Rest of renewables")), axis=1
-)
+) 
 
 # Disaggregate [Rest of renewables] for Category 4
 df3.loc[df3["Category"] == 4, ["Solar", "Hydro", "Other Renewables"]] = df3[df3["Category"] == 4].apply(
     lambda row: pd.Series(disaggregate(row, merged_df, ["Solar", "Hydro", "Other Renewables"], "Rest of renewables")), axis=1
-)
+) 
 
 # Disaggregate [Hydro, bio and other renewables] for Category 3
 df3.loc[df3["Category"] == 3, ["Hydro", "Other Renewables"]] = df3[df3["Category"] == 3].apply(
     lambda row: pd.Series(disaggregate(row, merged_df, ["Hydro", "Other Renewables"], "Hydro, bio and other renewables")), axis=1
-)
+) 
 
 # Disaggregate [Renewables] for Category 5
 df3.loc[df3["Category"] == 5, ["Solar", "Wind", "Hydro", "Other Renewables"]] = df3[df3["Category"] == 5].apply(
     lambda row: pd.Series(disaggregate(row, merged_df, ["Solar", "Wind", "Hydro", "Other Renewables"], "Renewables")), axis=1
-)
-
+) 
 # Drop unnecessary columns
 df3.drop(columns=["Rest of renewables", "Hydro, bio and other renewables", "Renewables"], inplace=True)
+
+# Multiply 2030 target columns by 1000 to convert from GW to MW (if needed)
+for col in ["res_capacity_target", "Hydro", "Other Renewables", "Solar", "Wind"]:
+    if col in df3.columns:
+        df3[col] = df3[col] * 1000
 
 # Rename columns for 2030 targets
 df3.rename(columns={
@@ -200,22 +195,53 @@ df3.rename(columns={
     "Wind": "Wind_2030"
 }, inplace=True)
 
-# Ensure the column name is correct for merging
-df3.rename(columns={"Country code": "country_code"}, inplace=True)
+# Merge the third dataset with the previously merged dataset, pulling only the needed columns from df3
+columns_to_pull = [
+    "country_code", "res_capacity_target", "res_share_target",
+    "Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030", "Category"
+]
 
-# Merge the third dataset with the previously merged dataset
-final_merged_df = pd.merge(merged_df, df3, left_on="ISO3_code", right_on="country_code", how="left")
+final_merged_df = pd.merge(
+    merged_df,
+    df3[columns_to_pull],
+    left_on="ISO3_code",
+    right_on="country_code",
+    how="left"
+)
 
-# Ensure extrapolated columns exist before using them
-for col in ["Solar", "Wind", "Hydro", "Other Renewables"]:
-    extrapolated_col = f"{col}_2030_extrapolated"
-    if extrapolated_col not in final_merged_df.columns:
-        print(f"Warning: Column '{extrapolated_col}' not found in final_merged_df. Skipping extrapolation for '{col}_2030'.")
-        continue
-    final_merged_df[f"{col}_2030"] = final_merged_df[f"{col}_2030"].fillna(final_merged_df[extrapolated_col])
 
-# Drop the extrapolated columns after use
-final_merged_df.drop(columns=[f"{col}_2030_extrapolated" for col in ["Solar", "Wind", "Hydro", "Other Renewables"] if f"{col}_2030_extrapolated" in final_merged_df.columns], inplace=True)
+# Task 4
+# Load the capacity conversion factors from the original p1_b_ember_gem_2023.xlsx file
+capacity_conversion_factors_df = pd.read_excel(p1_b_output_path, sheet_name="Grouped_cur")
+
+# Extract the capacity conversion factors for each country
+capacity_conversion_factors = capacity_conversion_factors_df.set_index("Country Code")[
+    ["Hydro_ConvRate", "Solar_ConvRate", "Wind_ConvRate", "Other Renewables_ConvRate"]
+].to_dict(orient="index")
+
+# Calculate MWh for 2030 based on the conversion factors and compute the total
+for index, row in final_merged_df.iterrows():
+    country_code = row["ISO3_code"]
+    if country_code in capacity_conversion_factors:
+        conversion_factors = capacity_conversion_factors[country_code]
+        hydro_mwh = row["Hydro_2030"] * conversion_factors["Hydro_ConvRate"]
+        solar_mwh = row["Solar_2030"] * conversion_factors["Solar_ConvRate"]
+        wind_mwh = row["Wind_2030"] * conversion_factors["Wind_ConvRate"]
+        other_renewables_mwh = row["Other Renewables_2030"] * conversion_factors["Other Renewables_ConvRate"]
+        
+        # Assign individual MWh values to the dataframe
+        # final_merged_df.at[index, "Hydro_2030_MWh"] = hydro_mwh
+        # final_merged_df.at[index, "Solar_2030_MWh"] = solar_mwh
+        # final_merged_df.at[index, "Wind_2030_MWh"] = wind_mwh
+        # final_merged_df.at[index, "Other Renewables_2030_MWh"] = other_renewables_mwh
+        
+        # Calculate the total MWh for 2030 and assign it to the new column
+        final_merged_df.at[index, "HSWO_2030_MWh"] = hydro_mwh + solar_mwh + wind_mwh + other_renewables_mwh
+
+
+# Reorder columns to have Country Name and ISO3_code first
+final_columns = ['Country Name', 'ISO3_code'] + [col for col in final_merged_df.columns if col not in ['Country Name', 'ISO3_code']]
+final_merged_df = final_merged_df[final_columns]
 
 # Save the final merged dataset to a CSV file
 final_merged_df.to_excel("outputs_processed_data/p1_a_ember_2023_30.xlsx", index=False)
