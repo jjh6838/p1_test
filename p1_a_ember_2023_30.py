@@ -1,6 +1,7 @@
 # 6/30/2025 at work
 
 import pandas as pd
+import itertools
 
 # Task 1
 # Load the first dataset 
@@ -36,7 +37,12 @@ p1_b_output_path = r"outputs_processed_data\p1_b_ember_gem_2023.xlsx"
 grouped_df = pd.read_excel(p1_b_output_path, sheet_name="Grouped_cur")
 
 # Extract relevant columns for merging
-granular_columns = ["Country Name", "Country Code", "Total_Potential_MWh"] + [col for col in grouped_df.columns if "_Larger_MW" in col]
+granular_columns = (
+    ["Country Name", "Country Code"] +
+    [col for col in grouped_df.columns if "_Larger_MW" in col] +
+    [col for col in grouped_df.columns if "_Potential_MWh" in col]
+)
+
 grouped_df = grouped_df[granular_columns]
 
 # Rename columns for clarity
@@ -45,6 +51,8 @@ grouped_df.rename(columns={"Total_Potential_MWh": "Total_MWh_2023"}, inplace=Tru
 
 # Rename columns to follow the {type}_2023 naming convention
 grouped_df.rename(columns={col: col.replace("_Larger_MW", "_2023") for col in grouped_df.columns if "_Larger_MW" in col}, inplace=True)
+grouped_df.rename(columns={col: col.replace("_Potential_MWh", "_2023_MWh") for col in grouped_df.columns if "_Potential_MWh" in col}, inplace=True)
+
 
 # Merge the two datasets by "ISO3_code"
 merged_df = pd.merge(pivot_df1, grouped_df, on="ISO3_code", how="inner")
@@ -248,11 +256,14 @@ capacity_conversion_factors = (
     .to_dict(orient="index")
 )
 
+
 # Calculate MWh for 2030 based on the conversion factors and compute the total
 for index, row in final_merged_df.iterrows():
     country_code = row["ISO3_code"]
     if country_code in capacity_conversion_factors:
         conversion_factors = capacity_conversion_factors[country_code]
+        
+        # Calculate MWh for each energy type
         hydro_mwh = row["Hydro_2030"] * conversion_factors["Hydro_ConvRate"]
         solar_mwh = row["Solar_2030"] * conversion_factors["Solar_ConvRate"]
         wind_mwh = row["Wind_2030"] * conversion_factors["Wind_ConvRate"]
@@ -264,16 +275,17 @@ for index, row in final_merged_df.iterrows():
         final_merged_df.at[index, "Wind_2030_MWh"] = wind_mwh
         final_merged_df.at[index, "Other Renewables_2030_MWh"] = other_renewables_mwh
         
-        # Calculate the total MWh for 2030 and assign it to the new column
-        final_merged_df.at[index, "HSWO_2030_MWh"] = hydro_mwh + solar_mwh + wind_mwh + other_renewables_mwh
+        # Calculate the total MWh for 2030
+        total_mwh = hydro_mwh + solar_mwh + wind_mwh + other_renewables_mwh
+        final_merged_df.at[index, "HSWO_2030_MWh"] = total_mwh
 
 # Compute total RE generation per capita for 2030
-final_merged_df["RE_Generation_Per_Capita_2030"] = (
-    final_merged_df["HSWO_2030_MWh"] / final_merged_df["PopTotal_2030"]
-)
+final_merged_df["Hydro_2030_MWh_per_capita"] = final_merged_df["Hydro_2030_MWh"] / final_merged_df["PopTotal_2030"]
+final_merged_df["Solar_2030_MWh_per_capita"] = final_merged_df["Solar_2030_MWh"] / final_merged_df["PopTotal_2030"]
+final_merged_df["Wind_2030_MWh_per_capita"] = final_merged_df["Wind_2030_MWh"] / final_merged_df["PopTotal_2030"]
+final_merged_df["Other Renewables_2030_MWh_per_capita"] = final_merged_df["Other Renewables_2030_MWh"] / final_merged_df["PopTotal_2030"]
+final_merged_df["HSWO_2030_MWh_per_capita"] = final_merged_df["HSWO_2030_MWh"] / final_merged_df["PopTotal_2030"]
 
-
-### 7/1/2025 to be at home. + in dataset b, use global mean conversion rates for each type!!
 ### Task 5
 # Extrapolate the 2030 targets for countries without NDCs using regional benchmarks
 # Load/add WB Country Class (https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups)
@@ -292,32 +304,105 @@ final_merged_df = pd.merge(
 # Drop rows with missing values in Region or Income group
 final_merged_df.dropna(subset=["Region", "Income group"], inplace=True)
 
-# Define the energy types to be used for regional benchmarks
-energy_types = ["Hydro_2030_MWh", "Solar_2030_MWh", "Wind_2030_MWh", "Other Renewables_2030_MWh"]
+# Fill 2030 Capacity Percentage targets for countries without values in the "res_share_target" column
 
-# Filter the dataset to include only countries with valid NDCs (non-null "Category")
-# Melt the dataframe to reshape it for grouping by region, income group, and energy type
-regional_benchmarks = (
-    final_merged_df[final_merged_df["Category"].notnull()]  # Filter rows with valid NDCs
-    .melt(
-        id_vars=["Region", "Income group", "PopTotal_2030"],  # Include population for per capita calculation
-        value_vars=energy_types,  # Columns to unpivot (energy types)
-        var_name="Energy_Type",  # Name of the new column for energy types
-        value_name="MWh"  # Name of the new column for energy values
-    )
-    .assign(MWh_Per_Capita=lambda df: df["MWh"] / df["PopTotal_2030"])  # Calculate MWh per capita
-    .groupby(["Region", "Income group", "Energy_Type"])["MWh_Per_Capita"]  # Group by region, income group, and energy type
-    .mean()  # Compute the average MWh per capita for each group
-    .reset_index()  # Reset the index to return a flat dataframe
+# Calculate regional and income group benchmarks for "res_share_target"
+res_share_benchmarks = (
+    final_merged_df[final_merged_df["res_share_target"].notnull()]
+    .groupby(["Region", "Income group"])["res_share_target"]
+    .mean()
+    .reset_index()
 )
 
-# Pivot so each energy type is a column with _Regional_Benchmark suffix
-regional_benchmarks_pivot = regional_benchmarks.pivot(
-    index=["Region", "Income group"], columns="Energy_Type", values="MWh_Per_Capita"
+# Compute global mean for "res_share_target"
+global_res_share_mean = final_merged_df["res_share_target"].mean()
+
+# Merge regional benchmarks back into the dataset
+final_merged_df = pd.merge(
+    final_merged_df,
+    res_share_benchmarks,
+    on=["Region", "Income group"],
+    how="left",
+    suffixes=("", "_R_Benchmark")
+)
+
+# Fill missing "res_share_target" values
+final_merged_df["res_share_target"] = final_merged_df["res_share_target"].fillna(
+    final_merged_df["res_share_target_R_Benchmark"]
+).fillna(global_res_share_mean)
+
+# Calculate and fill MWh per capita for 2030
+# Define the energy types to be used for regional benchmarks
+energy_types = ["Hydro_2030_MWh_per_capita", "Solar_2030_MWh_per_capita", "Wind_2030_MWh_per_capita", "Other Renewables_2030_MWh_per_capita"]
+
+# Filter the dataset to include only countries with valid NDCs (non-null "Category")
+# Filter only countries with valid NDCs
+valid_ndc_df = final_merged_df[final_merged_df["Category"].notnull()]
+
+# Melt the dataframe for per capita calculations
+melted_df = valid_ndc_df.melt(
+    id_vars=["Region", "Income group"],
+    value_vars=energy_types,
+    var_name="Energy_Type",
+    value_name="MWh_Per_Capita"
+)
+# Calculate regional benchmarks (mean per capita by Region, Income group, and Energy Type)
+regional_benchmarks = (
+    melted_df
+    .groupby(["Region", "Income group", "Energy_Type"])["MWh_Per_Capita"]
+    .mean()
+    .reset_index()
+)
+# Create a full index of all combinations
+regions = valid_ndc_df["Region"].dropna().unique()
+income_groups = valid_ndc_df["Income group"].dropna().unique()
+energy_types_unique = melted_df["Energy_Type"].dropna().unique()
+
+full_index = pd.DataFrame(
+    list(itertools.product(regions, income_groups, energy_types_unique)),
+    columns=["Region", "Income group", "Energy_Type"]
+)
+
+# Merge full index with actual data
+regional_benchmarks = full_index.merge(
+    regional_benchmarks,
+    on=["Region", "Income group", "Energy_Type"],
+    how="left"
+)
+
+# Compute global means by Income group and Energy Type
+global_means_by_income = (
+    valid_ndc_df
+    .melt(
+        id_vars=["Income group"],
+        value_vars=energy_types,
+        var_name="Energy_Type",
+        value_name="MWh_Per_Capita"
+    )
+    .groupby(["Income group", "Energy_Type"])["MWh_Per_Capita"]
+    .mean()
+    .to_dict()
+)
+
+# Fill missing or zero values with global means
+regional_benchmarks["MWh_Per_Capita"] = regional_benchmarks.apply(
+    lambda row: global_means_by_income.get((row["Income group"], row["Energy_Type"]), 0)
+    if pd.isna(row["MWh_Per_Capita"]) or row["MWh_Per_Capita"] == 0 else row["MWh_Per_Capita"],
+    axis=1
+)
+
+# Pivot the table to wide format
+regional_benchmarks_pivot = regional_benchmarks.pivot_table(
+    index=["Region", "Income group"],
+    columns="Energy_Type",
+    values="MWh_Per_Capita",
+    aggfunc="mean"
 ).reset_index()
+
+# Rename columns to indicate these are regional benchmarks
 regional_benchmarks_pivot.columns = [
     "Region", "Income group"
-] + [f"{col}_Regional_Benchmark" for col in regional_benchmarks_pivot.columns[2:]]
+] + [f"{col}_R_Benchmark" for col in regional_benchmarks_pivot.columns[2:]]
 
 # Merge regional benchmarks back into the dataset
 final_merged_df = pd.merge(
@@ -329,11 +414,75 @@ final_merged_df = pd.merge(
 
 # Apply regional benchmarks to countries without 2030 targets
 for energy_type in energy_types:
-    benchmark_col = energy_type + "_Regional_Benchmark"
+    benchmark_col = energy_type + "_R_Benchmark"
     final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type] = (
-        final_merged_df.loc[final_merged_df["Category"].isnull(), "PopTotal_2030"]
-        * final_merged_df.loc[final_merged_df["Category"].isnull(), benchmark_col]
+        final_merged_df.loc[final_merged_df["Category"].isnull(), benchmark_col]
     ).fillna(0)  # Fill any missing values with 0
 
+### Task 6
+# Fill in missing generation data (MWh) for 2030 using regional benchmarks:
+# 1. Calculate missing generation for Hydro_2030, Solar_2030, Wind_2030, and Other Renewables_2030.
+#    This is done by multiplying the regional benchmark per capita (MWh per capita) * the 2030 population 
+#    and dividing by the conversion factor for each energy type.
+# 2. Adjust the total generation for 2030 using the "res_share_target" percentage:
+#    - Compute the total generation by summing Hydro_2030, Solar_2030, Wind_2030, Other Renewables_2030, Fossil_2023, and Nuclear_2023.
+#    - Multiply the total generation by "res_share_target" / 100 to get the adjusted total generation.
+# 3. Distribute the adjusted total capacigenerationty proportionally among Hydro_2030, Solar_2030, Wind_2030, and Other Renewables_2030, keeping Fossil_2023 and Nuclear_2023 unchanged.
+
+
+energy_types2 = ["Hydro_2030_MWh", "Solar_2030_MWh", "Wind_2030_MWh", "Other Renewables_2030_MWh"]
+for energy_type2 in energy_types2:
+    benchmark_col = energy_type2 + "_per_capita_R_Benchmark"
+    energy_2030_col = energy_type2
+
+    # Calculate missing 2030 generation
+    final_merged_df.loc[final_merged_df['Category'].isnull(), energy_2030_col] = (
+        final_merged_df.loc[final_merged_df['Category'].isnull(), benchmark_col]
+        * final_merged_df.loc[final_merged_df['Category'].isnull(), "PopTotal_2030"]
+    ).fillna(0)  # Fill any remaining missing values with 0
+
+# Adjust the total generation using "res_share_target"
+for index, row in final_merged_df.iterrows():
+    if pd.isnull(row["Category"]):  # Only adjust for countries without valid NDCs
+        # Calculate the total generation (MWh) for 2030, including "Fossil_2023_MWh" + "Nuclear_2023_MWh"
+        total_gen_2030 = sum(row[energy_type] for energy_type in energy_types2 if pd.notnull(row[energy_type])) + row.get("Fossil_2023_MWh", 0) + row.get("Nuclear_2023_MWh", 0)
+
+        # Adjust the total generation using "res_share_target"
+        if pd.notnull(row["res_share_target"]) and row["res_share_target"] > 0:
+            adjusted_total_generation = total_gen_2030 * (row["res_share_target"] / 100)
+        else:
+            adjusted_total_generation = total_gen_2030  # Default to total generation if no valid target
+
+        # Calculate the proportions of each renewable energy type in MWh
+        total_renewables = sum(row[energy_type] for energy_type in energy_types2 if pd.notnull(row[energy_type]))
+        proportions = {
+            energy_type: (row[energy_type] / total_renewables) if total_renewables > 0 else 0
+            for energy_type in energy_types2
+        }
+
+        # Distribute the adjusted total generation proportionally among renewables
+        for energy_type in energy_types2:
+            final_merged_df.at[index, energy_type] = adjusted_total_generation * proportions[energy_type]
+
+        # Ensure the sum of adjusted by-type MWh matches the adjusted total generation
+        adjusted_renewables_sum = sum(final_merged_df.at[index, energy_type] for energy_type in energy_types2)
+        scaling_factor = adjusted_total_generation / adjusted_renewables_sum if adjusted_renewables_sum > 0 else 1
+
+        for energy_type in energy_types2:
+            final_merged_df.at[index, energy_type] *= scaling_factor
+
+
+### Task 7
+# Fill in missing Capacity (MW) data for 2030 based on [MWh / conversion factor]
+energy_types3 = ["Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030"]
+for energy_type_mw in energy_types3:
+    energy_type_mwh = energy_type_mw + "_MWh"
+    conversion_factor_col = energy_type_mw.replace("_2030", "_ConvRate")
+    # Calculate missing capacity (MW) for 2030 using conversion factors
+    final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type_mw] = (
+        final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type_mwh]
+        / final_merged_df["ISO3_code"].map(lambda code: capacity_conversion_factors.get(code, {}).get(conversion_factor_col, global_mean_conv_rates.get(conversion_factor_col, 0)))
+    ).fillna(0)  # Fill any remaining missing values with 0
+    
 # Save the final merged dataset to a CSV file
 final_merged_df.to_excel("outputs_processed_data/p1_a_ember_2023_30.xlsx", index=False)
