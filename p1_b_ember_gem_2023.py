@@ -170,6 +170,28 @@ print("Matching countries available in both Ember and GEM datasets:", sorted(mat
 granular_df = pd.DataFrame()
 grouped_df = pd.DataFrame()
 
+# Calculate global conversion rates for fallback
+# Calculate global mean conversion rates by averaging local rates across countries
+global_conversion_rates = {}
+
+# Loop through each granular energy category to calculate its global conversion rate
+for category in granular_categories:
+    # Collect all local rates for the current category across countries
+    local_rates = []
+    for country_code in matching_country_codes:
+        filtered_generation_data = generation_data[generation_data['Country code'] == country_code]
+        filtered_capacity_data = capacity_data[capacity_data['Country code'] == country_code]
+        
+        generation = filtered_generation_data.groupby('Variable')['Value'].sum().get(category, 0) * 1000000  # Convert TWh to MWh
+        capacity = filtered_capacity_data.groupby('Variable')['Value'].sum().get(category, 0) * 1000  # Convert GW to MW
+        
+        if capacity > 0:
+            local_rate = generation / capacity
+            local_rates.append(local_rate)
+    
+    # Calculate the global mean conversion rate as the average of local rates
+    global_conversion_rates[category] = sum(local_rates) / len(local_rates) if local_rates else 0
+
 # Process data for each matching country
 for country_code in matching_country_codes:
     gem_data = gem_data[gem_data['Status'] == 'operating']  # for the current year (i.e., 2024)
@@ -187,6 +209,7 @@ for country_code in matching_country_codes:
     filtered_capacity_data = capacity_data[capacity_data['Country code'] == country_code]
     ember_capacity = filtered_capacity_data.groupby('Variable')['Value'].sum() * 1000  # Convert GW to MW
 
+
     # Filter GEM data for the current country (already in MW)
     gem_country_data = gem_data[gem_data['ISO3'] == country_code]
     gem_capacity = gem_country_data.groupby('Type')['Capacity (MW)'].sum()
@@ -201,7 +224,14 @@ for country_code in matching_country_codes:
     for category in granular_categories:
         generation = ember_generation.get(category, 0)
         capacity = ember_capacity.get(category, 0)
-        granular_conversion_rates[category] = generation / capacity if capacity > 0 else 0
+        # Use global rate if local rate is zero or missing
+        if capacity > 0:
+            rate = generation / capacity
+        else:
+            rate = 0
+        if not rate:
+            rate = global_conversion_rates.get(category, 0)
+        granular_conversion_rates[category] = rate
 
     # Initialize granular data for the current country
     granular_data = {'Country Code': country_code, 'Country Name': map_iso3_to_country_name(country_code)}
