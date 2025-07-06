@@ -10,11 +10,13 @@ data = pd.read_excel('outputs_processed_data/p1_a_ember_2023_30.xlsx')
 if not isinstance(data, pd.DataFrame):
     raise ValueError("The data loaded from p1_a_ember_2023_30.xlsx must be a pandas DataFrame.")
 
+iea_pledge_caagr_2030 = {"Fossil" :-1.2 * 0.01, "Nuclear" : 2.4 * 0.01} # Compound Annual Growth Rate for renewable energy generation
+
 # Add Fossil_2030 and Nuclear_2030 columns using 2023 data if they don't exist
 if 'Fossil_2030' not in data.columns and 'Fossil_2023' in data.columns:
-    data['Fossil_2030'] = data['Fossil_2023']
+    data['Fossil_2030'] = data['Fossil_2023'] * (1 + iea_pledge_caagr_2030["Fossil"]) ** 7
 if 'Nuclear_2030' not in data.columns and 'Nuclear_2023' in data.columns:
-    data['Nuclear_2030'] = data['Nuclear_2023']
+    data['Nuclear_2030'] = data['Nuclear_2023'] * (1 + iea_pledge_caagr_2030["Nuclear"]) ** 7
 
 # Reorder columns to match the desired order
 desired_order = [

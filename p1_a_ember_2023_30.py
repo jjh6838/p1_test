@@ -91,7 +91,7 @@ def determine_category(row):
         return 5
     elif row.get("Hydro, bio and other renewables", 0) > 0:
         return 3
-    elif row.get("Rest of renewables", 0) > 0 and row.get("Hydro", 0) > 0:
+    elif row.get("Rest of renewables", 0) > 0 and row.get("Hybdro", 0) > 0:
         return 1
     elif row.get("Rest of renewables", 0) > 0 and row.get("Wind", 0) > 0:
         return 4
@@ -213,9 +213,13 @@ for col in columns_to_fill:
 
 # Merge the third dataset with the previously merged dataset, pulling only the needed columns from df3
 columns_to_pull = [
-    "country_code", "res_capacity_target", "res_share_target",
+    "country_code", "res_capacity_target", "res_share_target", 
     "Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030", "Category"
 ]
+
+# Add res_share_target_org column with the same values as res_share_target
+df3["res_share_target_org"] = df3["res_share_target"]
+columns_to_pull.append("res_share_target_org")
 
 final_merged_df = pd.merge(
     merged_df,
@@ -235,7 +239,29 @@ for col in columns_to_fill:
         final_merged_df.loc[mask, col] = final_merged_df.loc[mask, corresponding_2023_col]
 
 
-### Task 4
+# Task 4 - Calculate Fossil and Nuclear generation (MWh) for 2030 and 2050 based on IEA Pledges and Stated Policies CAAGRs
+
+# Source: check: iea_energy_projections\WEO2024_Free_Dataset.xlsx (Sheet name: "World Electricity")
+iea_pledge_caagr_2050 = {"Fossil": -5.1 * 0.01, "Nuclear": 2.9 * 0.01}  # Compound Annual Growth Rate for renewable energy generation
+# Calculate Fossil_2030_MWh and Nuclear_2030_MWh based on the growth rates (IEA Pledges)
+final_merged_df["Fossil_2030_MWh"] = final_merged_df["Fossil_2023_MWh"] * (1 + iea_pledge_caagr_2050["Fossil"]) ** 7  # 7 years growth from 2023 to 2030
+final_merged_df["Nuclear_2030_MWh"] = final_merged_df["Nuclear_2023_MWh"] * (1 + iea_pledge_caagr_2050["Nuclear"]) ** 7  # 7 years growth from 2023 to 2030
+
+# Calculate Fossil_2050_MWh and Nuclear_2050_MWh based on the growth rates (IEA Pledges)
+final_merged_df["Fossil_2050_MWh"] = final_merged_df["Fossil_2023_MWh"] * (1 + iea_pledge_caagr_2050["Fossil"]) ** 27  # 27 years growth from 2023 to 2050
+final_merged_df["Nuclear_2050_MWh"] = final_merged_df["Nuclear_2023_MWh"] * (1 + iea_pledge_caagr_2050["Nuclear"]) ** 27  # 27 years growth from 2023 to 2050
+
+# iea_stated_caagr_2050 = {"Fossil": -1.9 * 0.01, "Nuclear": 1.8 * 0.01}  # Compound Annual Growth Rate for renewable energy generation
+# # Calculate Fossil_2030_MWh and Nuclear_2030_MWh based on the growth rates (IEA Stated Policies)
+# final_merged_df["Fossil_2030_MWh_Stated"] = final_merged_df["Fossil_2023_MWh"] * (1 + iea_stated_caagr_2050["Fossil"]) ** 7  # 7 years growth from 2023 to 2030
+# final_merged_df["Nuclear_2030_MWh_Stated"] = final_merged_df["Nuclear_2023_MWh"] * (1 + iea_stated_caagr_2050["Nuclear"]) ** 7  # 7 years growth from 2023 to 2030
+
+# # Calculate Fossil_2050_MWh and Nuclear_2050_MWh based on the growth rates (IEA Stated Policies)
+# final_merged_df["Fossil_2050_MWh_Stated"] = final_merged_df["Fossil_2023_MWh"] * (1 + iea_stated_caagr_2050["Fossil"]) ** 27  # 27 years growth from 2023 to 2050
+# final_merged_df["Nuclear_2050_MWh_Stated"] = final_merged_df["Nuclear_2023_MWh"] * (1 + iea_stated_caagr_2050["Nuclear"]) ** 27  # 27 years growth from 2023 to 2050
+
+
+# Task 5: Calculate renewable generation (MWh) for 2030 based on the capacity conversion factors
 # Load the capacity conversion factors
 capacity_conversion_factors_df = pd.read_excel(p1_b_output_path, sheet_name="Grouped_cur")
 
@@ -256,8 +282,7 @@ capacity_conversion_factors = (
     .to_dict(orient="index")
 )
 
-
-# Calculate MWh for 2030 based on the conversion factors and compute the total
+# Calculate MWh for 2030 based on the conversion factors (This is for countries with valid NDCs)
 for index, row in final_merged_df.iterrows():
     country_code = row["ISO3_code"]
     if country_code in capacity_conversion_factors:
@@ -275,19 +300,15 @@ for index, row in final_merged_df.iterrows():
         final_merged_df.at[index, "Wind_2030_MWh"] = wind_mwh
         final_merged_df.at[index, "Other Renewables_2030_MWh"] = other_renewables_mwh
         
-        # Calculate the total MWh for 2030
-        total_mwh = hydro_mwh + solar_mwh + wind_mwh + other_renewables_mwh
-        final_merged_df.at[index, "HSWO_2030_MWh"] = total_mwh
-
-# Compute total RE generation per capita for 2030
+# Compute RE generation MWh per capita for 2030
 final_merged_df["Hydro_2030_MWh_per_capita"] = final_merged_df["Hydro_2030_MWh"] / final_merged_df["PopTotal_2030"]
 final_merged_df["Solar_2030_MWh_per_capita"] = final_merged_df["Solar_2030_MWh"] / final_merged_df["PopTotal_2030"]
 final_merged_df["Wind_2030_MWh_per_capita"] = final_merged_df["Wind_2030_MWh"] / final_merged_df["PopTotal_2030"]
 final_merged_df["Other Renewables_2030_MWh_per_capita"] = final_merged_df["Other Renewables_2030_MWh"] / final_merged_df["PopTotal_2030"]
-final_merged_df["HSWO_2030_MWh_per_capita"] = final_merged_df["HSWO_2030_MWh"] / final_merged_df["PopTotal_2030"]
 
-### Task 5
-# Extrapolate the 2030 targets for countries without NDCs using regional benchmarks
+
+### Task 6 - Extrapolate the 2030 renewable targets MWh for countries without NDCs using regional benchmarks (i.e. MWh per capita)
+# Step 6.1. First calculate MWh per capita for 2030
 # Load/add WB Country Class (https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups)
 wb_country_class_path = "wb_country_class/CLASS.xlsx"
 wb_country_class_df = pd.read_excel(wb_country_class_path, sheet_name="List of economies")
@@ -419,18 +440,10 @@ for energy_type in energy_types:
         final_merged_df.loc[final_merged_df["Category"].isnull(), benchmark_col]
     ).fillna(0)  # Fill any missing values with 0
 
-### Task 6
-# Fill in missing generation data (MWh) for 2030 using regional benchmarks:
-# 1. Calculate missing generation for Hydro_2030, Solar_2030, Wind_2030, and Other Renewables_2030.
+# 6.2. Fill in missing generation data (MWh) for 2030 using regional benchmarks (per capita MWh):
+# Calculate missing generation for Hydro_2030, Solar_2030, Wind_2030, and Other Renewables_2030 for countries without valid NDCs (i.e., where "Category" is null).
 #    This is done by multiplying the regional benchmark per capita (MWh per capita) * the 2030 population 
-#    and dividing by the conversion factor for each energy type.
-# 2. Adjust the generation of each type for 2030 proportionally to meet the following formula:
-#   post-calculation total renewable generations / post-calculation total generation = res_share_target / 100
 
-# Step 1: Calculate missing generation
-# For each renewable energy type (Hydro, Solar, Wind, Other Renewables), calculate the missing generation (MWh) for 2030.
-# This is done for countries without valid NDCs (i.e., where "Category" is null).
-# The calculation uses the regional benchmark per capita (MWh per capita) multiplied by the 2030 population.
 energy_types2 = [
     "Hydro_2030_MWh", "Solar_2030_MWh",
     "Wind_2030_MWh", "Other Renewables_2030_MWh"
@@ -445,14 +458,16 @@ for energy_type2 in energy_types2:
         * final_merged_df.loc[final_merged_df['Category'].isnull(), "PopTotal_2030"]
     ).fillna(0)  # Fill any remaining missing values with 0
 
-# Step 2a: Adjust the generation to match the res_share_target - Based on NDCs extrapolation
-# For countries without valid NDCs, ensure renewable generation values are at least equal to 2023 values,
+# 6.3. Adjust the renewable generation of each type for 2030 proportionally to meet the following formula - i.e., Minimum rule!:
+# post-calculation total renewable generations / post-calculation total generation = res_share_target / 100
+# Adjust the generation to match the res_share_target (i.e. renewable generation share target %) - Based on NDCs extrapolation for 2030
+# Note: For countries without valid NDCs, ensure renewable generation values are at least equal to 2023 values,
 # then apply regional benchmarks, and finally adjust proportions to meet the target renewable share (res_share_target).
 
 for index, row in final_merged_df.iterrows():
     if pd.isnull(row["Category"]):  # Only adjust for countries without valid NDCs
-        fossil = row.get("Fossil_2023_MWh", 0)
-        nuclear = row.get("Nuclear_2023_MWh", 0)
+        fossil = row.get("Fossil_2030_MWh", 0)
+        nuclear = row.get("Nuclear_2030_MWh", 0)
         target_share = row.get("res_share_target", 0) / 100 if pd.notnull(row.get("res_share_target", 0)) else 0
         renewables_2023 = {energy_type: row.get(energy_type.replace("_2030_MWh", "_2023_MWh"), 0) for energy_type in energy_types2}
         renewables_2030 = {energy_type: row.get(energy_type, 0) for energy_type in energy_types2}
@@ -463,11 +478,14 @@ for index, row in final_merged_df.iterrows():
                 desired_renewable_total = renewables_sum
             else:
                 desired_renewable_total = target_share * (fossil + nuclear) / (1 - target_share)
+            
             # Initial scaling
             scaling_factor = desired_renewable_total / renewables_sum
             scaled = {k: v * scaling_factor for k, v in renewables_2030.items()}
+            
             # Enforce minimum = 2023 value
             fixed = {k: max(scaled[k], renewables_2023[k]) for k in energy_types2}
+            
             # If sum is now above target, re-scale only those not fixed at 2023 value
             fixed_sum = sum(v for k, v in fixed.items() if v == renewables_2023[k])
             to_scale = [k for k in energy_types2 if fixed[k] > renewables_2023[k]]
@@ -494,78 +512,403 @@ for index, row in final_merged_df.iterrows():
             for k in energy_types2:
                 final_merged_df.at[index, k] = renewables_2030[k]
 
-# Step 2b: Adjust the generation to match the res_share_target - Based on Estimates of IEA tracker
-# (https://www.iea.org/data-and-statistics/data-tools/renewable-energy-progress-tracker)
-# For countries without valid NDCs, ensure renewable generation values are at least equal to 2023 values,
-# then apply regional benchmarks, and finally adjust proportions to meet the target renewable share (IEA_targets).
+### Task 7 - extrapolate the 2030 renewable targets for 2050 (for both countries with and without valid NDCs)
+# 7.1: Bring MWh per capita for 2030 for each renewable type from above code, and calculate the 2050 MWh per capita values based on the CAAGR (IEA Pledges) from 2030 to 2050
+# 7.2: Calculate the 2050 MWh targets (MWh) for each renewable type, by multiplying Population 2050 by the 2050 MWh per capita values.
+# Please note that countries with valid NDCs will use the 2030 MWh per capita values as a base, while countries without valid NDCs will use the regional benchmarks for 2030 MWh per capita values.
+# 7.3: Ensure the 2050 values are at least equal to the 2023 values (i.e., the minimum rule!), and adjust proportions to meet the target renewable share (IEA 2050 Pledges targets).
 
-IEA_targets = {
-    "High income": 0.49,
-    "Upper middle income": 0.44,
-    "Lower middle income": 0.44,
-    "Low income": 0.44
+# IEA pledge targets for total 2050 renewable shares by income group 
+iea_pledge_re_targets_2050 = {
+    "High income": 83.0609923373228 / 100, # 83.06% target for all income groups 
+    "Upper middle income": 83.0609923373228 / 100, 
+    "Lower middle income": 83.0609923373228 / 100,  
+    "Low income": 83.0609923373228 / 100  
 }
 
+# IEA pledge CAAGR for renewable energy types from 2023 to 2050
+iea_pledge_caagr_re_2050 = {
+    "Hydro_2030_MWh": 1.88379263475642 / 100,  # 1.9% annual growth
+    "Solar_2030_MWh": 11.2952022443711 / 100,  # 11.3% annual growth
+    "Wind_2030_MWh": 7.92053998446955 / 100,  # 7.9% annual growth
+    "Other Renewables_2030_MWh": (
+    ((2781.81 + 844.08 + 567.28 + 100.05) / (714.43 + 17.51 + 99.53 + 0.54)) ** (1 / (2050 - 2023)) - 1
+    ), # Average CAAGR for Other Renewables # 6.48% annual growth
+    # Bioenergy 714.43 in 2023 to 2781.81 in 2050; 
+    # CSP 17.51 in 2023 to 844.08 in 2050; 
+    # Geothermal 99.53 in 2023 to 567.28 in 2050;
+    # Marine 0.54 in 2023 to 100.05 in 2050
+}
+
+
+# 7.1: Use existing MWh per capita values from previous tasks
+# For countries with NDCs: Use the per capita values calculated in Task 5
+# For countries without NDCs: Use the regional benchmark per capita values from Task 6
+
+# 7.2: Calculate 2050 MWh per capita values using CAAGR from 2030 to 2050
+for energy_type in energy_types2:
+    caagr = iea_pledge_caagr_re_2050.get(energy_type, 0)  # Default to 3% if not found
+    per_capita_2030_col = energy_type + "_per_capita"
+    per_capita_2030_benchmark_col = energy_type + "_per_capita_R_Benchmark"
+    per_capita_2050_col = energy_type.replace("_2030_MWh", "_2050_MWh") + "_per_capita"
+    
+    # For countries with NDCs: Use their actual 2030 per capita values
+    # For countries without NDCs: Use their regional benchmark per capita values
+    final_merged_df[per_capita_2050_col] = final_merged_df.apply(
+        lambda row: (
+            row[per_capita_2030_col] if pd.notnull(row.get("res_share_target_org")) 
+            else row[per_capita_2030_benchmark_col]
+        ) * (1 + caagr) ** 20,  # 20 years from 2030 to 2050
+        axis=1
+    )
+
+# Calculate 2050 MWh targets by multiplying 2050 population by 2050 MWh per capita values
+for energy_type in energy_types2:
+    energy_type_2050 = energy_type.replace("_2030_MWh", "_2050_MWh")
+    per_capita_2050_col = energy_type_2050 + "_per_capita"
+    
+    final_merged_df[energy_type_2050] = (
+        final_merged_df[per_capita_2050_col] * final_merged_df["PopTotal_2050"]
+    )
+
+# Define 2050 energy types
+energy_types_2050 = [
+    "Hydro_2050_MWh", "Solar_2050_MWh",
+    "Wind_2050_MWh", "Other Renewables_2050_MWh"
+]
+
+# 7.3: Adjust renewable generation for 2050 to meet IEA target shares and enforce minimum rule
+def new_func(ndc_target_share, iea_2050_target_share):
+    target_share_2050 = max(ndc_target_share, iea_2050_target_share)
+    return target_share_2050
+
 for index, row in final_merged_df.iterrows():
-    if pd.isnull(row["Category"]):  # Only adjust for countries without valid NDCs
-        income_group = row.get("Income group", None)
-        iea_target_share = IEA_targets.get(income_group, 0.44)  # Default to 44% if not found
-        fossil = row.get("Fossil_2023_MWh", 0)
-        nuclear = row.get("Nuclear_2023_MWh", 0)
-        renewables_2023 = {energy_type: row.get(energy_type.replace("_2030_MWh", "_2023_MWh"), 0) for energy_type in energy_types2}
-        renewables_2030 = {energy_type: row.get(energy_type, 0) for energy_type in energy_types2}
-        renewables_sum = sum(renewables_2030.values())
-        total_gen_2030 = renewables_sum + fossil + nuclear
-        if total_gen_2030 > 0 and iea_target_share > 0 and renewables_sum > 0:
-            if fossil + nuclear == 0:
-                desired_renewable_total = renewables_sum
-            else:
-                desired_renewable_total = iea_target_share * (fossil + nuclear) / (1 - iea_target_share)
-            # Initial scaling
-            scaling_factor = desired_renewable_total / renewables_sum
-            scaled = {k: v * scaling_factor for k, v in renewables_2030.items()}
-            # Enforce minimum = 2023 value
-            fixed = {k: max(scaled[k], renewables_2023[k]) for k in energy_types2}
-            # If sum is now above target, re-scale only those not fixed at 2023 value
-            fixed_sum = sum(v for k, v in fixed.items() if v == renewables_2023[k])
-            to_scale = [k for k in energy_types2 if fixed[k] > renewables_2023[k]]
-            if to_scale:
-                remaining = desired_renewable_total - fixed_sum
-                if remaining < 0:
-                    # If fixed_sum already exceeds target, set all to 2023 value
-                    for k in energy_types2:
-                        final_merged_df.at[index, k + '_IEA'] = renewables_2023[k]
-                else:
-                    scale_sum = sum(fixed[k] for k in to_scale)
-                    if scale_sum > 0:
-                        rescale_factor = remaining / scale_sum
-                        for k in to_scale:
-                            final_merged_df.at[index, k + '_IEA'] = fixed[k] * rescale_factor
-                    for k in energy_types2:
-                        if fixed[k] == renewables_2023[k]:
-                            final_merged_df.at[index, k + '_IEA'] = renewables_2023[k]
-            else:
-                for k in energy_types2:
-                    final_merged_df.at[index, k + '_IEA'] = fixed[k]
+    income_group = row.get("Income group", None)
+    # Determine the target share for 2050
+    ndc_target_share = row.get("res_share_target", 0) / 100 if pd.notnull(row.get("res_share_target")) else 0
+    iea_2050_target_share = iea_pledge_re_targets_2050.get(income_group, 83.0609923373228 / 100)  # Default to 83.06% if not found
+    
+    # Use the greater of the NDC target or the IEA pledge target
+    target_share_2050 = new_func(ndc_target_share, iea_2050_target_share)
+    final_merged_df.at[index, "Target_Share_2050"] = target_share_2050
+
+    # Use appropriate fossil and nuclear values for 2050
+    fossil = row.get("Fossil_2050_MWh", 0)
+    nuclear = row.get("Nuclear_2050_MWh", 0)
+    
+    # Get renewable values for 2023 and 2050
+    renewables_2023 = {energy_type: row.get(energy_type.replace("_2050_MWh", "_2023_MWh"), 0) for energy_type in energy_types_2050}
+    renewables_2050 = {energy_type: row.get(energy_type, 0) for energy_type in energy_types_2050}
+    
+    renewables_sum = sum(renewables_2050.values())
+    total_gen_2050 = renewables_sum + fossil + nuclear
+    
+    if total_gen_2050 > 0 and target_share_2050 > 0 and renewables_sum > 0:
+        if fossil + nuclear == 0:
+            desired_renewable_total = renewables_sum
+        elif target_share_2050 == 1:
+            desired_renewable_total = renewables_sum 
         else:
-            # If not enough data, just copy 2030 values as fallback
-            for k in energy_types2:
-                final_merged_df.at[index, k + '_IEA'] = renewables_2030[k]
+            desired_renewable_total = target_share_2050 * (fossil + nuclear) / (1 - target_share_2050)
+        
+        # Initial scaling
+        scaling_factor = desired_renewable_total / renewables_sum
+        scaled = {k: v * scaling_factor for k, v in renewables_2050.items()}
+        
+        # Enforce minimum = 2023 value (minimum rule)
+        fixed = {k: max(scaled[k], renewables_2023[k]) for k in energy_types_2050}
+        
+        # If sum is now above target, re-scale only those not fixed at 2023 value
+        fixed_sum = sum(v for k, v in fixed.items() if v == renewables_2023[k])
+        to_scale = [k for k in energy_types_2050 if fixed[k] > renewables_2023[k]]
+        
+        if to_scale:
+            remaining = desired_renewable_total - fixed_sum
+            if remaining < 0:
+                # If fixed_sum already exceeds target, set all to 2023 value
+                for k in energy_types_2050:
+                    final_merged_df.at[index, k] = renewables_2023[k]
+            else:
+                scale_sum = sum(fixed[k] for k in to_scale)
+                if scale_sum > 0:
+                    rescale_factor = remaining / scale_sum
+                    for k in to_scale:
+                        final_merged_df.at[index, k] = fixed[k] * rescale_factor
+                # Set values that were fixed at 2023 level
+                for k in energy_types_2050:
+                    if fixed[k] == renewables_2023[k]:
+                        final_merged_df.at[index, k] = renewables_2023[k]
+        else:
+            for k in energy_types_2050:
+                final_merged_df.at[index, k] = fixed[k]
+    else:
+        # If not enough data, just copy calculated 2050 values as fallback
+        for k in energy_types_2050:
+            final_merged_df.at[index, k] = renewables_2050[k]
 
 
-### Task 7
-# Fill in missing Capacity (MW) data for 2030 based on [MWh / conversion factor]
-energy_types3 = ["Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030"]
-for energy_type_mw in energy_types3:
-    energy_type_mwh = energy_type_mw + "_MWh"
-    conversion_factor_col = energy_type_mw.replace("_2030", "_ConvRate")
-    # Calculate missing capacity (MW) for 2030 using conversion factors
-    final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type_mw] = (
-        final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type_mwh]
-        / final_merged_df["ISO3_code"].map(lambda code: capacity_conversion_factors.get(code, {}).get(conversion_factor_col, global_mean_conv_rates.get(conversion_factor_col, 0)))
-    ).fillna(0)  # Fill any remaining missing values with 0
+# Add after Task 7 to check if targets are being met for both 2030 and 2050
+print("\n=== VERIFICATION: Renewable Share Targets for 2030 and 2050 ===")
+verification_results = []
 
-### Task Last
+for index, row in final_merged_df.iterrows():
+    # Extract values for 2030
+    fossil_2030 = row.get("Fossil_2030_MWh", 0)
+    nuclear_2030 = row.get("Nuclear_2030_MWh", 0)
+    hydro_2030 = row.get("Hydro_2030_MWh", 0)
+    solar_2030 = row.get("Solar_2030_MWh", 0)
+    wind_2030 = row.get("Wind_2030_MWh", 0)
+    other_2030 = row.get("Other Renewables_2030_MWh", 0)
+    
+    total_renewables_2030 = hydro_2030 + solar_2030 + wind_2030 + other_2030
+    total_generation_2030 = total_renewables_2030 + fossil_2030 + nuclear_2030
+    
+    # Extract values for 2050
+    fossil_2050 = row.get("Fossil_2050_MWh", 0)
+    nuclear_2050 = row.get("Nuclear_2050_MWh", 0)
+    hydro_2050 = row.get("Hydro_2050_MWh", 0)
+    solar_2050 = row.get("Solar_2050_MWh", 0)
+    wind_2050 = row.get("Wind_2050_MWh", 0)
+    other_2050 = row.get("Other Renewables_2050_MWh", 0)
+    
+    total_renewables_2050 = hydro_2050 + solar_2050 + wind_2050 + other_2050
+    total_generation_2050 = total_renewables_2050 + fossil_2050 + nuclear_2050
+    
+    # Calculate actual shares and targets
+    actual_share_2030 = total_renewables_2030 / total_generation_2030 if total_generation_2030 > 0 else 0
+    actual_share_2050 = total_renewables_2050 / total_generation_2050 if total_generation_2050 > 0 else 0
+    target_share_2050 = iea_pledge_re_targets_2050.get(row.get("Income group"), 0.8306)
+    target_share_2030 = row.get("res_share_target", 0) / 100 if pd.notnull(row.get("res_share_target")) else 0
+    
+    # Check if minimum rule applied
+    min_rule_applied_2030 = (
+        hydro_2030 == row.get("Hydro_2023_MWh", 0) or 
+        solar_2030 == row.get("Solar_2023_MWh", 0) or
+        wind_2030 == row.get("Wind_2023_MWh", 0) or
+        other_2030 == row.get("Other Renewables_2023_MWh", 0)
+    )
+    min_rule_applied_2050 = (
+        hydro_2050 == row.get("Hydro_2030_MWh", 0) or 
+        solar_2050 == row.get("Solar_2030_MWh", 0) or
+        wind_2050 == row.get("Wind_2030_MWh", 0) or
+        other_2050 == row.get("Other Renewables_2030_MWh", 0)
+    )
+    
+    # Append results
+    verification_results.append({
+        "Country": row.get("Country Name"),
+        "Income Group": row.get("Income group"),
+        "Target_2030": target_share_2030,
+        "Actual_2030": actual_share_2030,
+        "Meets_Target_2030": actual_share_2030 >= target_share_2030,
+        "Min Rule Applied 2030": min_rule_applied_2030,
+        "Target_2050": target_share_2050,
+        "Actual_2050": actual_share_2050,
+        "Meets_Target_2050": actual_share_2050 >= target_share_2050,
+        "Min Rule Applied 2050": min_rule_applied_2050
+    })
+
+verification_df = pd.DataFrame(verification_results)
+
+# Calculate summary statistics
+total_countries = len(verification_df)
+countries_meeting_target_2030 = verification_df["Meets_Target_2030"].sum()
+countries_meeting_target_2050 = verification_df["Meets_Target_2050"].sum()
+countries_min_rule_2030 = verification_df["Min Rule Applied 2030"].sum()
+countries_min_rule_2050 = verification_df["Min Rule Applied 2050"].sum()
+
+print(f"Countries meeting 2030 target: {countries_meeting_target_2030}/{total_countries}")
+print(f"Countries meeting 2050 target: {countries_meeting_target_2050}/{total_countries}")
+print(f"Countries with min rule applied for 2030: {countries_min_rule_2030}/{total_countries}")
+print(f"Countries with min rule applied for 2050: {countries_min_rule_2050}/{total_countries}")
+print("=== END VERIFICATION ===\n")
+
+### Task 8 - Calculate the 2030 and 2050 renewable targets for countries without NDCs using Stated Policies (Scenario 2)
+# 8.1: calculate the compound average annual growth rate needed to reach the 2030 and 2050 targets from the 2023 values.
+# 8.2: Apply the growth rate to the 2023 values to estimate the 2030 and 2050 values.
+# 8.3: Ensure the 2030 and 2050 values are at least equal to the 2030 values (i.e., the minimum rule!), and adjust the proportions to meet the target renewable shares (the res_share_targets) 
+# based on Estimates of IEA Stated Policies for 2030 and 2050 from (https://www.iea.org/data-and-statistics/data-product/world-energy-outlook-2024-free-dataset)
+
+# # IEA targets for 2030 (Stated Policies)
+# IEA_targets_2030 = {
+#     "High income": 0.49,  # Sample: 49% renewable share target for 2030
+#     "Upper middle income": 0.44,  # Sample: 44% renewable share target for 2030
+#     "Lower middle income": 0.40,  # Sample: 40% renewable share target for 2030
+#     "Low income": 0.35  # Sample: 35% renewable share target for 2030
+# }
+
+# # IEA targets for 2050 (Stated Policies)
+# IEA_targets_2050 = {
+#     "High income": 0.70,  # Sample: 70% renewable share target for 2050
+#     "Upper middle income": 0.65,  # Sample: 65% renewable share target for 2050
+#     "Lower middle income": 0.60,  # Sample: 60% renewable share target for 2050
+#     "Low income": 0.55  # Sample: 55% renewable share target for 2050
+# }
+
+# # Sample CAAGR for renewable energy types from 2023 to 2030 (IEA Stated Policies - you can fill in actual values)
+# renewable_caagr_2023_2030_stated = {
+#     "Hydro_2030_MWh": 0.03,  # Sample: 3% annual growth from 2023 to 2030
+#     "Solar_2030_MWh": 0.12,  # Sample: 12% annual growth from 2023 to 2030
+#     "Wind_2030_MWh": 0.09,  # Sample: 9% annual growth from 2023 to 2030
+#     "Other Renewables_2030_MWh": 0.05  # Sample: 5% annual growth from 2023 to 2030
+# }
+
+# # Sample CAAGR for renewable energy types from 2023 to 2050 (IEA Stated Policies - you can fill in actual values)
+# renewable_caagr_2023_2050_stated = {
+#     "Hydro_2030_MWh": 0.025,  # Sample: 2.5% annual growth from 2023 to 2050
+#     "Solar_2030_MWh": 0.10,  # Sample: 10% annual growth from 2023 to 2050
+#     "Wind_2030_MWh": 0.07,  # Sample: 7% annual growth from 2023 to 2050
+#     "Other Renewables_2030_MWh": 0.04  # Sample: 4% annual growth from 2023 to 2050
+# }
+
+# # 8.1 & 8.2: Calculate renewable targets for 2030 and 2050 using CAAGR from 2023 values
+# # Calculate 2030 renewable generation using CAAGR from 2023 values (IEA Stated Policies)
+# for energy_type in energy_types2:
+#     caagr_2030 = renewable_caagr_2023_2030_stated.get(energy_type, 0.05)  # Default to 5% if not found
+#     final_merged_df[energy_type + '_IEA_2030_Base'] = (
+#         final_merged_df[energy_type.replace("_2030_MWh", "_2023_MWh")] * (1 + caagr_2030) ** 7  # 7 years from 2023 to 2030
+#     )
+
+# # Calculate 2050 renewable generation using CAAGR from 2023 values (IEA Stated Policies)
+# for energy_type in energy_types2:
+#     caagr_2050 = renewable_caagr_2023_2050_stated.get(energy_type, 0.04)  # Default to 4% if not found
+#     energy_type_2050 = energy_type.replace("_2030_MWh", "_2050_MWh")
+#     final_merged_df[energy_type_2050 + '_IEA_2050_Base'] = (
+#         final_merged_df[energy_type.replace("_2030_MWh", "_2023_MWh")] * (1 + caagr_2050) ** 27  # 27 years from 2023 to 2050
+#     )
+
+# # 8.3: Adjust renewable targets for 2030 and 2050 using IEA Stated Policies
+# for index, row in final_merged_df.iterrows():
+#     if pd.isnull(row["Category"]):  # Only adjust for countries without valid NDCs
+#         income_group = row.get("Income group", None)
+        
+#         # Get IEA target shares for 2030 and 2050
+#         iea_target_share_2030 = IEA_targets_2030.get(income_group, 0.44)  # Default to 44% if not found
+#         iea_target_share_2050 = IEA_targets_2050.get(income_group, 0.65)  # Default to 65% if not found
+        
+#         renewables_2023 = {energy_type: row.get(energy_type.replace("_2030_MWh", "_2023_MWh"), 0) for energy_type in energy_types2}
+        
+#         # === Calculate 2030 IEA Stated Policies targets ===
+#         fossil_2030 = row.get("Fossil_2030_MWh_Stated", 0)
+#         nuclear_2030 = row.get("Nuclear_2030_MWh_Stated", 0)
+#         renewables_2030 = {energy_type: row.get(energy_type + '_IEA_2030_Base', 0) for energy_type in energy_types2}
+#         renewables_sum_2030 = sum(renewables_2030.values())
+#         total_gen_2030 = renewables_sum_2030 + fossil_2030 + nuclear_2030
+        
+#         if total_gen_2030 > 0 and iea_target_share_2030 > 0 and renewables_sum_2030 > 0:
+#             if fossil_2030 + nuclear_2030 == 0:
+#                 desired_renewable_total_2030 = renewables_sum_2030
+#             else:
+#                 desired_renewable_total_2030 = iea_target_share_2030 * (fossil_2030 + nuclear_2030) / (1 - iea_target_share_2030)
+            
+#             # Initial scaling for 2030
+#             scaling_factor_2030 = desired_renewable_total_2030 / renewables_sum_2030
+#             scaled_2030 = {k: v * scaling_factor_2030 for k, v in renewables_2030.items()}
+            
+#             # Enforce minimum = 2023 value for 2030
+#             fixed_2030 = {k: max(scaled_2030[k], renewables_2023[k]) for k in energy_types2}
+            
+#             # Re-scale if needed for 2030
+#             fixed_sum_2030 = sum(v for k, v in fixed_2030.items() if v == renewables_2023[k])
+#             to_scale_2030 = [k for k in energy_types2 if fixed_2030[k] > renewables_2023[k]]
+            
+#             if to_scale_2030:
+#                 remaining_2030 = desired_renewable_total_2030 - fixed_sum_2030
+#                 if remaining_2030 < 0:
+#                     for k in energy_types2:
+#                         final_merged_df.at[index, k + '_IEA'] = renewables_2023[k]
+#                 else:
+#                     scale_sum_2030 = sum(fixed_2030[k] for k in to_scale_2030)
+#                     if scale_sum_2030 > 0:
+#                         rescale_factor_2030 = remaining_2030 / scale_sum_2030
+#                         for k in to_scale_2030:
+#                             final_merged_df.at[index, k + '_IEA'] = fixed_2030[k] * rescale_factor_2030
+#                     for k in energy_types2:
+#                         if fixed_2030[k] == renewables_2023[k]:
+#                             final_merged_df.at[index, k + '_IEA'] = renewables_2023[k]
+#             else:
+#                 for k in energy_types2:
+#                     final_merged_df.at[index, k + '_IEA'] = fixed_2030[k]
+#         else:
+#             # If not enough data, just copy CAAGR-calculated 2030 values as fallback
+#             for k in energy_types2:
+#                 final_merged_df.at[index, k + '_IEA'] = renewables_2030[k]
+        
+#         # === Calculate 2050 IEA Stated Policies targets ===
+#         fossil_2050 = row.get("Fossil_2050_MWh_Stated", 0)
+#         nuclear_2050 = row.get("Nuclear_2050_MWh_Stated", 0)
+#         renewables_2050 = {energy_type.replace("_2030_MWh", "_2050_MWh"): row.get(energy_type.replace("_2030_MWh", "_2050_MWh") + '_IEA_2050_Base', 0) for energy_type in energy_types2}
+#         renewables_sum_2050 = sum(renewables_2050.values())
+#         total_gen_2050 = renewables_sum_2050 + fossil_2050 + nuclear_2050
+        
+#         if total_gen_2050 > 0 and iea_target_share_2050 > 0 and renewables_sum_2050 > 0:
+#             if fossil_2050 + nuclear_2050 == 0:
+#                 desired_renewable_total_2050 = renewables_sum_2050
+#             else:
+#                 desired_renewable_total_2050 = iea_target_share_2050 * (fossil_2050 + nuclear_2050) / (1 - iea_target_share_2050)
+            
+#             # Initial scaling for 2050
+#             scaling_factor_2050 = desired_renewable_total_2050 / renewables_sum_2050
+#             scaled_2050 = {k: v * scaling_factor_2050 for k, v in renewables_2050.items()}
+            
+#             # Enforce minimum = 2023 value for 2050
+#             fixed_2050 = {k: max(scaled_2050[k], renewables_2023[k.replace("_2050_MWh", "_2030_MWh")]) for k in renewables_2050.keys()}
+            
+#             # Re-scale if needed for 2050
+#             fixed_sum_2050 = sum(v for k, v in fixed_2050.items() if v == renewables_2023[k.replace("_2050_MWh", "_2030_MWh")])
+#             to_scale_2050 = [k for k in renewables_2050.keys() if fixed_2050[k] > renewables_2023[k.replace("_2050_MWh", "_2030_MWh")]]
+            
+#             if to_scale_2050:
+#                 remaining_2050 = desired_renewable_total_2050 - fixed_sum_2050
+#                 if remaining_2050 < 0:
+#                     for k in renewables_2050.keys():
+#                         final_merged_df.at[index, k + '_IEA_2050'] = renewables_2023[k.replace("_2050_MWh", "_2030_MWh")]
+#                 else:
+#                     scale_sum_2050 = sum(fixed_2050[k] for k in to_scale_2050)
+#                     if scale_sum_2050 > 0:
+#                         rescale_factor_2050 = remaining_2050 / scale_sum_2050
+#                         for k in to_scale_2050:
+#                             final_merged_df.at[index, k + '_IEA_2050'] = fixed_2050[k] * rescale_factor_2050
+#                     for k in renewables_2050.keys():
+#                         if fixed_2050[k] == renewables_2023[k.replace("_2050_MWh", "_2030_MWh")]:
+#                             final_merged_df.at[index, k + '_IEA_2050'] = renewables_2023[k.replace("_2050_MWh", "_2030_MWh")]
+#             else:
+#                 for k in renewables_2050.keys():
+#                     final_merged_df.at[index, k + '_IEA_2050'] = fixed_2050[k]
+#         else:
+#             # If not enough data, just copy CAAGR-calculated 2050 values as fallback
+#             for k in renewables_2050.keys():
+#                 final_merged_df.at[index, k + '_IEA_2050'] = renewables_2050[k]
+
+# # 8.4. Fill in countries with NDCs (i.e., where "Category" is not null) with the values from step 8.3
+# # For 2030 IEA values
+# for energy_type in energy_types2:
+#     final_merged_df.loc[final_merged_df["Category"].notnull(), energy_type + '_IEA'] = final_merged_df.loc[
+#         final_merged_df["Category"].notnull(), energy_type
+#     ]
+
+# # For 2050 IEA values
+# for energy_type in energy_types2:
+#     energy_type_2050 = energy_type.replace("_2030_MWh", "_2050_MWh")
+#     final_merged_df.loc[final_merged_df["Category"].notnull(), energy_type_2050 + '_IEA_2050'] = final_merged_df.loc[
+#         final_merged_df["Category"].notnull(), energy_type_2050
+#     ]
+
+
+
+# # [???] Fill in missing Capacity (MW) data for 2030 based on [MWh / conversion factor]
+# energy_types3 = ["Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030"]
+# for energy_type_mw in energy_types3:
+#     energy_type_mwh = energy_type_mw + "_MWh"
+#     conversion_factor_col = energy_type_mw.replace("_2030", "_ConvRate")
+#     # Calculate missing capacity (MW) for 2030 using conversion factors
+#     final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type_mw] = (
+#         final_merged_df.loc[final_merged_df["Category"].isnull(), energy_type_mwh]
+#         / final_merged_df["ISO3_code"].map(lambda code: capacity_conversion_factors.get(code, {}).get(conversion_factor_col, global_mean_conv_rates.get(conversion_factor_col, 0)))
+#     ).fillna(0)  # Fill any remaining missing values with 0
+
+
+### Last Task
 # Clean up the column order in the final merged dataset
 column_order = [
     "Country Name", "ISO3_code", "Region", "Income group", 
@@ -574,14 +917,15 @@ column_order = [
     "Hydro_2023", "Solar_2023", "Wind_2023", "Other Renewables_2023", "Nuclear_2023", "Fossil_2023",
     "Hydro_2023_MWh", "Solar_2023_MWh", "Wind_2023_MWh", "Other Renewables_2023_MWh","Nuclear_2023_MWh", "Fossil_2023_MWh",
     "res_capacity_target", "res_share_target", "Category",
-    "Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030",
-    "Hydro_2030_MWh", "Solar_2030_MWh", "Wind_2030_MWh", "Other Renewables_2030_MWh",
-    "Hydro_2030_MWh_IEA", "Solar_2030_MWh_IEA", "Wind_2030_MWh_IEA", "Other Renewables_2030_MWh_IEA",
+    "Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030", 
+    "Hydro_2030_MWh", "Solar_2030_MWh", "Wind_2030_MWh", "Other Renewables_2030_MWh", "Nuclear_2030_MWh", "Fossil_2030_MWh",
+    "Hydro_2050_MWh", "Solar_2050_MWh", "Wind_2050_MWh", "Other Renewables_2050_MWh", "Nuclear_2050_MWh", "Fossil_2050_MWh",
+    "Target_Share_2050"
     ]
 final_merged_df = final_merged_df[column_order]
 
 print("Final number of countries: ", final_merged_df["ISO3_code"].nunique())
 
 # Save the final merged dataset to a CSV file
-final_merged_df.to_excel("outputs_processed_data/p1_a_ember_2023_30d.xlsx", index=False)
+final_merged_df.to_excel("outputs_processed_data/p1_a_ember_2023_30.xlsx", index=False)
 
