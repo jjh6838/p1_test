@@ -213,7 +213,7 @@ annot_fs = 7
 
 # === FIGURE 1: ENERGY (TWh) with custom 6 subplots layout ===
 fig1 = plt.figure(figsize=(7.2, 4), dpi=300)
-gs = gridspec.GridSpec(2, 4, width_ratios=[2, 1, 1, 1], wspace=0.1, hspace=0.35)
+gs = gridspec.GridSpec(2, 4, width_ratios=[2, 1, 1, 1], wspace=0.1, hspace=0.4)
 
 # Wide subplot for totals (spans (0,0) and (1,0))
 ax1 = fig1.add_subplot(gs[:, 0])
@@ -295,9 +295,9 @@ ax1.set_xticks([2024, 2030, 2040, 2050])
 
 # Legend with only the three main lines
 handles = [
-    plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Projected Electricity Generation'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed to Climate Hazards'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='With Risk-Avoidance Measures'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Total Generation'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed Generation'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='Exposed (With Risk-Avoidance)'),
 ]
 ax1.legend(handles=handles, fontsize=legend_fs, loc='upper left', bbox_to_anchor=(-0.01, 1.01), frameon=False)
 
@@ -398,7 +398,6 @@ for (row, col), etype in subplot_positions.items():
     
     ax.set_xticks(bar_x)
     ax.set_xticklabels(years, fontsize=tick_fs)
-
     ax.tick_params(axis='y', pad=1) 
     ax.tick_params(axis='y', direction='out', length=3, labelsize=tick_fs)
     ax.tick_params(axis='x', which='both', length=0, labelsize=tick_fs)
@@ -416,16 +415,16 @@ for (row, col), etype in subplot_positions.items():
 
 
 # fig1.legend(fontsize=legend_fs, loc='upper left', bbox_to_anchor=(0.15, 0.85))
-fig1.suptitle('Global Electricity Generation Projections (2024-2050): Climate Hazard Exposures by Energy Type', fontsize=9, fontweight='bold', y=1.01)
+fig1.suptitle('Figure 1. Climate Risk Exposure of Electricity Generation (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
 fig1.savefig('outputs_processed_vis/vis1a.pdf', bbox_inches='tight', dpi=300)
-# plt.show()
+
 
 
 
 
 # === FIGURE 2: ECONOMIC (USD) with custom 6 subplots layout ===
 fig2 = plt.figure(figsize=(7.2, 4), dpi=300)
-gs2 = gridspec.GridSpec(2, 4, width_ratios=[2, 1, 1, 1], wspace=0.1, hspace=0.35)
+gs2 = gridspec.GridSpec(2, 4, width_ratios=[2, 1, 1, 1], wspace=0.1, hspace=0.4)
 
 # Wide subplot for totals (spans (0,0) and (1,0))
 ax3 = fig2.add_subplot(gs2[:, 0])
@@ -457,8 +456,8 @@ for scenario, values in iea_scenarios_usd.items():
         ax3.text(x_pos, y_pos - 300, scenario.replace(" ", "\n"), ha='center', va='top', fontsize=annot_fs, color='#61615F')
 
 ax3.plot(years, total_raw_usd, 'o-', color='#61615F', linewidth=2.5, markersize=3, label='Non-Adjusted Total')
-ax3.plot(years, risk_avoid_total_usd, 'o-', color='#002147', linewidth=2.5, markersize=3, label='Risk-Avoidance Total')
-ax3.plot(years, total_exp_usd, 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposure-Adjusted Total')
+ax3.plot(years, risk_avoid_total_usd, 'o-', color='#426A5A', linewidth=2.5, markersize=3, label='Risk-Avoidance Total')
+ax3.plot(years, total_exp_usd, 'o-', color='#E2C044', linewidth=2.5, markersize=3, label='Exposure-Adjusted Total')
 
 for i, year in enumerate(years):
     ax3.text(year, total_raw_usd[i] - 100, f'${total_raw_usd[i]:,.0f}B', ha='center', va='top', fontsize=annot_fs)
@@ -467,23 +466,54 @@ for i, year in enumerate(years):
         ax3.text(year, risk_avoid_total_usd[i] - 100, f'${risk_avoid_total_usd[i]:,.0f}B', ha='center', va='top', fontsize=annot_fs)
 
 # Set y-axis limits
-ymin_usd, ymax_usd = 0, max(max(iea_scenarios_usd[scenario]) for scenario in iea_scenarios_usd)
+ymin_usd, ymid_usd, ymax_usd = 0, 3000, 6000
+yticks_usd = range(0, 7000, 1000)
+ax3.set_yticks(yticks_usd)  # First set the tick positions
+
+# Then set the tick labels
+ytick_labels_usd = [f'{tick:,.0f}' if tick in {ymin_usd, ymid_usd, ymax_usd} else '' for tick in yticks_usd]
+ax3.set_yticklabels(ytick_labels_usd, verticalalignment='center', fontsize=tick_fs, rotation=0)
+
 ax3.set_ylim([ymin_usd - 200, ymax_usd + 200])
 ax3.set_xlim([2024 - 3, 2050 + 3])
 
+ax3.tick_params(axis='y', pad=1) 
 ax3.tick_params(axis='y', direction='out', length=3, labelrotation=90, labelsize=tick_fs)
 ax3.tick_params(axis='x', which='both', length=0, labelsize=tick_fs)
 ax3.set_xticks([2024, 2030, 2040, 2050])
 
+
+# Set custom y-axis ticks with TWh labels and remove padding
+ymin, ymid, ymax = 0, 40000, 80000
+yticks = range(0, 90000, 10000)
+ax1.set_yticks(yticks)  # First set the tick positions
+
+# Then set the tick labels
+ytick_labels = [f'{tick:,.0f}' if tick in {ymin, ymid, ymax} else '' for tick in yticks]
+ax1.set_yticklabels(ytick_labels, verticalalignment='center', fontsize=tick_fs, rotation=0)  
+
+
+# Set y-axis limits to remove padding
+ax1.set_ylim([ymin - 2000, ymax + 2000])
+ax1.set_xlim([2024 - 3, 2050 + 3])
+
+# Styling
+ax1.tick_params(axis='y', pad=1) 
+
+
+
 # Legend
 handles = [
-    plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Economic Value'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed to Climate Hazards'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='With Risk-Avoidance Measures'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Total Economic Value'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#E2C044', label='Exposed Economic Value'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#426A5A', label='Exposed (With Risk-Avoidance)'),
 ]
 ax3.legend(handles=handles, fontsize=legend_fs, loc='upper left', bbox_to_anchor=(-0.01, 1.01), frameon=False)
 
 ax3.set_title('Economic Value\n(Billion USD)', fontsize=title_fs, fontweight='bold', pad=5)
+
+
+
 
 # 6 subplots for each energy type (percentage charts, USD)
 for (row, col), etype in subplot_positions.items():
@@ -505,8 +535,8 @@ for (row, col), etype in subplot_positions.items():
     ax.bar(bar_x + bar_width/2 + spacing, [100, 100, 100], width=bar_width, color='#F2F0F0', alpha=1)
     
     # Plot percentage bars
-    ax.bar(bar_x - bar_width/2 - spacing, exposure_pct_usd, width=bar_width, color='#AA1A2D', alpha=1)
-    ax.bar(bar_x[1:] + bar_width/2 + spacing, risk_avoid_pct_usd[1:], width=bar_width, color='#002147', alpha=1)
+    ax.bar(bar_x - bar_width/2 - spacing, exposure_pct_usd, width=bar_width, color='#E2C044', alpha=1)
+    ax.bar(bar_x[1:] + bar_width/2 + spacing, risk_avoid_pct_usd[1:], width=bar_width, color='#426A5A', alpha=1)
     
 
     # Annotate percentage values and differences
@@ -531,8 +561,8 @@ for (row, col), etype in subplot_positions.items():
             # Calculate positions for arrow and text annotations
             arrow_x = bar_x[i] + bar_width/2 + spacing  # X position above the right bar (risk-avoidance)
             center_x = bar_x[i]  # Center position between the two bars for text placement
-            arrow_mid_y = (exposure_pct_usd[i] + risk_avoid_pct_usd[i]) / 2 + 45  # Y position for text box
-            arrow_start_y = arrow_mid_y - 10  # Arrow start position (above text)
+            arrow_mid_y = (exposure_pct_usd[i] + risk_avoid_pct_usd[i]) / 2 + 45 - 5  # Y position for text box
+            arrow_start_y = (arrow_mid_y + 5) - 10  # Arrow start position (above text)
             arrow_end_y = risk_avoid_pct_usd[i] + 20  # Arrow end position (above risk-avoidance bar)
             
             # Draw arrow indicating the direction of change from exposure to risk-avoidance scenario
@@ -542,7 +572,7 @@ for (row, col), etype in subplot_positions.items():
                     '', 
                     xy=(arrow_x, arrow_end_y), 
                     xytext=(arrow_x, arrow_start_y),
-                    arrowprops=dict(arrowstyle='<-', color='#AA1A2D', lw=1)
+                    arrowprops=dict(arrowstyle='<-', color='#E2C044', lw=1)
                 )
             else:
                 # Risk-avoidance decreases exposure: arrow pointing down (good outcome)
@@ -550,11 +580,11 @@ for (row, col), etype in subplot_positions.items():
                     '', 
                     xy=(arrow_x, arrow_start_y), 
                     xytext=(arrow_x, arrow_end_y),
-                    arrowprops=dict(arrowstyle='<-', color='#002147', lw=1)
+                    arrowprops=dict(arrowstyle='<-', color='#426A5A', lw=1)
                 )
 
             # Add text box showing the absolute change in billion USD between scenarios
-            ax.text(center_x, arrow_mid_y, f'${diff_usd:,.1f}B', 
+            ax.text(center_x, arrow_mid_y, f'${diff_usd:,.0f}B', 
                     ha='center', va='center', fontsize=annot_fs, color='#61615F',
                     bbox=dict(boxstyle='round,pad=0.1', facecolor='white', alpha=1, linewidth=0.5))
 
@@ -562,8 +592,10 @@ for (row, col), etype in subplot_positions.items():
     title_text = etype.replace('_', ' ') + '\nExposure (%)'
     ax.set_title(title_text, fontsize=title_fs, fontweight='bold', pad=5)
     
+    
     ax.set_xticks(bar_x)
     ax.set_xticklabels(years, fontsize=tick_fs)
+    ax.tick_params(axis='y', pad=1) 
     ax.tick_params(axis='y', direction='out', length=3, labelsize=tick_fs)
     ax.tick_params(axis='x', which='both', length=0, labelsize=tick_fs)
     ax.yaxis.tick_right()
@@ -577,62 +609,80 @@ for (row, col), etype in subplot_positions.items():
     else:
         ax.yaxis.set_ticklabels([])
         ax.yaxis.set_ticks([])
+        
+fig2.suptitle('Figure 2. Climate Risk Exposure of Electricity Generation Value (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
+fig2.savefig('outputs_processed_vis/vis1b.pdf', bbox_inches='tight', dpi=300)
 
-fig2.suptitle('Global Electricity Generation Economic Value by Energy Type: Climate Hazard Exposures (2024-2050)', fontsize=9, fontweight='bold', y=1.01)
-fig2.savefig('outputs_processed_vis/vis2a.pdf', bbox_inches='tight', dpi=300)
-plt.show()
 
-# Print comprehensive summary with all scenarios
-print("=" * 80)
-print("COMPREHENSIVE ENERGY SCENARIO COMPARISON")
-print("=" * 80)
+# === FIGURE 3: Custom 11 subplots (2024–2050) ===
+# This figure will have 11 subplots, so use 3 rows and 4 columns. 
+# The first row will have 4 subplots indicating four income groups. 
+# The second row will have 4 subplots indicating first four regional groups.
+# The third row will have 3 subplots indicating the last three regional groups. The last subplot will be empty, but you can use it for legend.
+# Each subplot will show the total generation TWh and Billion USD for each country group over 2024 through 2050.
 
-print(f"\nTOTAL GENERATION COMPARISON (2050):")
-print(f"Actual Total Generation:     {total_raw[2]:>15,.1f} TWh (${total_raw_usd[2]:,.1f} billion)")
-print(f"Exposure-Adjusted Total:     {total_exp[2]:>15,.1f} TWh (${total_exp_usd[2]:,.1f} billion)")
-print(f"Risk-Avoidance Total:        {risk_avoid_total[2]:>15,.1f} TWh (${risk_avoid_total_usd[2]:,.1f} billion)")
+# Define country groups
+income_groups = ['Low Income', 'Lower Middle Income', 'Upper Middle Income', 'High Income']
+regional_groups = ['East Asia & Pacific', 'Europe & Central Asia', 'Latin America & Caribbean', 
+                  'Middle East & North Africa', 'North America', 'South Asia', 'Sub-Saharan Africa']
 
-for scenario, values in iea_scenarios.items():
-    print(f"IEA {scenario:<20}: {values[2]:>15,.1f} TWh (${iea_scenarios_usd[scenario][2]:,.1f} billion)")
+# Generate sample data for each group (you can replace this with actual data processing)
+np.random.seed(100)  # For reproducibility
 
-print(f"\nACTUAL ENERGY MIX BREAKDOWN (2050):")
-for energy_type in energy_types:
-    share = (raw_type_values_dict[energy_type][2] / total_raw[2]) * 100
-    share_usd = (raw_type_values_usd_dict[energy_type][2] / total_raw_usd[2]) * 100
-    print(f"  {energy_type:<18}: {raw_type_values_dict[energy_type][2]:>12,.1f} TWh ({share:>5.1f}%) | ${raw_type_values_usd_dict[energy_type][2]:>12,.1f}B ({share_usd:>5.1f}%)")
+# Create sample data for income groups
+income_data_twh = {}
+income_data_usd = {}
+for group in income_groups:
+    # Generate increasing values over time with some variation
+    base_twh = np.random.uniform(5000, 15000)
+    growth_rate = np.random.uniform(1.2, 1.8)
+    income_data_twh[group] = [base_twh * (growth_rate ** i) for i in range(3)]
+    
+    # Convert to USD using weighted average conversion rate
+    weighted_rate = 75  # Sample average rate
+    income_data_usd[group] = [val * weighted_rate / 1000000000 for val in income_data_twh[group]]
+    income_data_twh[group] = [val / 1000000 for val in income_data_twh[group]]  # Convert to TWh
 
-print(f"\nEXPOSURE-ADJUSTED ENERGY MIX BREAKDOWN (2050):")
-for energy_type in energy_types:
-    share = (type_values_dict[energy_type][2] / total_exp[2]) * 100
-    share_usd = (type_values_usd_dict[energy_type][2] / total_exp_usd[2]) * 100
-    print(f"  {energy_type:<18}: {type_values_dict[energy_type][2]:>12,.1f} TWh ({share:>5.1f}%) | ${type_values_usd_dict[energy_type][2]:>12,.1f}B ({share_usd:>5.1f}%)")
+# Create sample data for regional groups
+regional_data_twh = {}
+regional_data_usd = {}
+for group in regional_groups:
+    base_twh = np.random.uniform(3000, 12000)
+    growth_rate = np.random.uniform(1.1, 1.9)
+    regional_data_twh[group] = [base_twh * (growth_rate ** i) for i in range(3)]
+    
+    weighted_rate = 75
+    regional_data_usd[group] = [val * weighted_rate / 1000000000 for val in regional_data_twh[group]]
+    regional_data_twh[group] = [val / 1000000 for val in regional_data_twh[group]]
 
-print(f"\nRENEWABLE SHARE COMPARISON (2050):")
-renewable_raw = sum(raw_type_values_dict[energy_type][2] for energy_type in ["Hydro", "Solar", "Wind", "Other_Renewables"])
-renewable_exp = sum(type_values_dict[energy_type][2] for energy_type in ["Hydro", "Solar", "Wind", "Other_Renewables"])
-renewable_raw_usd = sum(raw_type_values_usd_dict[energy_type][2] for energy_type in ["Hydro", "Solar", "Wind", "Other_Renewables"])
-renewable_exp_usd = sum(type_values_usd_dict[energy_type][2] for energy_type in ["Hydro", "Solar", "Wind", "Other_Renewables"])
+# Create Figure 3
+fig3 = plt.figure(figsize=(7.2, 6), dpi=300)
+gs3 = gridspec.GridSpec(3, 4, hspace=0.4, wspace=0.3)
 
-share_renewable_raw = (renewable_raw / total_raw[2]) * 100
-share_renewable_exp = (renewable_exp / total_exp[2]) * 100
-share_renewable_raw_usd = (renewable_raw_usd / total_raw_usd[2]) * 100
-share_renewable_exp_usd = (renewable_exp_usd / total_exp_usd[2]) * 100
-
-print(f"  Renewable (Raw)       : {renewable_raw:>12,.1f} TWh ({share_renewable_raw:>5.1f}%) | ${renewable_raw_usd:>12,.1f}B ({share_renewable_raw_usd:>5.1f}%)")
-print(f"  Renewable (Adjusted)   : {renewable_exp:>12,.1f} TWh ({share_renewable_exp:>5.1f}%) | ${renewable_exp_usd:>12,.1f}B ({share_renewable_exp_usd:>5.1f}%)")
-
-# Detailed scenario comparison for 2050
-detailed_scenario_comparison = pd.DataFrame({
-    "Energy Type": energy_types,
-    "IEA Stated Policies": [raw_type_values_dict[et][2] for et in energy_types],
-    "IEA Announced Pledges": [raw_type_values_dict[et][2] for et in energy_types],
-    "IEA Net Zero by 2050": [raw_type_values_dict[et][2] for et in energy_types],
-})
-
-detailed_scenario_comparison["IEA Stated Policies USD"] = detailed_scenario_comparison["IEA Stated Policies"] * [conversion_rates[et] for et in energy_types]
-detailed_scenario_comparison["IEA Announced Pledges USD"] = detailed_scenario_comparison["IEA Announced Pledges"] * [conversion_rates[et] for et in energy_types]
-detailed_scenario_comparison["IEA Net Zero by 2050 USD"] = detailed_scenario_comparison["IEA Net Zero by 2050"] * [conversion_rates[et] for et in energy_types]
-
-# Display the detailed scenario comparison for 2050
-print("\nDETAILED SCENARIO COMPARISON (2050):")
-print(detailed_scenario_comparison.to_string(index=False, float_format="%.1f"))
+# Plot income groups (first row)
+for i, group in enumerate(income_groups):
+    ax = fig3.add_subplot(gs3[0, i])
+    
+    # Plot TWh and USD on dual y-axis
+    ax2 = ax.twinx()
+    
+    # Plot TWh (left axis)
+    line1 = ax.plot(years, income_data_twh[group], 'o-', color='#AA1A2D', linewidth=2, markersize=3, label='Generation (TWh)')
+    
+    # Plot USD (right axis)
+    line2 = ax2.plot(years, income_data_usd[group], 's-', color='#E2C044', linewidth=2, markersize=3, label='Value (Billion USD)')
+    
+    # Annotations
+    for j, year in enumerate(years):
+        ax.text(year, income_data_twh[group][j] * 1.05, f'{income_data_twh[group][j]:,.0f}', 
+                ha='center', va='bottom', fontsize=annot_fs-1, color='#AA1A2D')
+        ax2.text(year, income_data_usd[group][j] * 0.95, f'${income_data_usd[group][j]:,.0f}B', 
+                 ha='center', va='top', fontsize=annot_fs-1, color='#E2C044')
+    
+    # Styling
+    ax.set_title(group, fontsize=title_fs, fontweight='bold', pad=5)
+    ax.set_xticks(years)
+    ax.set_xticklabels(years, fontsize=tick_fs-1)
+    ax.tick_params(axis='y', labelsize=tick_fs-1, colors='#AA1A2D')
+    ax2.tick_params(axis='y', labelsize=tick_fs-1, colors='#E2C044')
+    ax.tick_params(axis='x', which
