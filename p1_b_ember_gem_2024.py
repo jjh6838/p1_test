@@ -106,7 +106,8 @@ energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format2025-0
 energy_data = pd.read_csv(energy_data_csv_path)
 
 # Separate filtering for Capacity and Electricity generation
-years = [2023, 2022, 2021, 2020, 2019]
+years = [2023, 2022, 2021, 2020, 2019] # 2024 data is not fully available yet...
+
 
 # Filter for Capacity data
 capacity_data = energy_data[
@@ -357,7 +358,7 @@ grouped_columns = ['Country Name'] + [col for col in grouped_df.columns if col !
 grouped_df = grouped_df[grouped_columns]
 
 # Save the results to an Excel file with two sheets
-output_path = r"outputs_processed_data\p1_b_ember_gem_2023.xlsx"
+output_path = r"outputs_processed_data\p1_b_ember_gem_2024.xlsx"
 
 with pd.ExcelWriter(output_path) as writer:
     granular_df.to_excel(writer, sheet_name='Granular_cur', index=False)

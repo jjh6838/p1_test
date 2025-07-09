@@ -10,19 +10,19 @@ plt.rcParams['font.family'] = 'Arial'  # Or 'Helvetica'
 
 
 # Load the data from the Excel file
-data = pd.read_excel('outputs_processed_data/p1_a_ember_2023_30.xlsx')
+data = pd.read_excel('outputs_processed_data/p1_a_ember_2024_30.xlsx')
 
-# Generate random percentages for 2023, 2030, and 2050
+# Generate random percentages for 2024, 2030, and 2050
 np.random.seed(42)  # For reproducibility
 
 # Define custom ranges for each energy type and year
-ranges_2023 = {
-    "exp_hydro_2023": (10, 15),
-    "exp_solar_2023": (20, 30),
-    "exp_wind_2023": (15, 25),
-    "exp_other_renewables_2023": (1, 10),
-    "exp_nuclear_2023": (1, 8),
-    "exp_fossil_2023": (1, 8),
+ranges_2024 = {
+    "exp_hydro_2024": (10, 15),
+    "exp_solar_2024": (20, 30),
+    "exp_wind_2024": (15, 25),
+    "exp_other_renewables_2024": (1, 10),
+    "exp_nuclear_2024": (1, 8),
+    "exp_fossil_2024": (1, 8),
 }
 ranges_2030 = {
     "exp_hydro_2030": (12, 17),
@@ -42,14 +42,14 @@ ranges_2050 = {
 }
 
 # Generate random percentages within the specified ranges
-percentages_2023 = {col: np.random.uniform(*rng) for col, rng in ranges_2023.items()}
+percentages_2024 = {col: np.random.uniform(*rng) for col, rng in ranges_2024.items()}
 percentages_2030 = {col: np.random.uniform(*rng) for col, rng in ranges_2030.items()}
 percentages_2050 = {col: np.random.uniform(*rng) for col, rng in ranges_2050.items()}
 
-# Generate random percentages for risk-avoidance planning for 2023, 2030, and 2050
-# For 2023, risk-avoidance values are exactly the same
-percentages_2023_risk_avoid = {
-    f'exp_risk_avoid_{k.split("_", 1)[1]}': v for k, v in percentages_2023.items()
+# Generate random percentages for risk-avoidance planning for 2024, 2030, and 2050
+# For 2024, risk-avoidance values are exactly the same
+percentages_2024_risk_avoid = {
+    f'exp_risk_avoid_{k.split("_", 1)[1]}': v for k, v in percentages_2024.items()
 }
 # For 2030 and 2050, apply a reduction factor to the ranges
 np.random.seed(123)  # Different seed for risk-avoidance scenario
@@ -70,15 +70,16 @@ column_mapping = {
 
 # Sample conversion rates from MWh to USD by energy type
 # Based on average levelized cost of electricity (LCOE) in USD/MWh
-# Source: Sample data based on industry averages
+# Source: Sample data based on industry averages (Global LCOE median data)
 conversion_rates = {
-    "Hydro": 65,      # $65 per MWh
-    "Solar": 40,      # $40 per MWh (utility-scale solar)
-    "Wind": 38,       # $38 per MWh (onshore)
-    "Other_Renewables": 85,  # $85 per MWh (biomass, geothermal)
-    "Nuclear": 105,   # $105 per MWh
-    "Fossil": 75,     # $75 per MWh (combined cycle natural gas)
+    "Hydro": 68,      # $68 per MWh
+    "Solar": 60,      # $60 per MWh (utility-scale solar)
+    "Wind": 60,       # $60 per MWh (onshore)
+    "Other_Renewables": 120,  # $120 per MWh (biomass, geothermal)
+    "Nuclear": 100,   # $100 per MWh
+    "Fossil": 105,     # $105 per MWh (combined cycle natural gas)
 }
+
 
 # Calculate values by each type and year, then apply the exposure percentages
 raw_type_values_dict = {}  # Non-exposure-adjusted values
@@ -96,7 +97,7 @@ for energy_type, pattern in column_mapping.items():
     type_values_usd_dict[energy_type] = []
     risk_avoid_type_values_usd_dict[energy_type] = []
     
-    for year in [2023, 2030, 2050]:
+    for year in [2024, 2030, 2050]:
         # Calculate total MWh for the energy type and year
         type_col = f'{energy_type}_{year}'
         data[type_col] = data[[col for col in data.columns if pattern in col and str(year) in col]].sum(axis=1)
@@ -113,8 +114,8 @@ for energy_type, pattern in column_mapping.items():
         # Fix the key generation to handle spaces in energy type names properly
         exposure_col = f'exp_{energy_type.lower().replace(" ", "_")}_{year}'
         
-        if year == 2023:
-            pct = percentages_2023.get(exposure_col, 0)
+        if year == 2024:
+            pct = percentages_2024.get(exposure_col, 0)
         elif year == 2030:
             pct = percentages_2030.get(exposure_col, 0)
         else:
@@ -133,8 +134,8 @@ for energy_type, pattern in column_mapping.items():
         # Apply risk-avoidance exposure percentages
         exposure_col_risk_avoid = f'exp_risk_avoid_{energy_type.lower().replace(" ", "_")}_{year}'
  
-        if year == 2023:
-            pct_risk_avoid = percentages_2023_risk_avoid.get(exposure_col_risk_avoid, 0)
+        if year == 2024:
+            pct_risk_avoid = percentages_2024_risk_avoid.get(exposure_col_risk_avoid, 0)
         elif year == 2030:
             pct_risk_avoid = percentages_2030_risk_avoid.get(exposure_col_risk_avoid, 0)
         else:
@@ -148,7 +149,7 @@ for energy_type, pattern in column_mapping.items():
         risk_avoid_type_values_usd_dict[energy_type].append(exp_value_risk_avoid_usd)
 
 # Prepare data for plotting
-years = [2023, 2030, 2050]
+years = [2024, 2030, 2050]
 # Reorder energy types as requested: Fossil, Nuclear, Other Renewable, Hydro, Wind, and Solar
 energy_types = ["Fossil", "Nuclear", "Other_Renewables", "Hydro", "Wind", "Solar"]
 
@@ -183,7 +184,7 @@ for scenario in iea_scenarios:
     iea_scenarios_usd[scenario] = [val / 1000000000 for val in iea_scenarios_usd[scenario]]
 
 # Calculate totals for line graphs
-# These totals represent the aggregated values across all energy types for each year (2023, 2030, 2050).
+# These totals represent the aggregated values across all energy types for each year (2024, 2030, 2050).
 
 # Total raw energy generation (non-adjusted) in TWh for each year
 total_raw = [sum(raw_type_values_dict[et][i] for et in energy_types) for i in range(3)]
@@ -223,7 +224,7 @@ line_styles = ['-', '-', '-']  # solid, dashed, frequent dotted
 scenario_colors = ['#D9D8D6', '#D9D8D6', '#D9D8D6']
 for i, (scenario, values) in enumerate(iea_scenarios.items()):
     ax1.plot(years, values, marker = 'o', linestyle=line_styles[i], color=scenario_colors[i], 
-             linewidth=1.5, markersize=2, label=f'IEA {scenario}')
+             linewidth=1.25, markersize=1.5, label=f'IEA {scenario}')
 ax1.grid(True, alpha=0.1, linewidth=0.5)
 
 # to indicate IEA scenarios, I will put numbers with frames on each line
@@ -234,9 +235,9 @@ for i, (scenario, values) in enumerate(iea_scenarios.items()):
 # Put numbered frames on IEA scenario lines with scenario text
 # Map scenarios to their x-positions, numbers, and text positions
 scenario_positions = {
-    "Net Zero by 2050": (2041, 1, "left"),
-    "Announced Pledges": (2042, 2, "left"), 
-    "Stated Policies": (2043, 3, "below")
+    "Net Zero by 2050": (2041, 'a', "left"),
+    "Announced Pledges": (2042, 'b', "left"), 
+    "Stated Policies": (2043, 'c', "below")
 }
 
 for scenario, values in iea_scenarios.items():
@@ -248,13 +249,14 @@ for scenario, values in iea_scenarios.items():
     
     # Add scenario text based on position
     if text_pos == "left":
-        ax1.text(x_pos - 1.5, y_pos, scenario, ha='right', va='center', fontsize=annot_fs, color='#61615F')
+        ax1.text(x_pos - 1.25, y_pos, scenario, ha='right', va='center', fontsize=annot_fs, color='#61615F')
     elif text_pos == "below":
-        ax1.text(x_pos, y_pos - 3000, scenario.replace(" ", "\n"), ha='center', va='top', fontsize=annot_fs, color='#61615F')
+        ax1.text(x_pos, y_pos - 2800, scenario.replace(" ", "\n"), ha='center', va='top', fontsize=annot_fs, color='#61615F')
 
+# Plot the main total generation lines
 ax1.plot(years, total_raw, 'o-', color='#61615F', linewidth=2.5, markersize=3, label='Non-Adjusted Total')
-ax1.plot(years, total_exp, 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposure-Adjusted Total')
 ax1.plot(years, risk_avoid_total, 'o-', color='#002147', linewidth=2.5, markersize=3, label='Risk-Avoidance Total')
+ax1.plot(years, total_exp, 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposure-Adjusted Total')
 
 for i, year in enumerate(years):
     # Annotate the Non-Adjusted Total line with values
@@ -264,7 +266,7 @@ for i, year in enumerate(years):
     ax1.text(year, total_exp[i] + 1000, f'{total_exp[i]:,.0f}', ha='center', va='bottom', fontsize=annot_fs)
     
     # Annotate the Risk-Avoidance Total line with values
-    if year != 2023:  # Skip annotation for 2023 to avoid overlap
+    if year != 2024:  # Skip annotation for 2024 to avoid overlap
         ax1.text(year, risk_avoid_total[i] - 1000, f'{risk_avoid_total[i]:,.0f}', ha='center', va='top', fontsize=annot_fs)
     
     # Commented out: IEA scenario annotations
@@ -274,31 +276,35 @@ for i, year in enumerate(years):
 # Set custom y-axis ticks with TWh labels and remove padding
 ymin, ymid, ymax = 0, 40000, 80000
 yticks = range(0, 90000, 10000)
-ytick_labels = [f'{tick:.0f}' if tick in {ymin, ymid, ymax} else '' for tick in yticks]
+ax1.set_yticks(yticks)  # First set the tick positions
+
+# Then set the tick labels
+ytick_labels = [f'{tick:,.0f}' if tick in {ymin, ymid, ymax} else '' for tick in yticks]
+ax1.set_yticklabels(ytick_labels, verticalalignment='center', fontsize=tick_fs, rotation=0)  
+
 
 # Set y-axis limits to remove padding
 ax1.set_ylim([ymin - 2000, ymax + 2000])
-ax1.set_xlim([2023 - 3, 2050 + 3])
-
-ax1.set_yticks(yticks)
-ax1.set_yticklabels(ytick_labels, verticalalignment='center')
-ax1.tick_params(axis='y', which='major', pad=5)
+ax1.set_xlim([2024 - 3, 2050 + 3])
 
 # Styling
-ax1.tick_params(axis='y', direction='out', length=3, labelrotation=90, labelsize=tick_fs)
+ax1.tick_params(axis='y', pad=1) 
+ax1.tick_params(axis='y', which='major', direction='out', length=3, labelrotation=90, labelsize=tick_fs)
 ax1.tick_params(axis='x', which='both', length=0, labelsize=tick_fs)
-ax1.set_xticks([2023, 2030, 2040, 2050])
+ax1.set_xticks([2024, 2030, 2040, 2050])
 
 # Legend with only the three main lines
 handles = [
-    plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Electricity Generation'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed to Risks'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='Exposed After Risk-Avoidance'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Projected Electricity Generation'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed to Climate Hazards'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='With Risk-Avoidance Measures'),
 ]
 ax1.legend(handles=handles, fontsize=legend_fs, loc='upper left', bbox_to_anchor=(-0.01, 1.01), frameon=False)
 
 # Set title for the main total generation subplot
-ax1.set_title('Projected Generation (TWh)', fontsize=title_fs, fontweight='bold', pad=5)
+ax1.set_title('Electricity\nGeneration (TWh)', fontsize=title_fs, fontweight='bold', pad=5)
+
+
 
 ### Generate Six subplots for each energy type
 # Mapping for subplot positions: (row, col): energy type
@@ -324,27 +330,76 @@ for (row, col), etype in subplot_positions.items():
     exposure_pct = [(type_values_dict[etype][i] / raw_type_values_dict[etype][i] * 100) if raw_type_values_dict[etype][i] > 0 else 0 for i in range(3)]
     risk_avoid_pct = [(risk_avoid_type_values_dict[etype][i] / raw_type_values_dict[etype][i] * 100) if raw_type_values_dict[etype][i] > 0 else 0 for i in range(3)]
     
+    # Calculate absolute values in TWh for Exposure-Adjusted and Risk-Avoidance
+    exposure_twh = type_values_dict[etype]
+    risk_avoid_twh = risk_avoid_type_values_dict[etype]
+    
     # Plot background bars with spacing
     ax.bar(bar_x - bar_width/2 - spacing, [100, 100, 100], width=bar_width, color='#F2F0F0', alpha=1, label='Non-Adjusted (100%)')
     ax.bar(bar_x + bar_width/2 + spacing, [100, 100, 100], width=bar_width, color='#F2F0F0', alpha=1)
     
     # Plot percentage bars with spacing
     ax.bar(bar_x - bar_width/2 - spacing, exposure_pct, width=bar_width, color='#AA1A2D', alpha=1, label='Exposure-Adjusted %')
-    ax.bar(bar_x + bar_width/2 + spacing, risk_avoid_pct, width=bar_width, color='#002147', alpha=1, label='Risk-Avoidance %')
+    ax.bar(bar_x[1:] + bar_width/2 + spacing, risk_avoid_pct[1:], width=bar_width, color='#002147', alpha=1, label='Risk-Avoidance %')
     
-    # Annotate percentage values
+    # Annotate percentage values and differences
     for i in range(3):
-        ax.text(bar_x[i] - bar_width/2 - spacing, exposure_pct[i] + 2, f'{exposure_pct[i]:.0f}%', ha='center', va='bottom', rotation=90, fontsize=annot_fs)
-        ax.text(bar_x[i] + bar_width/2 + spacing, risk_avoid_pct[i]+ 2, f'{risk_avoid_pct[i]:.0f}%', ha='center', va='bottom', rotation=90, fontsize=annot_fs)
-    
+        # Always show the exposure percentage
+        ax.text(bar_x[i] - bar_width/2 - spacing, exposure_pct[i] + 2, f'{exposure_pct[i]:.0f}%', 
+                ha='center', va='bottom', rotation=90, fontsize=annot_fs)
+        
+        # For risk avoidance, show "NA" or - mark for 2024 (index 0) and percentage for other years
+        if i == 0:  # 2024
+            ax.text(bar_x[i] + bar_width/2 + spacing, 1, "-", 
+                    ha='center', va='bottom', rotation=0, fontsize=annot_fs)
+        else:  # 2030 and 2050
+            ax.text(bar_x[i] + bar_width/2 + spacing, risk_avoid_pct[i] + 2, f'{risk_avoid_pct[i]:.0f}%', 
+                    ha='center', va='bottom', rotation=90, fontsize=annot_fs)
+            
+            # Calculate the difference in TWh between exposure and risk-avoidance scenarios
+            # Positive diff_twh means risk-avoidance reduces exposure (Unexpected outcome)
+            # Negative diff_twh means risk-avoidance increases exposure (Good outcome)
+            diff_twh = - (exposure_twh[i] - risk_avoid_twh[i])
+            
+            # Calculate positions for arrow and text annotations
+            arrow_x = bar_x[i] + bar_width/2 + spacing  # X position above the right bar (risk-avoidance)
+            center_x = bar_x[i]  # Center position between the two bars for text placement
+            arrow_mid_y = (exposure_pct[i] + risk_avoid_pct[i]) / 2 + 45  # Y position for text box
+            arrow_start_y = arrow_mid_y - 10  # Arrow start position (above text)
+            arrow_end_y = risk_avoid_pct[i] + 20  # Arrow end position (above risk-avoidance bar)
+            
+            # Draw arrow indicating the direction of change from exposure to risk-avoidance scenario
+            if diff_twh > 0:
+                # Risk-avoidance increases exposure: arrow pointing up (unexpected outcome)
+                ax.annotate(
+                    '', 
+                    xy=(arrow_x, arrow_end_y), 
+                    xytext=(arrow_x, arrow_start_y),
+                    arrowprops=dict(arrowstyle='<-', color='#AA1A2D', lw=1)
+                )
+            else:
+                # Risk-avoidance decreases exposure: arrow pointing down (good outcome)
+                ax.annotate(
+                    '', 
+                    xy=(arrow_x, arrow_start_y), 
+                    xytext=(arrow_x, arrow_end_y),
+                    arrowprops=dict(arrowstyle='<-', color='#002147', lw=1)
+                )
+
+            # Add text box showing the absolute change in TWh between scenarios
+            ax.text(center_x, arrow_mid_y, f'{diff_twh:,.0f}\nTWh', 
+                    ha='center', va='center', fontsize=annot_fs, color='#61615F',
+                    bbox=dict(boxstyle='round,pad=0.1', facecolor='white', alpha=1, linewidth=0.5))
+
+
     # Set subplot title
-    # Format the title based on energy type
-    title_text = etype.replace('_', ' ') + ' (%)'
+    title_text = etype.replace('_', ' ') + '\nExposure (%)'
     ax.set_title(title_text, fontsize=title_fs, fontweight='bold', pad=5)
     
     ax.set_xticks(bar_x)
     ax.set_xticklabels(years, fontsize=tick_fs)
 
+    ax.tick_params(axis='y', pad=1) 
     ax.tick_params(axis='y', direction='out', length=3, labelsize=tick_fs)
     ax.tick_params(axis='x', which='both', length=0, labelsize=tick_fs)
     ax.yaxis.tick_right()
@@ -361,8 +416,8 @@ for (row, col), etype in subplot_positions.items():
 
 
 # fig1.legend(fontsize=legend_fs, loc='upper left', bbox_to_anchor=(0.15, 0.85))
-fig1.suptitle('Global Electricity Generation (TWh) by Energy Type, Scenario, and Climate Risk Exposure (%) \nWith and Without Risk-Avoidance Planning (2023–2050)', fontsize=9, fontweight='bold', y=1.01)
-fig1.savefig('energy_figure_a4_energy_disagg.png', bbox_inches='tight', dpi=300)
+fig1.suptitle('Global Electricity Generation Projections (2024-2050): Climate Hazard Exposures by Energy Type', fontsize=9, fontweight='bold', y=1.01)
+fig1.savefig('outputs_processed_vis/vis1a.pdf', bbox_inches='tight', dpi=300)
 # plt.show()
 
 
@@ -379,15 +434,15 @@ line_styles = ['-', '-', '-']
 
 scenario_colors = ['#D9D8D6', '#D9D8D6', '#D9D8D6']
 for i, (scenario, values) in enumerate(iea_scenarios_usd.items()):
-    ax3.plot(years, values, marker = 'o', linestyle=line_styles[i], color=scenario_colors[i], 
+    ax3.plot(years, values, marker='o', linestyle=line_styles[i], color=scenario_colors[i], 
              linewidth=1.5, markersize=2, label=f'IEA {scenario}')
 ax3.grid(True, alpha=0.1, linewidth=0.5)
 
 # Put numbered frames on IEA scenario lines with scenario text
 scenario_positions_usd = {
-    "Net Zero by 2050": (2041, 1, "left"),
-    "Announced Pledges": (2042, 2, "left"), 
-    "Stated Policies": (2043, 3, "below")
+    "Net Zero by 2050": (2041, 'a', "left"),
+    "Announced Pledges": (2042, 'b', "left"), 
+    "Stated Policies": (2043, 'c', "below")
 }
 
 for scenario, values in iea_scenarios_usd.items():
@@ -397,38 +452,38 @@ for scenario, values in iea_scenarios_usd.items():
              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='#61615F', linewidth=0.5))
     
     if text_pos == "left":
-        ax3.text(x_pos - 1.5, y_pos, scenario, ha='right', va='center', fontsize=annot_fs, color='#61615F')
+        ax3.text(x_pos - 1.25, y_pos, scenario, ha='right', va='center', fontsize=annot_fs, color='#61615F')
     elif text_pos == "below":
         ax3.text(x_pos, y_pos - 300, scenario.replace(" ", "\n"), ha='center', va='top', fontsize=annot_fs, color='#61615F')
 
 ax3.plot(years, total_raw_usd, 'o-', color='#61615F', linewidth=2.5, markersize=3, label='Non-Adjusted Total')
-ax3.plot(years, total_exp_usd, 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposure-Adjusted Total')
 ax3.plot(years, risk_avoid_total_usd, 'o-', color='#002147', linewidth=2.5, markersize=3, label='Risk-Avoidance Total')
+ax3.plot(years, total_exp_usd, 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposure-Adjusted Total')
 
 for i, year in enumerate(years):
     ax3.text(year, total_raw_usd[i] - 100, f'${total_raw_usd[i]:,.0f}B', ha='center', va='top', fontsize=annot_fs)
     ax3.text(year, total_exp_usd[i] + 100, f'${total_exp_usd[i]:,.0f}B', ha='center', va='bottom', fontsize=annot_fs)
-    if year != 2023:
+    if year != 2024:
         ax3.text(year, risk_avoid_total_usd[i] - 100, f'${risk_avoid_total_usd[i]:,.0f}B', ha='center', va='top', fontsize=annot_fs)
 
 # Set y-axis limits
 ymin_usd, ymax_usd = 0, max(max(iea_scenarios_usd[scenario]) for scenario in iea_scenarios_usd)
 ax3.set_ylim([ymin_usd - 200, ymax_usd + 200])
-ax3.set_xlim([2023 - 3, 2050 + 3])
+ax3.set_xlim([2024 - 3, 2050 + 3])
 
 ax3.tick_params(axis='y', direction='out', length=3, labelrotation=90, labelsize=tick_fs)
 ax3.tick_params(axis='x', which='both', length=0, labelsize=tick_fs)
-ax3.set_xticks([2023, 2030, 2040, 2050])
+ax3.set_xticks([2024, 2030, 2040, 2050])
 
 # Legend
 handles = [
     plt.Rectangle((0, 0), 1, 1, facecolor='#61615F', label='Economic Value'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed to Risks'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='Exposed After Risk-Avoidance'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed to Climate Hazards'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='With Risk-Avoidance Measures'),
 ]
 ax3.legend(handles=handles, fontsize=legend_fs, loc='upper left', bbox_to_anchor=(-0.01, 1.01), frameon=False)
 
-ax3.set_title('Projected Economic Value (Billion USD)', fontsize=title_fs, fontweight='bold', pad=5)
+ax3.set_title('Economic Value\n(Billion USD)', fontsize=title_fs, fontweight='bold', pad=5)
 
 # 6 subplots for each energy type (percentage charts, USD)
 for (row, col), etype in subplot_positions.items():
@@ -441,21 +496,70 @@ for (row, col), etype in subplot_positions.items():
     exposure_pct_usd = [(type_values_usd_dict[etype][i] / raw_type_values_usd_dict[etype][i] * 100) if raw_type_values_usd_dict[etype][i] > 0 else 0 for i in range(3)]
     risk_avoid_pct_usd = [(risk_avoid_type_values_usd_dict[etype][i] / raw_type_values_usd_dict[etype][i] * 100) if raw_type_values_usd_dict[etype][i] > 0 else 0 for i in range(3)]
     
+    # Calculate absolute values in billion USD for Exposure-Adjusted and Risk-Avoidance
+    exposure_usd = type_values_usd_dict[etype]
+    risk_avoid_usd = risk_avoid_type_values_usd_dict[etype]
+    
     # Plot background bars
     ax.bar(bar_x - bar_width/2 - spacing, [100, 100, 100], width=bar_width, color='#F2F0F0', alpha=1)
     ax.bar(bar_x + bar_width/2 + spacing, [100, 100, 100], width=bar_width, color='#F2F0F0', alpha=1)
     
     # Plot percentage bars
     ax.bar(bar_x - bar_width/2 - spacing, exposure_pct_usd, width=bar_width, color='#AA1A2D', alpha=1)
-    ax.bar(bar_x + bar_width/2 + spacing, risk_avoid_pct_usd, width=bar_width, color='#002147', alpha=1)
+    ax.bar(bar_x[1:] + bar_width/2 + spacing, risk_avoid_pct_usd[1:], width=bar_width, color='#002147', alpha=1)
     
-    # Annotate percentage values
+
+    # Annotate percentage values and differences
     for i in range(3):
-        ax.text(bar_x[i] - bar_width/2 - spacing, exposure_pct_usd[i] + 2, f'{exposure_pct_usd[i]:.0f}%', ha='center', va='bottom', rotation=90, fontsize=annot_fs)
-        ax.text(bar_x[i] + bar_width/2 + spacing, risk_avoid_pct_usd[i] + 2, f'{risk_avoid_pct_usd[i]:.0f}%', ha='center', va='bottom', rotation=90, fontsize=annot_fs)
-    
+        # Always show the exposure percentage
+        ax.text(bar_x[i] - bar_width/2 - spacing, exposure_pct_usd[i] + 2, f'{exposure_pct_usd[i]:.0f}%', 
+                ha='center', va='bottom', rotation=90, fontsize=annot_fs)
+        
+        # For risk avoidance, show "NA" or - mark for 2024 (index 0) and percentage for other years
+        if i == 0:  # 2024
+            ax.text(bar_x[i] + bar_width/2 + spacing, 1, "-", 
+                    ha='center', va='bottom', rotation=0, fontsize=annot_fs)
+        else:  # 2030 and 2050
+            ax.text(bar_x[i] + bar_width/2 + spacing, risk_avoid_pct_usd[i] + 2, f'{risk_avoid_pct_usd[i]:.0f}%', 
+                    ha='center', va='bottom', rotation=90, fontsize=annot_fs)
+            
+            # Calculate the difference in billion USD between exposure and risk-avoidance scenarios
+            # Positive diff_usd means risk-avoidance reduces exposure (Unexpected outcome)
+            # Negative diff_usd means risk-avoidance increases exposure (Good outcome)
+            diff_usd = - (exposure_usd[i] - risk_avoid_usd[i])
+            
+            # Calculate positions for arrow and text annotations
+            arrow_x = bar_x[i] + bar_width/2 + spacing  # X position above the right bar (risk-avoidance)
+            center_x = bar_x[i]  # Center position between the two bars for text placement
+            arrow_mid_y = (exposure_pct_usd[i] + risk_avoid_pct_usd[i]) / 2 + 45  # Y position for text box
+            arrow_start_y = arrow_mid_y - 10  # Arrow start position (above text)
+            arrow_end_y = risk_avoid_pct_usd[i] + 20  # Arrow end position (above risk-avoidance bar)
+            
+            # Draw arrow indicating the direction of change from exposure to risk-avoidance scenario
+            if diff_usd > 0:
+                # Risk-avoidance increases exposure: arrow pointing up (unexpected outcome)
+                ax.annotate(
+                    '', 
+                    xy=(arrow_x, arrow_end_y), 
+                    xytext=(arrow_x, arrow_start_y),
+                    arrowprops=dict(arrowstyle='<-', color='#AA1A2D', lw=1)
+                )
+            else:
+                # Risk-avoidance decreases exposure: arrow pointing down (good outcome)
+                ax.annotate(
+                    '', 
+                    xy=(arrow_x, arrow_start_y), 
+                    xytext=(arrow_x, arrow_end_y),
+                    arrowprops=dict(arrowstyle='<-', color='#002147', lw=1)
+                )
+
+            # Add text box showing the absolute change in billion USD between scenarios
+            ax.text(center_x, arrow_mid_y, f'${diff_usd:,.1f}B', 
+                    ha='center', va='center', fontsize=annot_fs, color='#61615F',
+                    bbox=dict(boxstyle='round,pad=0.1', facecolor='white', alpha=1, linewidth=0.5))
+
     # Set subplot title
-    title_text = etype.replace('_', ' ') + ' (%)'
+    title_text = etype.replace('_', ' ') + '\nExposure (%)'
     ax.set_title(title_text, fontsize=title_fs, fontweight='bold', pad=5)
     
     ax.set_xticks(bar_x)
@@ -474,8 +578,8 @@ for (row, col), etype in subplot_positions.items():
         ax.yaxis.set_ticklabels([])
         ax.yaxis.set_ticks([])
 
-fig2.suptitle('Global Electricity Generation Economic Value (USD) by Energy Type, Scenario, and Climate Risk Exposure (%) \nWith and Without Risk-Avoidance Planning (2023–2050)', fontsize=9, fontweight='bold', y=1.01)
-fig2.savefig('energy_figure_a4_usd_disagg.png', bbox_inches='tight', dpi=300)
+fig2.suptitle('Global Electricity Generation Economic Value by Energy Type: Climate Hazard Exposures (2024-2050)', fontsize=9, fontweight='bold', y=1.01)
+fig2.savefig('outputs_processed_vis/vis2a.pdf', bbox_inches='tight', dpi=300)
 plt.show()
 
 # Print comprehensive summary with all scenarios
