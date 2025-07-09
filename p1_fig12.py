@@ -357,7 +357,7 @@ for (row, col), etype in subplot_positions.items():
                     ha='center', va='bottom', rotation=90, fontsize=annot_fs)
             
             # Calculate the difference in TWh between exposure and risk-avoidance scenarios
-            # Positive diff_twh means risk-avoidance reduces exposure (Unexpected outcome)
+            # Positive diff_twh means risk-avoidance increases exposure (Unexpected outcome)
             # Negative diff_twh means risk-avoidance increases exposure (Good outcome)
             diff_twh = - (exposure_twh[i] - risk_avoid_twh[i])
             
@@ -416,7 +416,7 @@ for (row, col), etype in subplot_positions.items():
 
 # fig1.legend(fontsize=legend_fs, loc='upper left', bbox_to_anchor=(0.15, 0.85))
 fig1.suptitle('Figure 1. Climate Risk Exposure of Electricity Generation (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
-fig1.savefig('outputs_processed_vis/vis1a.pdf', bbox_inches='tight', dpi=300)
+fig1.savefig('outputs_processed_vis/fig1.pdf', bbox_inches='tight', dpi=300)
 
 
 
@@ -611,12 +611,4 @@ for (row, col), etype in subplot_positions.items():
         ax.yaxis.set_ticks([])
         
 fig2.suptitle('Figure 2. Climate Risk Exposure of Electricity Generation Value (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
-fig2.savefig('outputs_processed_vis/vis1b.pdf', bbox_inches='tight', dpi=300)
-
-
-# === FIGURE 3: Custom 11 subplots (2024–2050) ===
-# This figure will have 11 subplots, so use 3 rows and 4 columns. 
-# The first row will have 4 subplots indicating four income groups. 
-# The second row will have 4 subplots indicating first four regional groups.
-# The third row will have 3 subplots indicating the last three regional groups. The last subplot will be empty, but you can use it for legend.
-# Each subplot will show the total generation TWh and Billion USD for each country group over 2024 through 2050.
+fig2.savefig('outputs_processed_vis/fig2.pdf', bbox_inches='tight', dpi=300)
