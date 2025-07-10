@@ -149,15 +149,15 @@ for energy_type, pattern in column_mapping.items():
         risk_avoid_type_values_usd_dict[energy_type].append(exp_value_risk_avoid_usd)
 
 # Prepare data for plotting
-years = [2030, 2050]  # Remove 2024
+years = [2024, 2030, 2050]
 # Reorder energy types as requested: Fossil, Nuclear, Other Renewable, Hydro, Wind, and Solar
 energy_types = ["Fossil", "Nuclear", "Other_Renewables", "Hydro", "Wind", "Solar"]
 
 # Sample numbers for IEA scenarios
 iea_scenarios = {
-    "Stated Policies": [37488.89 * 1000000, 58352.13 * 1000000],  # Remove first element
-    "Announced Pledges": [38284.86 * 1000000, 70564.11 * 1000000],  # Remove first element
-    "Net Zero by 2050": [39782.75 * 1000000, 80194.39 * 1000000],  # Remove first element
+    "Stated Policies": [29863.4 * 1000000, 37488.89 * 1000000, 58352.13 * 1000000],
+    "Announced Pledges": [29863.4 * 1000000, 38284.86 * 1000000, 70564.11 * 1000000],
+    "Net Zero by 2050": [29863.4 * 1000000, 39782.75 * 1000000, 80194.39 * 1000000],
 }
 
 # Convert IEA scenarios to USD (using weighted average conversion rate)
@@ -166,19 +166,18 @@ for scenario, values in iea_scenarios.items():
     iea_scenarios_usd[scenario] = []
     for i, value in enumerate(values):
         # Calculate weighted average conversion rate based on energy mix in raw values
-        total_energy = sum(raw_type_values_dict[et][i+1] for et in energy_types)  # Add +1 to skip 2024 data
-        weighted_rate = sum(raw_type_values_dict[et][i+1] / total_energy * conversion_rates[et] for et in energy_types)
+        total_energy = sum(raw_type_values_dict[et][i] for et in energy_types)
+        weighted_rate = sum(raw_type_values_dict[et][i] / total_energy * conversion_rates[et] for et in energy_types)
         iea_scenarios_usd[scenario].append(value * weighted_rate)
 
 # Convert all values from MWh to TWh and USD to billions USD for plotting
 for energy_type in energy_types:
-    # Slice to remove 2024 data (keep indices 1 and 2 for 2030 and 2050)
-    raw_type_values_dict[energy_type] = [raw_type_values_dict[energy_type][i] / 1000000 for i in [1, 2]]
-    type_values_dict[energy_type] = [type_values_dict[energy_type][i] / 1000000 for i in [1, 2]]
-    risk_avoid_type_values_dict[energy_type] = [risk_avoid_type_values_dict[energy_type][i] / 1000000 for i in [1, 2]]
-    raw_type_values_usd_dict[energy_type] = [raw_type_values_usd_dict[energy_type][i] / 1000000000 for i in [1, 2]]
-    type_values_usd_dict[energy_type] = [type_values_usd_dict[energy_type][i] / 1000000000 for i in [1, 2]]
-    risk_avoid_type_values_usd_dict[energy_type] = [risk_avoid_type_values_usd_dict[energy_type][i] / 1000000000 for i in [1, 2]]
+    raw_type_values_dict[energy_type] = [val / 1000000 for val in raw_type_values_dict[energy_type]]
+    type_values_dict[energy_type] = [val / 1000000 for val in type_values_dict[energy_type]]
+    risk_avoid_type_values_dict[energy_type] = [val / 1000000 for val in risk_avoid_type_values_dict[energy_type]]
+    raw_type_values_usd_dict[energy_type] = [val / 1000000000 for val in raw_type_values_usd_dict[energy_type]]
+    type_values_usd_dict[energy_type] = [val / 1000000000 for val in type_values_usd_dict[energy_type]]
+    risk_avoid_type_values_usd_dict[energy_type] = [val / 1000000000 for val in risk_avoid_type_values_usd_dict[energy_type]]
 
 for scenario in iea_scenarios:
     iea_scenarios[scenario] = [val / 1000000 for val in iea_scenarios[scenario]]
@@ -188,22 +187,22 @@ for scenario in iea_scenarios:
 # These totals represent the aggregated values across all energy types for each year (2024, 2030, 2050).
 
 # Total raw energy generation (non-adjusted) in TWh for each year
-total_raw = [sum(raw_type_values_dict[et][i] for et in energy_types) for i in range(2)]
+total_raw = [sum(raw_type_values_dict[et][i] for et in energy_types) for i in range(3)]
 
 # Total exposure-adjusted energy generation in TWh for each year
-total_exp = [sum(type_values_dict[et][i] for et in energy_types) for i in range(2)]
+total_exp = [sum(type_values_dict[et][i] for et in energy_types) for i in range(3)]
 
 # Total risk-avoidance energy generation in TWh for each year
-risk_avoid_total = [sum(risk_avoid_type_values_dict[et][i] for et in energy_types) for i in range(2)]
+risk_avoid_total = [sum(risk_avoid_type_values_dict[et][i] for et in energy_types) for i in range(3)]
 
 # Total raw economic value (non-adjusted) in billion USD for each year
-total_raw_usd = [sum(raw_type_values_usd_dict[et][i] for et in energy_types) for i in range(2)]
+total_raw_usd = [sum(raw_type_values_usd_dict[et][i] for et in energy_types) for i in range(3)]
 
 # Total exposure-adjusted economic value in billion USD for each year
-total_exp_usd = [sum(type_values_usd_dict[et][i] for et in energy_types) for i in range(2)]
+total_exp_usd = [sum(type_values_usd_dict[et][i] for et in energy_types) for i in range(3)]
 
 # Total risk-avoidance economic value in billion USD for each year
-risk_avoid_total_usd = [sum(risk_avoid_type_values_usd_dict[et][i] for et in energy_types) for i in range(2)]
+risk_avoid_total_usd = [sum(risk_avoid_type_values_usd_dict[et][i] for et in energy_types) for i in range(3)]
 
 # Font sizes
 title_fs = 8
@@ -215,7 +214,7 @@ annot_fs = 7
 
 # === FIGURE 3: Custom 11 subplots (2024–2050) - TWh ===
 fig3 = plt.figure(figsize=(7.2, 5.5), dpi=300)
-gs3 = gridspec.GridSpec(3, 4, wspace=0.2, hspace=0.3)
+gs3 = gridspec.GridSpec(3, 4, wspace=0.15, hspace=0.3)
 
 # Get unique income groups and regions from the data
 income_groups = data['Income group'].unique()
@@ -232,7 +231,7 @@ for group in income_groups:
     exposure_values = []
     risk_avoid_values = []
     
-    for year in [2030, 2050]:  # Changed from [2024, 2030, 2050]
+    for year in [2024, 2030, 2050]:
         # Calculate total TWh for this income group and year
         total_mwh = 0
         total_exposure_mwh = 0
@@ -285,8 +284,7 @@ for region in regions:
     exposure_values = []
     risk_avoid_values = []
     
-    # for year in [2024, 2030, 2050]:
-    for year in [2030, 2050]:
+    for year in [2024, 2030, 2050]:
         # Calculate total TWh for this region and year
         total_mwh = 0
         total_exposure_mwh = 0
@@ -348,191 +346,103 @@ for i, group in enumerate(income_groups_sorted):
     max_twh_risk_avoid = max([max(income_group_risk_avoid_twh[group]) for group in income_groups] +
                              [max(regional_group_risk_avoid_twh[region]) for region in regions])
     ylim_twh = max(max_twh_exposure, max_twh_risk_avoid) * 1.2  # Add 10% padding
-    ylim_twh_min = 0
+    ylim_twh_min = max(max_twh_exposure, max_twh_risk_avoid) * -0.05  # Add 5% padding from zero
+    xlim_twh = 2053  # Set x-axis limit to 2050
+    xlim_twh_min = 2021  # Set x-axis limit to 2022
 
-    # Plot TWh data as bars
-    bar_width = 0.4
-    bar_positions = np.arange(len(years))  # This will now be [0, 1] instead of [0, 1, 2]
-    
-    ax.bar(bar_positions - bar_width/2, income_group_exposure_twh[group], bar_width, 
-           color='#AA1A2D', alpha=1, label='Exposed Generation')
-    ax.bar(bar_positions + bar_width/2, income_group_risk_avoid_twh[group], bar_width, 
-           color='#002147', alpha=1)
-    
-    # Add line showing percentage change from exposed to risk-avoidance
-    change_pct = [(income_group_exposure_twh[group][i] - income_group_risk_avoid_twh[group][i]) / income_group_exposure_twh[group][i] * 100 
-                  if income_group_exposure_twh[group][i] > 0 else 0 for i in range(len(years))]
-    ax2 = ax.twinx()
-    ax2.plot(bar_positions, change_pct, 'o-', color='#FB5607', linewidth=2, markersize=3)
-    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Keep tick marks
-    ax2.set_ylim([0, 100])  # Consistent scale for all subplots
-    
-    # Show second y-axis label only for subplots (0, 3), (1, 3), (2, 2)
-    if i == 3:
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-    else:
-        ax2.tick_params(axis='y', labelleft=False)
+    # Plot TWh data - using Figure 1 colors
+    ax.plot(years, income_group_risk_avoid_twh[group], 'o-', color='#002147', linewidth=2.5, markersize=3, label='Exposed (With Risk-Avoidance)')
+    ax.plot(years, income_group_exposure_twh[group], 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposed Generation')
 
     # Annotations
-    for j, year in enumerate(years):  # This will now enumerate [2030, 2050] with indices [0, 1]
-        if income_group_exposure_twh[group][j] > 0 and year != 2024:
-            ax.text(j - bar_width/2, income_group_exposure_twh[group][j] * 1.05, f'{income_group_exposure_twh[group][j]:.0f}', 
+    for j, year in enumerate(years):
+        if income_group_exposure_twh[group][j] > 0:
+            ax.text(year, income_group_exposure_twh[group][j] * 1.05, f'{income_group_exposure_twh[group][j]:.0f}', 
                     ha='center', va='bottom', fontsize=annot_fs, color='#AA1A2D')
         if income_group_risk_avoid_twh[group][j] > 0 and year != 2024:
-            ax.text(j + bar_width/2, income_group_risk_avoid_twh[group][j] * 1.05, f'{income_group_risk_avoid_twh[group][j]:.0f}', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#002147')
-        # Add percentage labels for line graph
-        if change_pct[j] > 0:
-            ax2.text(j, change_pct[j] + 5, f'{change_pct[j]:.0f}%', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#FB5607')
-
+            ax.text(year, income_group_risk_avoid_twh[group][j] * 0.95, f'{income_group_risk_avoid_twh[group][j]:.0f}', 
+                    ha='center', va='top', fontsize=annot_fs, color='#002147')
+    
     # Styling
     ax.set_title(group, fontsize=title_fs, fontweight='bold', pad=5)
-    ax.set_xticks(bar_positions)
+    ax.set_xticks(years)
     ax.set_xticklabels(years, fontsize=tick_fs)
-    ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
-    ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
+    ax.tick_params(axis='y', labelsize=tick_fs)
     ax.grid(True, alpha=0.1)
     ax.set_ylim([ylim_twh_min, ylim_twh])
+    ax.set_xlim([xlim_twh_min, xlim_twh])  # Set x-axis limits to match years
     
-    # Y-axis label only for first column
+    # Y-axis label
     if i == 0:
-        ax.set_ylabel('TWh', fontsize=label_fs)
-        ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Labels but no tick marks
+        ax.set_ylabel('Generation (TWh)', fontsize=label_fs)
     else:
-        ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
-    
-    # Second y-axis configuration
-    if i == 3:  # Subplot (0,3)
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-        ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Labels and tick marks
-    else:
-        ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
+        ax.tick_params(axis='y', labelleft=False)
 
 # Second row: First 4 regional groups (sorted by exposed generation, highest first)
 for i, region in enumerate(regions_sorted[:4]):
     ax = fig3.add_subplot(gs3[1, i])
     
-    # Plot TWh data as bars
-    bar_width = 0.4
-    bar_positions = np.arange(len(years))  # This will now be [0, 1] instead of [0, 1, 2]
-    
-    ax.bar(bar_positions - bar_width/2, regional_group_exposure_twh[region], bar_width, 
-           color='#AA1A2D', alpha=0.8, label='Exposed Generation')
-    ax.bar(bar_positions + bar_width/2, regional_group_risk_avoid_twh[region], bar_width, 
-           color='#002147', alpha=0.8)
-    
-    # Add line showing percentage change from exposed to risk-avoidance
-    change_pct = [(regional_group_exposure_twh[region][i] - regional_group_risk_avoid_twh[region][i]) / regional_group_exposure_twh[region][i] * 100 
-                  if regional_group_exposure_twh[region][i] > 0 else 0 for i in range(len(years))]
-    ax2 = ax.twinx()
-    ax2.plot(bar_positions, change_pct, 'o-', color='#FB5607', linewidth=2, markersize=3)
-    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Keep tick marks
-    ax2.set_ylim([0, 100])  # Consistent scale for all subplots
-    
-    # Show second y-axis label only for subplot (1, 3)
-    if i == 3:
-        # Add label for the second y-axis (percentage reduction) for the last subplot in the second row
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-        # Disable left-side labels for the second y-axis
-        ax2.tick_params(axis='y', labelleft=False)
-    else:
-        # Disable both left-side and right-side labels for the second y-axis for other subplots
-        ax2.tick_params(axis='y', labelleft=False, labelright=False)
+    # Plot TWh data - using Figure 1 colors
+    ax.plot(years, regional_group_risk_avoid_twh[region], 'o-', color='#002147', linewidth=2.5, markersize=3, label='Exposed (With Risk-Avoidance)')
+    ax.plot(years, regional_group_exposure_twh[region], 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposed Generation')
 
     # Annotations
     for j, year in enumerate(years):
-        if regional_group_exposure_twh[region][j] > 0 and year != 2024:
-            ax.text(j - bar_width/2, regional_group_exposure_twh[region][j] * 1.05, f'{regional_group_exposure_twh[region][j]:.0f}', 
+        if regional_group_exposure_twh[region][j] > 0:
+            ax.text(year, regional_group_exposure_twh[region][j] * 1.05, f'{regional_group_exposure_twh[region][j]:.0f}', 
                     ha='center', va='bottom', fontsize=annot_fs, color='#AA1A2D')
         if regional_group_risk_avoid_twh[region][j] > 0 and year != 2024:
-            ax.text(j + bar_width/2, regional_group_risk_avoid_twh[region][j] * 1.05, f'{regional_group_risk_avoid_twh[region][j]:.0f}', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#002147')
-        # Add percentage labels for line graph
-        if change_pct[j] > 0:
-            ax2.text(j, change_pct[j] + 5, f'{change_pct[j]:.0f}%', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#FB5607')
-
+            ax.text(year, regional_group_risk_avoid_twh[region][j] * 0.95, f'{regional_group_risk_avoid_twh[region][j]:.0f}', 
+                    ha='center', va='top', fontsize=annot_fs, color='#002147')
+    
     # Styling
     ax.set_title(region, fontsize=title_fs, fontweight='bold', pad=5)
-    ax.set_xticks(bar_positions)
+    ax.set_xticks(years)
     ax.set_xticklabels(years, fontsize=tick_fs)
-    ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
-    ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
+    ax.tick_params(axis='y', labelsize=tick_fs)
     ax.grid(True, alpha=0.1)
     ax.set_ylim([ylim_twh_min, ylim_twh])
+    ax.set_xlim([xlim_twh_min, xlim_twh])  # Set x-axis limits to match years
     
-    # Y-axis label only for first column
+    # Y-axis label
     if i == 0:
-        ax.set_ylabel('TWh', fontsize=label_fs)
-        ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Labels but no tick marks
+        ax.set_ylabel('Generation (TWh)', fontsize=label_fs)
     else:
-        ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
-    
-    # Second y-axis configuration
-    if i == 3:  # Subplot (1,3)
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-        ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Labels and tick marks
-    else:
-        ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
+        ax.tick_params(axis='y', labelleft=False)
 
 # Third row: Remaining regional groups + legend
 remaining_regions_sorted = regions_sorted[4:]
 for i, region in enumerate(remaining_regions_sorted):
     ax = fig3.add_subplot(gs3[2, i])
     
-    # Plot TWh data as bars
-    bar_width = 0.4
-    bar_positions = np.arange(len(years))  # This will now be [0, 1] instead of [0, 1, 2]
+    # Plot TWh data - using Figure 1 colors
+    ax.plot(years, regional_group_risk_avoid_twh[region], 'o-', color='#002147', linewidth=2.5, markersize=3, label='Exposed (With Risk-Avoidance)')
+    ax.plot(years, regional_group_exposure_twh[region], 'o-', color='#AA1A2D', linewidth=2.5, markersize=3, label='Exposed Generation')
     
-    ax.bar(bar_positions - bar_width/2, regional_group_exposure_twh[region], bar_width, 
-           color='#AA1A2D', alpha=0.8, label='Exposed Generation')
-    ax.bar(bar_positions + bar_width/2, regional_group_risk_avoid_twh[region], bar_width, 
-           color='#002147', alpha=0.8)
     
-    # Add line showing percentage change from exposed to risk-avoidance
-    change_pct = [(regional_group_exposure_twh[region][i] - regional_group_risk_avoid_twh[region][i]) / regional_group_exposure_twh[region][i] * 100 
-                  if regional_group_exposure_twh[region][i] > 0 else 0 for i in range(len(years))]
-    ax2 = ax.twinx()
-    ax2.plot(bar_positions, change_pct, 'o-', color='#FB5607', linewidth=2, markersize=3)
-    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Keep tick marks
-    ax2.set_ylim([0, 100])  # Consistent scale for all subplots
-    
-    # Show second y-axis label only for subplot (2, 2)
-    ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
-
-
     # Annotations
     for j, year in enumerate(years):
-        if regional_group_exposure_twh[region][j] > 0 and year != 2024:
-            ax.text(j - bar_width/2, regional_group_exposure_twh[region][j] * 1.05, f'{regional_group_exposure_twh[region][j]:.0f}', 
+        if regional_group_exposure_twh[region][j] > 0:
+            ax.text(year, regional_group_exposure_twh[region][j] * 1.05, f'{regional_group_exposure_twh[region][j]:.0f}', 
                     ha='center', va='bottom', fontsize=annot_fs, color='#AA1A2D')
-        if regional_group_risk_avoid_twh[region][j] > 0 and year != 2024:
-            ax.text(j + bar_width/2, regional_group_risk_avoid_twh[region][j] * 1.05, f'{regional_group_risk_avoid_twh[region][j]:.0f}', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#002147')
-        # Add percentage labels for line graph
-        if change_pct[j] > 0:
-            ax2.text(j, change_pct[j] + 5, f'{change_pct[j]:.0f}%', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#FB5607')
-
+        if regional_group_risk_avoid_twh[region][j] > 0:
+            ax.text(year, regional_group_risk_avoid_twh[region][j] * 0.95, f'{regional_group_risk_avoid_twh[region][j]:.0f}', 
+                    ha='center', va='top', fontsize=annot_fs, color='#002147')
+    
     # Styling
     ax.set_title(region, fontsize=title_fs, fontweight='bold', pad=5)
-    ax.set_xticks(bar_positions)
+    ax.set_xticks(years)
     ax.set_xticklabels(years, fontsize=tick_fs)
-    ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
-    ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
+    ax.tick_params(axis='y', labelsize=tick_fs)
     ax.grid(True, alpha=0.1)
     ax.set_ylim([ylim_twh_min, ylim_twh])
+    ax.set_xlim([xlim_twh_min, xlim_twh])  # Set x-axis limits to match years
     
-    # Y-axis label only for first column
+    # Y-axis label
     if i == 0:
-        ax.set_ylabel('TWh', fontsize=label_fs)
-        ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Labels but no tick marks
+        ax.set_ylabel('Generation (TWh)', fontsize=label_fs)
     else:
-        ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
-    
-    # Second y-axis configuration
-    ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
+        ax.tick_params(axis='y', labelleft=False)
 
 # Legend subplot (bottom right)
 ax_legend = fig3.add_subplot(gs3[2, 3])
@@ -540,18 +450,18 @@ ax_legend.axis('off')
 
 # Create legend handles using Figure 1 colors
 legend_handles = [
-    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed\nGeneration'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='Exposed\nGeneration\n(Risk Avoided)')
+    plt.Rectangle((0, 0), 1, 1, facecolor='#AA1A2D', label='Exposed Generation'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#002147', label='Exposed (With Risk-Avoidance)')
 ]
 
-# Add legend with vertical layout and smaller color boxes
+# Add legend
 ax_legend.legend(handles=legend_handles, loc='center', fontsize=legend_fs, frameon=True, 
-                facecolor='white', edgecolor='gray', title_fontsize=title_fs, ncol=1)
+                facecolor='white', edgecolor='gray', title='Legend', title_fontsize=title_fs)
 
 # Main title and save
 fig3.suptitle('Figure 3. Climate Risk Exposure of Electricity Generation by Income Group and Region (2024–2050)', 
               fontsize=10, fontweight='bold', y=0.95)
-fig3.savefig('outputs_processed_fig/fig3.pdf', bbox_inches='tight', dpi=300)
+fig3.savefig('outputs_processed_fig/fig3_alt1.pdf', bbox_inches='tight', dpi=300)
 
 
 # === FIGURE 4: Custom 11 subplots (2024–2050) - Economic Value (USD) ===
@@ -570,7 +480,7 @@ for group in income_groups:
     exposure_values = []
     risk_avoid_values = []
     
-    for year in [2030, 2050]:  # Changed from [2024, 2030, 2050]
+    for year in [2024, 2030, 2050]:
         # Calculate total USD value for this income group and year
         total_usd = 0
         total_exposure_usd = 0
@@ -623,7 +533,7 @@ for region in regions:
     exposure_values = []
     risk_avoid_values = []
     
-    for year in [2030, 2050]:  # Changed from [2024, 2030, 2050]
+    for year in [2024, 2030, 2050]:
         # Calculate total USD value for this region and year
         total_usd = 0
         total_exposure_usd = 0
@@ -685,129 +595,72 @@ for i, group in enumerate(income_groups_sorted_usd):
     max_usd_risk_avoid = max([max(income_group_risk_avoid_usd[group]) for group in income_groups] +
                             [max(regional_group_risk_avoid_usd[region]) for region in regions])
     ylim_usd = max(max_usd_exposure, max_usd_risk_avoid) * 1.2  # Add 10% padding
-    ylim_usd_min = 0
+    ylim_usd_min = max(max_usd_exposure, max_usd_risk_avoid) * -0.05  # Add 10% padding
+    xlim_usd = 2053  # Set x-axis limit to 2050
+    xlim_usd_min = 2021  # Set x-axis limit to 2022
+
 
     # Plot USD data - using Figure 2 colors
-    bar_width = 0.4
-    bar_positions = np.arange(len(years))  # This will now be [0, 1] instead of [0, 1, 2]
+    ax.plot(years, income_group_risk_avoid_usd[group], 'o-', color='#426A5A', linewidth=2.5, markersize=3, label='Exposed (With Risk-Avoidance)')
+    ax.plot(years, income_group_exposure_usd[group], 'o-', color='#E2C044', linewidth=2.5, markersize=3, label='Exposed Economic Value')
     
-    ax.bar(bar_positions - bar_width/2, income_group_exposure_usd[group], bar_width, 
-           color='#E2C044', alpha=1, label='Exposed Economic Value')
-    ax.bar(bar_positions + bar_width/2, income_group_risk_avoid_usd[group], bar_width, 
-           color='#426A5A', alpha=1)
     
-    # Add line showing percentage change from exposed to risk-avoidance
-    change_pct = [(income_group_exposure_usd[group][i] - income_group_risk_avoid_usd[group][i]) / income_group_exposure_usd[group][i] * 100 
-                  if income_group_exposure_usd[group][i] > 0 else 0 for i in range(len(years))]
-    ax2 = ax.twinx()
-    ax2.plot(bar_positions, change_pct, 'o-', color='#FB5607', linewidth=2, markersize=3)
-    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Keep tick marks
-    ax2.set_ylim([0, 100])  # Consistent scale for all subplots
-    
-    # Show second y-axis label only for subplot (0, 3)
-    if i == 3:
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-    else:
-        ax2.tick_params(axis='y', labelleft=False)
-
     # Annotations
     for j, year in enumerate(years):
-        if income_group_exposure_usd[group][j] > 0 and year != 2024:
-            ax.text(j - bar_width/2, income_group_exposure_usd[group][j] * 1.05, f'${income_group_exposure_usd[group][j]:.0f}B', 
+        if income_group_exposure_usd[group][j] > 0:
+            ax.text(year, income_group_exposure_usd[group][j] * 1.05, f'${income_group_exposure_usd[group][j]:.0f}B', 
                     ha='center', va='bottom', fontsize=annot_fs, color='#E2C044')
         if income_group_risk_avoid_usd[group][j] > 0 and year != 2024:
-            ax.text(j + bar_width/2, income_group_risk_avoid_usd[group][j] * 1.05, f'${income_group_risk_avoid_usd[group][j]:.0f}B', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#426A5A')
-        # Add percentage labels for line graph
-        if change_pct[j] > 0:
-            ax2.text(j, change_pct[j] + 5, f'{change_pct[j]:.0f}%', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#FB5607')
-
+            ax.text(year, income_group_risk_avoid_usd[group][j] * 0.95, f'${income_group_risk_avoid_usd[group][j]:.0f}B', 
+                    ha='center', va='top', fontsize=annot_fs, color='#426A5A')
+    
     # Styling
     ax.set_title(group, fontsize=title_fs, fontweight='bold', pad=5)
-    ax.set_xticks(bar_positions)
+    ax.set_xticks(years)
     ax.set_xticklabels(years, fontsize=tick_fs)
-    ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
-    ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
+    ax.tick_params(axis='y', labelsize=tick_fs)
     ax.grid(True, alpha=0.1)
     ax.set_ylim([ylim_usd_min, ylim_usd])
+    ax.set_xlim([xlim_usd_min, xlim_usd])
 
-    # Y-axis configuration for Figure 4
+    # Y-axis label
     if i == 0:
-        ax.set_ylabel('Billion USD', fontsize=label_fs)
-        ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Labels but no tick marks
+        ax.set_ylabel('Economic Value (Billion USD)', fontsize=label_fs)
     else:
-        ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
-    
-    # Second y-axis configuration
-    if i == 3:  # Subplot (0,3)
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-        ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Labels and tick marks
-    else:
-        ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
+        ax.tick_params(axis='y', labelleft=False)
 
 # Second row: First 4 regional groups (sorted by exposed economic value, highest first)
 for i, region in enumerate(regions_sorted_usd[:4]):
     ax = fig4.add_subplot(gs4[1, i])
     
     # Plot USD data - using Figure 2 colors
-    bar_width = 0.4
-    bar_positions = np.arange(len(years))
+    ax.plot(years, regional_group_risk_avoid_usd[region], 'o-', color='#426A5A', linewidth=2.5, markersize=3, label='Exposed (With Risk-Avoidance)')
+    ax.plot(years, regional_group_exposure_usd[region], 'o-', color='#E2C044', linewidth=2.5, markersize=3, label='Exposed Economic Value')
     
-    ax.bar(bar_positions - bar_width/2, regional_group_exposure_usd[region], bar_width, 
-           color='#E2C044', alpha=0.8, label='Exposed Economic Value')
-    ax.bar(bar_positions + bar_width/2, regional_group_risk_avoid_usd[region], bar_width, 
-           color='#426A5A', alpha=0.8)
     
-    # Add line showing percentage change from exposed to risk-avoidance
-    change_pct = [(regional_group_exposure_usd[region][i] - regional_group_risk_avoid_usd[region][i]) / regional_group_exposure_usd[region][i] * 100 
-                  if regional_group_exposure_usd[region][i] > 0 else 0 for i in range(len(years))]
-    ax2 = ax.twinx()
-    ax2.plot(bar_positions, change_pct, 'o-', color='#FB5607', linewidth=2, markersize=3)
-    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Keep tick marks
-    ax2.set_ylim([0, 100])  # Consistent scale for all subplots
-    
-    # Show second y-axis label only for subplot (1, 3)
-    if i == 3:
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-    else:
-        ax2.tick_params(axis='y', labelleft=False)
-
     # Annotations
     for j, year in enumerate(years):
-        if regional_group_exposure_usd[region][j] > 0 and year != 2024:
-            ax.text(j - bar_width/2, regional_group_exposure_usd[region][j] * 1.05, f'${regional_group_exposure_usd[region][j]:.0f}B', 
+        if regional_group_exposure_usd[region][j] > 0:
+            ax.text(year, regional_group_exposure_usd[region][j] * 1.05, f'${regional_group_exposure_usd[region][j]:.0f}B', 
                     ha='center', va='bottom', fontsize=annot_fs, color='#E2C044')
         if regional_group_risk_avoid_usd[region][j] > 0 and year != 2024:
-            ax.text(j + bar_width/2, regional_group_risk_avoid_usd[region][j] * 1.05, f'${regional_group_risk_avoid_usd[region][j]:.0f}B', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#426A5A')
-        # Add percentage labels for line graph
-        if change_pct[j] > 0:
-            ax2.text(j, change_pct[j] + 5, f'{change_pct[j]:.0f}%', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#FB5607')
-
+            ax.text(year, regional_group_risk_avoid_usd[region][j] * 0.95, f'${regional_group_risk_avoid_usd[region][j]:.0f}B', 
+                    ha='center', va='top', fontsize=annot_fs, color='#426A5A')
+    
     # Styling
     ax.set_title(region, fontsize=title_fs, fontweight='bold', pad=5)
-    ax.set_xticks(bar_positions)
+    ax.set_xticks(years)
     ax.set_xticklabels(years, fontsize=tick_fs)
-    ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
-    ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
+    ax.tick_params(axis='y', labelsize=tick_fs)
     ax.grid(True, alpha=0.1)
-    ax.set_ylim([ylim_usd_min, ylim_usd]) 
+    ax.set_ylim([ylim_usd_min, ylim_usd])
+    ax.set_xlim([xlim_usd_min, xlim_usd]) 
     
-    # Y-axis configuration for Figure 4
+    # Y-axis label
     if i == 0:
-        ax.set_ylabel('Billion USD', fontsize=label_fs)
-        ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Labels but no tick marks
+        ax.set_ylabel('Economic Value (Billion USD)', fontsize=label_fs)
     else:
-        ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
-    
-    # Second y-axis configuration
-    if i == 3:  # Subplot (1,3)
-        ax2.set_ylabel('Avoided Exposure (%)', fontsize=label_fs, color='#FB5607')
-        ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Labels and tick marks
-    else:
-        ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
+        ax.tick_params(axis='y', labelleft=False)
 
 # Third row: Remaining regional groups + legend
 remaining_regions_sorted_usd = regions_sorted_usd[4:]
@@ -815,60 +668,33 @@ for i, region in enumerate(remaining_regions_sorted_usd):
     ax = fig4.add_subplot(gs4[2, i])
     
     # Plot USD data - using Figure 2 colors
-    bar_width = 0.4
-    bar_positions = np.arange(len(years))
+    ax.plot(years, regional_group_risk_avoid_usd[region], 'o-', color='#426A5A', linewidth=2.5, markersize=3, label='Exposed (With Risk-Avoidance)')
+    ax.plot(years, regional_group_exposure_usd[region], 'o-', color='#E2C044', linewidth=2.5, markersize=3, label='Exposed Economic Value')
     
-    ax.bar(bar_positions - bar_width/2, regional_group_exposure_usd[region], bar_width, 
-           color='#E2C044', alpha=0.8, label='Exposed Economic Value')
-    ax.bar(bar_positions + bar_width/2, regional_group_risk_avoid_usd[region], bar_width, 
-           color='#426A5A', alpha=0.8)
     
-    # Add line showing percentage change from exposed to risk-avoidance
-    change_pct = [(regional_group_exposure_usd[region][i] - regional_group_risk_avoid_usd[region][i]) / regional_group_exposure_usd[region][i] * 100 
-                  if regional_group_exposure_usd[region][i] > 0 else 0 for i in range(len(years))]
-    ax2 = ax.twinx()
-    ax2.plot(bar_positions, change_pct, 'o-', color='#FB5607', linewidth=2, markersize=3)
-    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Keep tick marks
-    ax2.set_ylim([0, 100])  # Consistent scale for all subplots
-    
-    # Show second y-axis label only for subplot (2, 2)
-    ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
-
     # Annotations
     for j, year in enumerate(years):
-        if regional_group_exposure_usd[region][j] > 0 and year != 2024:
-            ax.text(j - bar_width/2, regional_group_exposure_usd[region][j] * 1.05, f'${regional_group_exposure_usd[region][j]:.0f}B', 
+        if regional_group_exposure_usd[region][j] > 0:
+            ax.text(year, regional_group_exposure_usd[region][j] * 1.05, f'${regional_group_exposure_usd[region][j]:.0f}B', 
                     ha='center', va='bottom', fontsize=annot_fs, color='#E2C044')
         if regional_group_risk_avoid_usd[region][j] > 0 and year != 2024:
-            ax.text(j + bar_width/2, regional_group_risk_avoid_usd[region][j] * 1.05, f'${regional_group_risk_avoid_usd[region][j]:.0f}B', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#426A5A')
-        # Add percentage labels for line graph
-        if change_pct[j] > 0:
-            ax2.text(j, change_pct[j] + 5, f'{change_pct[j]:.0f}%', 
-                    ha='center', va='bottom', fontsize=annot_fs, color='#FB5607')
-
+            ax.text(year, regional_group_risk_avoid_usd[region][j] * 0.95, f'${regional_group_risk_avoid_usd[region][j]:.0f}B', 
+                    ha='center', va='top', fontsize=annot_fs, color='#426A5A')
+    
     # Styling
     ax.set_title(region, fontsize=title_fs, fontweight='bold', pad=5)
-    ax.set_xticks(bar_positions)
+    ax.set_xticks(years)
     ax.set_xticklabels(years, fontsize=tick_fs)
-    ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
-    ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
+    ax.tick_params(axis='y', labelsize=tick_fs)
     ax.grid(True, alpha=0.1)
-    ax.set_ylim([ylim_usd_min, ylim_usd]) 
+    ax.set_ylim([ylim_usd_min, ylim_usd])
+    ax.set_xlim([xlim_usd_min, xlim_usd]) 
     
-    # Y-axis configuration for Figure 4
+    # Y-axis label
     if i == 0:
-        ax.set_ylabel('Billion USD', fontsize=label_fs)
-        ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Labels but no tick marks
+        ax.set_ylabel('Economic Value (Billion USD)', fontsize=label_fs)
     else:
-        ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
-    
-    # Second y-axis configuration
-    if i == 2:  # Subplot (2,2) - Last region in third row
-        ax2.set_ylabel('', fontsize=label_fs, color='#FB5607')
-        ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Labels and tick marks
-    else:
-        ax2.tick_params(axis='y', labelleft=False, labelright=False)  # Only tick marks, no labels
+        ax.tick_params(axis='y', labelleft=False)
 
 # Legend subplot (bottom right)
 ax_legend = fig4.add_subplot(gs4[2, 3])
@@ -876,16 +702,16 @@ ax_legend.axis('off')
 
 # Create legend handles using Figure 2 colors
 legend_handles = [
-    plt.Rectangle((0, 0), 1, 1, facecolor='#E2C044', label='Exposed\nEconomic Value'),
-    plt.Rectangle((0, 0), 1, 1, facecolor='#426A5A', label='Exposed\nEconomic Value\n(Risk Avoided)')
+    plt.Rectangle((0, 0), 1, 1, facecolor='#E2C044', label='Exposed Economic Value'),
+    plt.Rectangle((0, 0), 1, 1, facecolor='#426A5A', label='Exposed (With Risk-Avoidance)')
 ]
 
-# Add legend with vertical layout and smaller color boxes
+# Add legend
 ax_legend.legend(handles=legend_handles, loc='center', fontsize=legend_fs, frameon=True, 
-                facecolor='white', edgecolor='gray', title_fontsize=title_fs, ncol=1)
+                facecolor='white', edgecolor='gray', title='Legend', title_fontsize=title_fs)
 
 # Main title and save
 fig4.suptitle('Figure 4. Climate Risk Exposure of Electricity Generation Value by Income Group and Region (2024–2050)', 
               fontsize=10, fontweight='bold', y=0.95)
-fig4.savefig('outputs_processed_fig/fig4.pdf', bbox_inches='tight', dpi=300)
+fig4.savefig('outputs_processed_fig/fig4_alt1.pdf', bbox_inches='tight', dpi=300)
 

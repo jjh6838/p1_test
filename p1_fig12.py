@@ -416,7 +416,7 @@ for (row, col), etype in subplot_positions.items():
 
 # fig1.legend(fontsize=legend_fs, loc='upper left', bbox_to_anchor=(0.15, 0.85))
 fig1.suptitle('Figure 1. Climate Risk Exposure of Electricity Generation (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
-fig1.savefig('outputs_processed_vis/fig1.pdf', bbox_inches='tight', dpi=300)
+fig1.savefig('outputs_processed_fig/fig1.pdf', bbox_inches='tight', dpi=300)
 
 
 
@@ -611,4 +611,4 @@ for (row, col), etype in subplot_positions.items():
         ax.yaxis.set_ticks([])
         
 fig2.suptitle('Figure 2. Climate Risk Exposure of Electricity Generation Value (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
-fig2.savefig('outputs_processed_vis/fig2.pdf', bbox_inches='tight', dpi=300)
+fig2.savefig('outputs_processed_fig/fig2.pdf', bbox_inches='tight', dpi=300)

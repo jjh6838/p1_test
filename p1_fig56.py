@@ -793,7 +793,7 @@ for i, region in enumerate(regions_sorted_usd[:4]):
     ax.tick_params(axis='x', length=0)  # Remove x-axis tick marks
     ax.tick_params(axis='y', labelsize=tick_fs, length=0)  # Remove y-axis tick marks
     ax.grid(True, alpha=0.1)
-    ax.set_ylim([ylim_usd_min, ylim_usd]) 
+    ax.set_ylim([ylim_usd_min, ylim_usd])
     
     # Y-axis configuration for Figure 4
     if i == 0:
@@ -864,7 +864,7 @@ for i, region in enumerate(remaining_regions_sorted_usd):
         ax.tick_params(axis='y', labelleft=False, length=0)  # No labels, no tick marks
     
     # Second y-axis configuration
-    if i == 2:  # Subplot (2,2) - Last region in third row
+    if i == 3:  # Subplot (2,2) - Last region in third row
         ax2.set_ylabel('', fontsize=label_fs, color='#FB5607')
         ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)  # Labels and tick marks
     else:
@@ -888,4 +888,288 @@ ax_legend.legend(handles=legend_handles, loc='center', fontsize=legend_fs, frame
 fig4.suptitle('Figure 4. Climate Risk Exposure of Electricity Generation Value by Income Group and Region (2024–2050)', 
               fontsize=10, fontweight='bold', y=0.95)
 fig4.savefig('outputs_processed_fig/fig4.pdf', bbox_inches='tight', dpi=300)
+
+# === FIGURE 5: Country-level data binned by Income Group - TWh ===
+fig5 = plt.figure(figsize=(12, 8), dpi=300)
+gs5 = gridspec.GridSpec(4, 1, hspace=0.4)
+
+# Get unique income groups and country codes from the data
+income_groups = data['Income group'].unique()
+countries = data['ISO3_code'].unique()
+
+# Calculate aggregated TWh data for countries
+country_data_twh = {}
+country_exposure_twh = {}
+country_risk_avoid_twh = {}
+country_income_group = {}
+
+for country in countries:
+    country_data = data[data['ISO3_code'] == country]
+    if len(country_data) == 0:
+        continue
+        
+    # Get income group for this country
+    country_income_group[country] = country_data['Income group'].iloc[0]
+    
+    twh_values = []
+    exposure_values = []
+    risk_avoid_values = []
+    
+    for year in [2030, 2050]:
+        # Calculate total TWh for this country and year
+        total_mwh = 0
+        total_exposure_mwh = 0
+        total_risk_avoid_mwh = 0
+        
+        for energy_type in conversion_rates.keys():
+            # Find columns for this energy type and year
+            pattern = column_mapping[energy_type]
+            energy_cols = [col for col in data.columns if pattern in col and str(year) in col]
+            energy_mwh = country_data[energy_cols].sum().sum()
+            total_mwh += energy_mwh
+            
+            # Calculate exposure and risk-avoidance values
+            exposure_col = f'exp_{energy_type.lower().replace(" ", "_")}_{year}'
+            risk_avoid_col = f'exp_risk_avoid_{energy_type.lower().replace(" ", "_")}_{year}'
+            
+            if year == 2030:
+                pct = percentages_2030.get(exposure_col, 0)
+                pct_risk = percentages_2030_risk_avoid.get(risk_avoid_col, 0)
+            else:
+                pct = percentages_2050.get(exposure_col, 0)
+                pct_risk = percentages_2050_risk_avoid.get(risk_avoid_col, 0)
+            
+            total_exposure_mwh += energy_mwh * (pct / 100)
+            total_risk_avoid_mwh += energy_mwh * (pct_risk / 100)
+        
+        total_twh = total_mwh / 1000000
+        exposure_twh = total_exposure_mwh / 1000000
+        risk_avoid_twh = total_risk_avoid_mwh / 1000000
+        
+        twh_values.append(total_twh)
+        exposure_values.append(exposure_twh)
+        risk_avoid_values.append(risk_avoid_twh)
+    
+    country_data_twh[country] = twh_values
+    country_exposure_twh[country] = exposure_values
+    country_risk_avoid_twh[country] = risk_avoid_values
+
+# Group countries by income group and sort by total exposed generation
+countries_by_income_group = {}
+for income_group in income_groups:
+    countries_in_group = [country for country, group in country_income_group.items() if group == income_group]
+    # Sort countries by total exposed generation (sum across all years)
+    countries_sorted = sorted(countries_in_group, 
+                             key=lambda x: sum(country_exposure_twh.get(x, [0, 0])), 
+                             reverse=True)
+    countries_by_income_group[income_group] = countries_sorted
+
+# Sort income groups by total exposed generation
+income_groups_sorted = sorted(income_groups, 
+                             key=lambda x: sum([sum(country_exposure_twh.get(country, [0, 0])) 
+                                               for country in countries_by_income_group[x]]), 
+                             reverse=True)
+
+# Create subplots for each income group
+for group_idx, income_group in enumerate(income_groups_sorted):
+    ax = fig5.add_subplot(gs5[group_idx, 0])
+    
+    countries_in_group = countries_by_income_group[income_group][:]  # Show all countries
+    
+    if not countries_in_group:
+        ax.axis('off')
+        continue
+    
+    # Calculate y-axis limits
+    max_exposure = max([max(country_exposure_twh.get(country, [0, 0])) for country in countries_in_group] + [1])
+    max_risk_avoid = max([max(country_risk_avoid_twh.get(country, [0, 0])) for country in countries_in_group] + [1])
+    ylim_max = max(max_exposure, max_risk_avoid) * 1.2
+    
+    # Plot data as line graphs
+    x_positions = np.arange(len(countries_in_group))
+    
+    # Get data for 2030 and 2050
+    exposure_2030 = [country_exposure_twh.get(country, [0, 0])[0] for country in countries_in_group]
+    exposure_2050 = [country_exposure_twh.get(country, [0, 0])[1] for country in countries_in_group]
+    risk_avoid_2030 = [country_risk_avoid_twh.get(country, [0, 0])[0] for country in countries_in_group]
+    risk_avoid_2050 = [country_risk_avoid_twh.get(country, [0, 0])[1] for country in countries_in_group]
+    
+    # Calculate exposure avoided percentages
+    avoided_2030 = [(exposure_2030[i] - risk_avoid_2030[i]) / exposure_2030[i] * 100 
+                    if exposure_2030[i] > 0 else 0 for i in range(len(countries_in_group))]
+    avoided_2050 = [(exposure_2050[i] - risk_avoid_2050[i]) / exposure_2050[i] * 100 
+                    if exposure_2050[i] > 0 else 0 for i in range(len(countries_in_group))]
+    
+    # Create line plots
+    ax.plot(x_positions, exposure_2030, 'o-', color='#AA1A2D', alpha=0.7, linewidth=2, markersize=4, label='2030 Exposed')
+    ax.plot(x_positions, risk_avoid_2030, 's-', color='#002147', alpha=0.7, linewidth=2, markersize=4, label='2030 Risk Avoided')
+    ax.plot(x_positions, exposure_2050, 'o-', color='#AA1A2D', alpha=1.0, linewidth=2, markersize=4, label='2050 Exposed')
+    ax.plot(x_positions, risk_avoid_2050, 's-', color='#002147', alpha=1.0, linewidth=2, markersize=4, label='2050 Risk Avoided')
+    
+    # Add secondary y-axis for percentage avoided
+    ax2 = ax.twinx()
+    ax2.plot(x_positions, avoided_2030, '^-', color='#FB5607', alpha=0.7, linewidth=1.5, markersize=3, label='2030 Avoided %')
+    ax2.plot(x_positions, avoided_2050, '^-', color='#FB5607', alpha=1.0, linewidth=1.5, markersize=3, label='2050 Avoided %')
+    ax2.set_ylabel('Exposure Avoided (%)', fontsize=label_fs, color='#FB5607')
+    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)
+    ax2.set_ylim([0, 100])
+    
+    # Styling
+    ax.set_title(f'{income_group} Countries', fontsize=title_fs+2, fontweight='bold', pad=10)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(countries_in_group, fontsize=tick_fs, rotation=45, ha='right')
+    ax.tick_params(axis='x', length=0)
+    ax.tick_params(axis='y', labelsize=tick_fs, length=0)
+    ax.set_ylabel('TWh', fontsize=label_fs)
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim([0, ylim_max])
+    
+    # Add legend only for first subplot
+    if group_idx == 0:
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax.legend(lines1 + lines2, labels1 + labels2, fontsize=legend_fs, loc='upper right', ncol=3)
+
+# Main title and save
+fig5.suptitle('Figure 5. Climate Risk Exposure of Electricity Generation by Country (Grouped by Income Level)', 
+              fontsize=12, fontweight='bold', y=0.98)
+fig5.savefig('outputs_processed_fig/fig5.pdf', bbox_inches='tight', dpi=300)
+
+# === FIGURE 6: Country-level data binned by Income Group - Economic Value (USD) ===
+fig6 = plt.figure(figsize=(12, 8), dpi=300)
+gs6 = gridspec.GridSpec(4, 1, hspace=0.4)
+
+# Calculate aggregated USD data for countries
+country_data_usd = {}
+country_exposure_usd = {}
+country_risk_avoid_usd = {}
+
+for country in countries:
+    country_data = data[data['ISO3_code'] == country]
+    if len(country_data) == 0:
+        continue
+        
+    usd_values = []
+    exposure_values = []
+    risk_avoid_values = []
+    
+    for year in [2030, 2050]:
+        # Calculate total USD value for this country and year
+        total_usd = 0
+        total_exposure_usd = 0
+        total_risk_avoid_usd = 0
+        
+        for energy_type, rate in conversion_rates.items():
+            # Find columns for this energy type and year
+            pattern = column_mapping[energy_type]
+            energy_cols = [col for col in data.columns if pattern in col and str(year) in col]
+            energy_mwh = country_data[energy_cols].sum().sum()
+            total_usd += energy_mwh * rate
+            
+            # Calculate exposure and risk-avoidance values
+            exposure_col = f'exp_{energy_type.lower().replace(" ", "_")}_{year}'
+            risk_avoid_col = f'exp_risk_avoid_{energy_type.lower().replace(" ", "_")}_{year}'
+            
+            if year == 2030:
+                pct = percentages_2030.get(exposure_col, 0)
+                pct_risk = percentages_2030_risk_avoid.get(risk_avoid_col, 0)
+            else:
+                pct = percentages_2050.get(exposure_col, 0)
+                pct_risk = percentages_2050_risk_avoid.get(risk_avoid_col, 0)
+            
+            total_exposure_usd += energy_mwh * rate * (pct / 100)
+            total_risk_avoid_usd += energy_mwh * rate * (pct_risk / 100)
+        
+        total_usd_billions = total_usd / 1000000000
+        exposure_usd_billions = total_exposure_usd / 1000000000
+        risk_avoid_usd_billions = total_risk_avoid_usd / 1000000000
+        
+        usd_values.append(total_usd_billions)
+        exposure_values.append(exposure_usd_billions)
+        risk_avoid_values.append(risk_avoid_usd_billions)
+    
+    country_data_usd[country] = usd_values
+    country_exposure_usd[country] = exposure_values
+    country_risk_avoid_usd[country] = risk_avoid_values
+
+# Group countries by income group and sort by total exposed economic value
+countries_by_income_group_usd = {}
+for income_group in income_groups:
+    countries_in_group = [country for country, group in country_income_group.items() if group == income_group]
+    # Sort countries by total exposed economic value (sum across all years)
+    countries_sorted = sorted(countries_in_group, 
+                             key=lambda x: sum(country_exposure_usd.get(x, [0, 0])), 
+                             reverse=True)
+    countries_by_income_group_usd[income_group] = countries_sorted
+
+# Sort income groups by total exposed economic value
+income_groups_sorted_usd = sorted(income_groups, 
+                                 key=lambda x: sum([sum(country_exposure_usd.get(country, [0, 0])) 
+                                                   for country in countries_by_income_group_usd[x]]), 
+                                 reverse=True)
+
+# Create subplots for each income group
+for group_idx, income_group in enumerate(income_groups_sorted_usd):
+    ax = fig6.add_subplot(gs6[group_idx, 0])
+    
+    countries_in_group = countries_by_income_group_usd[income_group][:]  # Show all countries
+    
+    if not countries_in_group:
+        ax.axis('off')
+        continue
+    
+    # Calculate y-axis limits
+    max_exposure = max([max(country_exposure_usd.get(country, [0, 0])) for country in countries_in_group] + [1])
+    max_risk_avoid = max([max(country_risk_avoid_usd.get(country, [0, 0])) for country in countries_in_group] + [1])
+    ylim_max = max(max_exposure, max_risk_avoid) * 1.2
+    
+    # Plot data as line graphs
+    x_positions = np.arange(len(countries_in_group))
+    
+    # Get data for 2030 and 2050
+    exposure_2030 = [country_exposure_usd.get(country, [0, 0])[0] for country in countries_in_group]
+    exposure_2050 = [country_exposure_usd.get(country, [0, 0])[1] for country in countries_in_group]
+    risk_avoid_2030 = [country_risk_avoid_usd.get(country, [0, 0])[0] for country in countries_in_group]
+    risk_avoid_2050 = [country_risk_avoid_usd.get(country, [0, 0])[1] for country in countries_in_group]
+    
+    # Calculate exposure avoided percentages
+    avoided_2030 = [(exposure_2030[i] - risk_avoid_2030[i]) / exposure_2030[i] * 100 
+                    if exposure_2030[i] > 0 else 0 for i in range(len(countries_in_group))]
+    avoided_2050 = [(exposure_2050[i] - risk_avoid_2050[i]) / exposure_2050[i] * 100 
+                    if exposure_2050[i] > 0 else 0 for i in range(len(countries_in_group))]
+    
+    # Create line plots
+    ax.plot(x_positions, exposure_2030, 'o-', color='#E2C044', alpha=0.7, linewidth=2, markersize=4, label='2030 Exposed')
+    ax.plot(x_positions, risk_avoid_2030, 's-', color='#426A5A', alpha=0.7, linewidth=2, markersize=4, label='2030 Risk Avoided')
+    ax.plot(x_positions, exposure_2050, 'o-', color='#E2C044', alpha=1.0, linewidth=2, markersize=4, label='2050 Exposed')
+    ax.plot(x_positions, risk_avoid_2050, 's-', color='#426A5A', alpha=1.0, linewidth=2, markersize=4, label='2050 Risk Avoided')
+    
+    # Add secondary y-axis for percentage avoided
+    ax2 = ax.twinx()
+    ax2.plot(x_positions, avoided_2030, '^-', color='#FB5607', alpha=0.7, linewidth=1.5, markersize=3, label='2030 Avoided %')
+    ax2.plot(x_positions, avoided_2050, '^-', color='#FB5607', alpha=1.0, linewidth=1.5, markersize=3, label='2050 Avoided %')
+    ax2.set_ylabel('Exposure Avoided (%)', fontsize=label_fs, color='#FB5607')
+    ax2.tick_params(axis='y', labelcolor='#FB5607', labelsize=tick_fs)
+    ax2.set_ylim([0, 100])
+    
+    # Styling
+    ax.set_title(f'{income_group} Countries', fontsize=title_fs+2, fontweight='bold', pad=10)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(countries_in_group, fontsize=tick_fs, rotation=45, ha='right')
+    ax.tick_params(axis='x', length=0)
+    ax.tick_params(axis='y', labelsize=tick_fs, length=0)
+    ax.set_ylabel('Billion USD', fontsize=label_fs)
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim([0, ylim_max])
+    
+    # Add legend only for first subplot
+    if group_idx == 0:
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax.legend(lines1 + lines2, labels1 + labels2, fontsize=legend_fs, loc='upper right', ncol=3)
+
+# Main title and save
+fig6.suptitle('Figure 6. Climate Risk Exposure of Electricity Generation Value by Country (Grouped by Income Level)', 
+              fontsize=12, fontweight='bold', y=0.98)
+fig6.savefig('outputs_processed_fig/fig6.pdf', bbox_inches='tight', dpi=300)
 
