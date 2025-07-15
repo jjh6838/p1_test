@@ -726,14 +726,12 @@ print("=== END VERIFICATION ===\n")
 column_order = [
     "Country Name", "ISO3_code", "Region", "Income group", 
     "PopTotal_2024", "PopTotal_2030", "PopTotal_2050", "Growth_Factor_2024_2030", "Growth_Factor_2024_2050",
-    "Total_MWh_2024", "Total_MWh_2030", "Total_MWh_2050",
     "Hydro_2024", "Solar_2024", "Wind_2024", "Other Renewables_2024", "Nuclear_2024", "Fossil_2024",
     "Hydro_2024_MWh", "Solar_2024_MWh", "Wind_2024_MWh", "Other Renewables_2024_MWh","Nuclear_2024_MWh", "Fossil_2024_MWh",
     "res_capacity_target", "res_share_target", "Category",
     "Hydro_2030", "Solar_2030", "Wind_2030", "Other Renewables_2030", 
     "Hydro_2030_MWh", "Solar_2030_MWh", "Wind_2030_MWh", "Other Renewables_2030_MWh", "Nuclear_2030_MWh", "Fossil_2030_MWh",
-    "Hydro_2050_MWh", "Solar_2050_MWh", "Wind_2050_MWh", "Other Renewables_2050_MWh", "Nuclear_2050_MWh", "Fossil_2050_MWh",
-    "Target_Share_2050"
+    "Hydro_2050_MWh", "Solar_2050_MWh", "Wind_2050_MWh", "Other Renewables_2050_MWh", "Nuclear_2050_MWh", "Fossil_2050_MWh"
     ]
 final_merged_df = final_merged_df[column_order]
 

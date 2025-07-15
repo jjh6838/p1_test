@@ -357,12 +357,89 @@ granular_df = granular_df[granular_columns]
 grouped_columns = ['Country Name'] + [col for col in grouped_df.columns if col != 'Country Name']
 grouped_df = grouped_df[grouped_columns]
 
+### I want to generate another sheet, Grouped_cur_facilities, which contains facility-level data by country (Latitude, Longtitude, Watt adjusted proportionally)
+# Create a new DataFrame for facility-level data
+grouped_facilities_df = gem_data[['ISO3', 'Country/area', 'Type', 'Capacity (MW)', 'Latitude', 'Longitude', 'GEM location ID']].copy()
+# Add ISO3 codes and standardize country names
+grouped_facilities_df['Country Code'] = grouped_facilities_df['Country/area'].apply(map_country_to_iso3)
+grouped_facilities_df['Country Name'] = grouped_facilities_df['Country Code'].apply(map_iso3_to_country_name)
+
+# Filter out rows with unknown ISO3 codes
+grouped_facilities_df = grouped_facilities_df[grouped_facilities_df['Country Code'] != "unknown"]
+
+# Filter to only include countries that are in the matching_country_codes
+grouped_facilities_df = grouped_facilities_df[grouped_facilities_df['Country Code'].isin(matching_country_codes)]
+
+# Map GEM types to grouped categories
+gem_to_grouped_mapping = {
+    "bioenergy": "Other Renewables",
+    "coal": "Fossil",
+    "hydropower": "Hydro",
+    "nuclear": "Nuclear",
+    "solar": "Solar",
+    "wind": "Wind",
+    "geothermal": "Other Renewables",
+    "oil/gas": "Fossil"
+}
+
+grouped_facilities_df['Grouped_Type'] = grouped_facilities_df['Type'].map(gem_to_grouped_mapping)
+
+# Remove rows where Type cannot be mapped to a grouped category
+grouped_facilities_df = grouped_facilities_df.dropna(subset=['Grouped_Type'])
+
+# Calculate current capacity totals by country and grouped type
+current_totals = grouped_facilities_df.groupby(['Country Code', 'Grouped_Type'])['Capacity (MW)'].sum().reset_index()
+current_totals.rename(columns={'Capacity (MW)': 'Current_Total_MW'}, inplace=True)
+
+# Get target totals from grouped_df
+target_totals = []
+for _, row in grouped_df.iterrows():
+    country_code = row['Country Code']
+    for group in grouped_categories.keys():
+        target_mw = row.get(f'{group}_Larger_MW', 0)
+        if target_mw > 0:
+            target_totals.append({
+                'Country Code': country_code,
+                'Grouped_Type': group,
+                'Target_Total_MW': target_mw
+            })
+
+target_totals_df = pd.DataFrame(target_totals)
+
+# Merge current and target totals
+totals_comparison = pd.merge(current_totals, target_totals_df, on=['Country Code', 'Grouped_Type'], how='outer')
+totals_comparison['Current_Total_MW'] = totals_comparison['Current_Total_MW'].fillna(0)
+totals_comparison['Target_Total_MW'] = totals_comparison['Target_Total_MW'].fillna(0)
+
+# Calculate scaling factors
+totals_comparison['Scaling_Factor'] = totals_comparison.apply(
+    lambda row: row['Target_Total_MW'] / row['Current_Total_MW'] if row['Current_Total_MW'] > 0 else 1,
+    axis=1
+)
+
+# Merge scaling factors back to facilities dataframe
+grouped_facilities_df = pd.merge(
+    grouped_facilities_df,
+    totals_comparison[['Country Code', 'Grouped_Type', 'Scaling_Factor']],
+    on=['Country Code', 'Grouped_Type'],
+    how='left'
+)
+
+# Apply scaling factors to adjust capacity
+grouped_facilities_df['Adjusted_Capacity_MW'] = grouped_facilities_df['Capacity (MW)'] * grouped_facilities_df['Scaling_Factor']
+
+# Select and reorder final columns
+grouped_facilities_df = grouped_facilities_df[['Country Name', 'Country Code', 'Type', 'Grouped_Type', 
+                                               'Capacity (MW)', 'Adjusted_Capacity_MW', 'Latitude', 
+                                               'Longitude', 'GEM location ID']]
+
 # Save the results to an Excel file with two sheets
 output_path = r"outputs_processed_data\p1_b_ember_gem_2024.xlsx"
 
 with pd.ExcelWriter(output_path) as writer:
     granular_df.to_excel(writer, sheet_name='Granular_cur', index=False)
     grouped_df.to_excel(writer, sheet_name='Grouped_cur', index=False)
+    grouped_facilities_df.to_excel(writer, sheet_name='Grouped_cur_facilities', index=False)
 
-print(f"Analysis saved to {output_path} with two sheets: 'Granular_cur' and 'Grouped_cur'")
+print(f"Analysis saved to {output_path} with three sheets: 'Granular_cur', 'Grouped_cur', and 'Grouped_cur_facilities'")
 
