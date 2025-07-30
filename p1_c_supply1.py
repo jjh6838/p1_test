@@ -14,6 +14,7 @@ print("Loading admin1 boundaries...")
 # Use bbox filter to load only Jeju region data
 test_bbox = [124.0, 33.0, 132.0, 43.0]  # [min_lon, min_lat, max_lon, max_lat] # Korea 
 admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410.gpkg', bbox=test_bbox)
+print(admin_boundaries.head())
 
 # Optionally simplify geometry for faster masking (tolerance in degrees, adjust as needed)
 print("Simplifying geometry...")

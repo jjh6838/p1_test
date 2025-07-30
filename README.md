@@ -1,0 +1,170 @@
+# Global Supply Analysis Workflow
+
+This workflow processes supply analysis for all countries using Snakemake, designed to run efficiently on local machines or clusters.
+
+## Status: ✅ WORKING
+
+The workflow is now fully functional with:
+- **Fixed environment**: All dependencies resolve properly
+- **Fixed Snakemake rules**: No more rule conflicts  
+- **Tested workflow**: Successfully builds DAG and runs
+- **Simplified setup**: Minimal, novice-friendly configuration
+
+## Overview
+
+The workflow:
+1. Extracts country list from energy demand data (`ISO3_code` column in `p1_a_ember_2024_30.xlsx`)
+2. Automatically filters to only countries that exist in GADM administrative boundaries
+3. Processes each valid country independently to calculate population-weighted demand centroids
+4. Combines all country results into a global dataset
+
+**Key Advantage**: Only processes countries that have both energy demand projections AND administrative boundaries, ensuring efficient resource usage.
+
+## Files
+
+### Essential Scripts (7 files)
+- `get_countries.py` - Extracts valid countries from demand data
+- `process_country_supply.py` - Main script to process a single country
+- `combine_global_results.py` - Combines all country results into global dataset
+- `Snakefile` - Snakemake workflow definition (conflicts resolved)
+- `config.yaml` - Configuration parameters
+- `environment.yml` - Conda environment with all dependencies 
+- `test_workflow.py` - Simple test with 2 countries
+
+### Cluster Files (Optional)
+- `cluster_config.yaml` - Cluster-specific resource settings  
+- `submit_workflow.sh` - Submit workflow to SLURM cluster
+
+## Setup
+
+1. **Environment Setup (Required)**
+   ```bash
+   # Update conda environment with all dependencies including Snakemake
+   conda env update -f environment.yml
+   conda activate p1_etl
+   
+   # Optional: Set strict channel priority (recommended)
+   conda config --set channel_priority strict
+   ```
+
+2. **Data Requirements**
+   Ensure these data files exist:
+   - `bigdata_gadm/gadm_410.gpkg` - GADM administrative boundaries
+   - `bigdata_gridfinder/grid.gpkg` - Electrical grid data
+   - `bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif` - Population raster
+   - `outputs_processed_data/p1_a_ember_2024_30.xlsx` - Energy demand data
+
+## Usage
+
+### Quick Start (Recommended)
+```bash
+# 1. Setup environment (first time only)
+conda env update -f environment.yml
+
+# 2. Test with 2 countries first
+python test_workflow.py
+
+# 3. If test passes, run full Snakemake workflow
+snakemake --cores 4 --use-conda
+
+# 4. For cluster (optional)
+sbatch submit_workflow.sh
+```
+
+### Alternative: Manual Processing
+Process individual countries:
+```bash
+# Single country
+python process_country_supply.py USA --output-dir outputs_per_country
+
+# All countries (Windows batch)
+process_all_countries.bat
+
+# Combine results
+python combine_global_results.py --input-dir outputs_per_country
+```
+
+## Output Files
+
+### Per Country
+- `outputs_per_country/supply_analysis_{ISO3}.parquet` - GeoPandas dataframe with centroids
+- `outputs_per_country/supply_analysis_{ISO3}.csv` - CSV without geometry
+- `outputs_per_country/supply_analysis_{ISO3}.png` - Visualization (if enabled)
+
+### Global Results
+- `global_supply_analysis.parquet` - Combined global dataset with geometry
+- `global_supply_analysis.csv` - Combined global dataset without geometry  
+- `global_supply_summary.csv` - Summary statistics by country
+
+## Configuration
+
+Edit `config.yaml` to customize:
+- Output directories
+- Resource allocations
+- Processing options
+- Country list (if not using GADM auto-detection)
+
+Edit `cluster_config.yaml` for cluster-specific settings:
+- Partition names
+- Memory/time limits
+- Queue settings
+
+## Data Schema
+
+Each country output contains:
+- `geometry` - Point geometry for population centroid
+- `Population_centroid` - Population at this centroid
+- `Total_Demand_2024_centroid` - Energy demand for 2024 (MWh)
+- `Total_Demand_2030_centroid` - Energy demand for 2030 (MWh)  
+- `Total_Demand_2050_centroid` - Energy demand for 2050 (MWh)
+- `GID_0` - ISO3 country code
+
+## Cluster Resources
+
+Default resource requirements per country:
+- Memory: 8GB
+- Runtime: 2 hours
+- CPUs: 1
+
+Combining step:
+- Memory: 16GB  
+- Runtime: 1 hour
+
+## Troubleshooting
+
+### Fixed Issues ✅
+- **Environment conflicts**: Resolved dependency issues in `environment.yml`
+- **Snakemake rule conflicts**: Removed duplicate rules causing AmbiguousRuleException
+- **Missing packages**: All required packages now included
+
+### Common Issues
+1. **Missing countries**: The workflow automatically skips countries without GADM boundaries
+2. **Memory errors**: Increase memory allocation in `cluster_config.yaml`  
+3. **Runtime errors**: Check individual country logs in logs/ directory
+4. **Failed countries**: Check error messages, some countries may have no population/grid data
+
+### Getting Help
+1. **Test first**: Always run `python test_workflow.py` before full workflow
+2. **Check logs**: Snakemake creates detailed logs for each job
+3. **Dry run**: Use `snakemake --dry-run` to check workflow without running
+
+## Performance Tips
+
+1. **Large countries** (USA, CHN, RUS) take longer - consider separate processing
+2. **Small islands** may have no grid data - script handles gracefully
+3. **Memory usage** scales with country size - monitor cluster usage
+4. **Parallelization** - workflow can run 50+ countries simultaneously on cluster
+
+## Monitoring
+
+Check workflow progress:
+```bash
+# View running jobs
+squeue -u $USER
+
+# Check snakemake status  
+snakemake --summary
+
+# View specific job output
+cat logs/slurm-JOBID.out
+```
