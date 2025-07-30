@@ -10,9 +10,11 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Output files (optional - uncomment if you don't want to track outputs)
-# outputs_per_country/
-# global_supply_analysis.*
+# Output files
+outputs_per_country/
+global_supply_analysis.*
+
+# Auto-generated files (users can regenerate)
 # countries_list.txt
 
 # Conda environment files (optional)
