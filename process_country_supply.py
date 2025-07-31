@@ -52,8 +52,9 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     
     # Simplify geometry for faster processing
     print("Simplifying geometry...")
-    admin_boundaries['geometry'] = admin_boundaries['geometry'].simplify(tolerance=0.001, preserve_topology=True)
-    
+    admin_boundaries['geometry'] = admin_boundaries['geometry'].simplify(tolerance=0.1, preserve_topology=True)
+    # Tolerance of 0.001° ≈ 100m simplification
+
     # Load grid data for this country
     print("Loading grid data...")
     try:
@@ -114,53 +115,56 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     
     print(f"Total population in {country_iso3}: {total_country_population:,.0f}")
     
-    # Load national demand data for this specific country
+    # Load national supply data for this specific country
     try:
-        demand_df = pd.read_excel("outputs_processed_data/p1_a_ember_2024_30.xlsx")
+        supply_df = pd.read_excel("outputs_processed_data/p1_a_ember_2024_30.xlsx")
         
         # Filter for this country using ISO3_code column
-        if 'ISO3_code' in demand_df.columns:
-            country_demand = demand_df[demand_df['ISO3_code'] == country_iso3]
-            if country_demand.empty:
-                print(f"Warning: No demand data found for {country_iso3} in demand file")
-                # Create empty demand data - will use default values below
-                demand_df = pd.DataFrame()
+        if 'ISO3_code' in supply_df.columns:
+            country_supply = supply_df[supply_df['ISO3_code'] == country_iso3]
+            if country_supply.empty:
+                print(f"Warning: No supply data found for {country_iso3} in supply file")
+                # Create empty supply data - will use default values below
+                supply_df = pd.DataFrame()
             else:
-                demand_df = country_demand
-                print(f"Loaded demand data for {country_iso3}: {len(demand_df)} records")
+                supply_df = country_supply
+                print(f"Loaded supply data for {country_iso3}: {len(supply_df)} records")
         else:
-            print(f"Warning: ISO3_code column not found in demand data, using all data")
-            # Keep full demand_df and let original logic handle it
+            print(f"Warning: ISO3_code column not found in supply data, using all data")
+            # Keep full supply_df and let original logic handle it
             
     except Exception as e:
-        print(f"Warning: Could not load demand data for {country_iso3}: {e}")
-        # Create dummy demand data
-        demand_df = pd.DataFrame()
+        print(f"Warning: Could not load supply data for {country_iso3}: {e}")
+        # Create dummy supply data
+        supply_df = pd.DataFrame()
     
-    # Define demand types and years
-    demand_types = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
-    years = [2024, 2030, 2050]
+    # Define supply types and years
+    supply_types = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
+    years = [2030, 2050]  # Focus on future projections only
     
     # Calculate and assign total demand for each centroid for each year
+    # Methodology: Assumes national generation = national demand (supply-demand equivalence)
     for year in years:
-        # Calculate total national demand for this year
-        total_national_demand = 0
-        if not demand_df.empty:
-            for demand_type in demand_types:
-                col = f"{demand_type}_{year}_MWh"
-                if col in demand_df.columns:
-                    total_national_demand += demand_df[col].sum()
+        # Calculate total national supply for this year (projected generation)
+        total_national_supply = 0
+        if not supply_df.empty:
+            for supply_type in supply_types:
+                col = f"{supply_type}_{year}_MWh"
+                if col in supply_df.columns:
+                    total_national_supply += supply_df[col].sum()
         
-        # If no demand data, use a default per capita value
-        if total_national_demand == 0:
+        # If no supply data, use a default per capita value
+        if total_national_supply == 0:
             # Default: 5 MWh per person per year (rough estimate)
-            total_national_demand = total_country_population * 5
-            print(f"Using default demand for {country_iso3} in {year}: {total_national_demand:,.0f} MWh")
+            total_national_supply = total_country_population * 5
+            print(f"Using default supply for {country_iso3} in {year}: {total_national_supply:,.0f} MWh")
         
-        # Calculate and assign demand for each centroid based on population proportion
+        # Spatial allocation using population share methodology:
+        # Demand_centroid = Population_Share_centroid × National_Supply_year (supply-demand equivalence)
+        # Population_Share_centroid = Population_centroid / Total_Population
         demand_col = f"Total_Demand_{year}_centroid"
         centroids_gdf[demand_col] = (
-            centroids_gdf["Population_centroid"] / total_country_population * total_national_demand
+            centroids_gdf["Population_centroid"] / total_country_population * total_national_supply
         )
     
     # Filter out centroids with zero population

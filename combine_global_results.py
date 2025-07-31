@@ -56,12 +56,11 @@ def combine_country_results(input_dir="outputs_per_country", output_file="global
     print("\nSummary by country:")
     country_summary = global_data.groupby('GID_0').agg({
         'Population_centroid': ['count', 'sum'],
-        'Total_Demand_2024_centroid': 'sum',
         'Total_Demand_2030_centroid': 'sum',
         'Total_Demand_2050_centroid': 'sum'
     }).round(0)
     
-    country_summary.columns = ['Num_Centroids', 'Total_Population', 'Demand_2024_MWh', 'Demand_2030_MWh', 'Demand_2050_MWh']
+    country_summary.columns = ['Num_Centroids', 'Total_Population', 'Demand_2030_MWh', 'Demand_2050_MWh']
     print(country_summary.head(10))
     
     # Save global dataset

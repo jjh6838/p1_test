@@ -1,17 +1,18 @@
 # Essential Files for Global Supply Analysis
 
-## CORE FILES (Required - 7 files)
+## CORE FILES (Required - 8 files)
 
 ### 1. Main Processing Scripts (3 files)
 - `get_countries.py` - Gets list of valid countries from demand data
 - `process_country_supply.py` - Processes one country at a time  
 - `combine_global_results.py` - Combines all country results
 
-### 2. Workflow Files (4 files)
+### 2. Workflow Files (5 files)
 - `Snakefile` - Defines the workflow (rule conflicts fixed)
 - `config.yaml` - Configuration settings
 - `environment.yml` - Conda environment with all dependencies
-- `test_workflow.py` - Simple test with 2 countries
+- `test_workflow.py` - Test with 2 countries
+- `test_workflow_single.py` - Test with 1 country (fastest)
 
 ## CLUSTER FILES (Optional - 2 files)
 
@@ -29,10 +30,12 @@
 
 ```bash
 # 1. Setup environment (first time only)
-conda env update -f environment.yml
+conda env create -f environment.yml
+conda activate global_supply_analysis
 
-# 2. Test with 2 countries first
-python test_workflow.py
+# 2. Test options (choose one):
+python test_workflow_single.py  # Fastest: 1 country (NRU)
+python test_workflow.py         # Standard: 2 countries (LKA, JAM)
 
 # 3. If test passes, run full Snakemake workflow
 snakemake --cores 4 --use-conda

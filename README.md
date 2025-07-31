@@ -22,14 +22,15 @@ The workflow:
 
 ## Files
 
-### Essential Scripts (7 files)
+### Essential Scripts (8 files)
 - `get_countries.py` - Extracts valid countries from demand data
 - `process_country_supply.py` - Main script to process a single country
 - `combine_global_results.py` - Combines all country results into global dataset
 - `Snakefile` - Snakemake workflow definition (conflicts resolved)
 - `config.yaml` - Configuration parameters
 - `environment.yml` - Conda environment with all dependencies 
-- `test_workflow.py` - Simple test with 2 countries
+- `test_workflow.py` - Test with 2 countries (LKA, JAM)
+- `test_workflow_single.py` - Test with 1 country (NRU) - fastest
 
 ### Cluster Files (Optional)
 - `cluster_config.yaml` - Cluster-specific resource settings  
@@ -39,9 +40,9 @@ The workflow:
 
 1. **Environment Setup (Required)**
    ```bash
-   # Update conda environment with all dependencies including Snakemake
-   conda env update -f environment.yml
-   conda activate p1_etl
+   # Create new conda environment with all dependencies including Snakemake
+   conda env create -f environment.yml
+   conda activate global_supply_analysis
    
    # Optional: Set strict channel priority (recommended)
    conda config --set channel_priority strict
@@ -59,10 +60,12 @@ The workflow:
 ### Quick Start (Recommended)
 ```bash
 # 1. Setup environment (first time only)
-conda env update -f environment.yml
+conda env create -f environment.yml
+conda activate global_supply_analysis
 
-# 2. Test with 2 countries first
-python test_workflow.py
+# 2. Test options (choose one):
+python test_workflow_single.py  # Fastest: 1 country (NRU)
+python test_workflow.py         # Standard: 2 countries (LKA, JAM)
 
 # 3. If test passes, run full Snakemake workflow
 snakemake --cores 4 --use-conda
@@ -116,7 +119,6 @@ Edit `cluster_config.yaml` for cluster-specific settings:
 Each country output contains:
 - `geometry` - Point geometry for population centroid
 - `Population_centroid` - Population at this centroid
-- `Total_Demand_2024_centroid` - Energy demand for 2024 (MWh)
 - `Total_Demand_2030_centroid` - Energy demand for 2030 (MWh)  
 - `Total_Demand_2050_centroid` - Energy demand for 2050 (MWh)
 - `GID_0` - ISO3 country code
