@@ -1,0 +1,52 @@
+Column Reference for LKA
+Generated: 2025-07-31 22:40:49.901759
+Total Columns: 95
+
+BASE COLUMNS:
+  - GID_0
+  - Population_centroid
+  - geometry
+
+2030 COLUMNS:
+  - Demand_Per_Capita_2030_MWh
+  - Fossil_Percent_2030
+  - Fossil_Supply_2030_MWh
+  - Hydro_Percent_2030
+  - Hydro_Supply_2030_MWh
+  - Nuclear_Percent_2030
+  - Nuclear_Supply_2030_MWh
+  - Other Renewables_Percent_2030
+  - Other Renewables_Supply_2030_MWh
+  - Population_Share_2030
+  - Population_Weight_2030
+  - Residual_Demand_2030_MWh
+  - Solar_Percent_2030
+  - Solar_Supply_2030_MWh
+  - Supplied_2030_MWh
+  - Supply_Coverage_2030_Percent
+  - Supply_Status_2030
+  - Total_Demand_2030_MWh
+  - Wind_Percent_2030
+  - Wind_Supply_2030_MWh
+
+2050 COLUMNS:
+  - Demand_Per_Capita_2050_MWh
+  - Fossil_Percent_2050
+  - Fossil_Supply_2050_MWh
+  - Hydro_Percent_2050
+  - Hydro_Supply_2050_MWh
+  - Nuclear_Percent_2050
+  - Nuclear_Supply_2050_MWh
+  - Other Renewables_Percent_2050
+  - Other Renewables_Supply_2050_MWh
+  - Population_Share_2050
+  - Population_Weight_2050
+  - Residual_Demand_2050_MWh
+  - Solar_Percent_2050
+  - Solar_Supply_2050_MWh
+  - Supplied_2050_MWh
+  - Supply_Coverage_2050_Percent
+  - Supply_Status_2050
+  - Total_Demand_2050_MWh
+  - Wind_Percent_2050
+  - Wind_Supply_2050_MWh
