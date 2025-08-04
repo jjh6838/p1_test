@@ -108,10 +108,10 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     
     print(f"Total population in {country_iso3} (2023 baseline): {total_country_population_2023:,.0f}")
     
-    # Load country-level population projections from p1_a dataset
+    # Load country-level population projections from p1_b dataset
     print("Loading country-level population projections...")
     try:
-        pop_projections_df = pd.read_excel("outputs_processed_data/p1_a_ember_2024_30.xlsx")
+        pop_projections_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
         
         # Filter for this country using ISO3_code column
         country_pop_data = None
@@ -151,8 +151,8 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     # Load national supply data for this specific country
     print("Loading supply projections...")
     try:
-        supply_df = pd.read_excel("outputs_processed_data/p1_a_ember_2024_30.xlsx")
-        
+        supply_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
+
         # Filter for this country using ISO3_code column
         if 'ISO3_code' in supply_df.columns:
             country_supply = supply_df[supply_df['ISO3_code'] == country_iso3]
