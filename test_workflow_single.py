@@ -12,11 +12,11 @@ def test_one_country():
     """Test workflow with 1 small country for quick validation"""
     
     start_time = time.time()
-    test_country = "NRU"  # Nauru - very small Pacific island
+    test_country = "KOR"  # South Korea
     output_dir = "test_outputs_single"
     
     print("🧪 Testing workflow with 1 country (fastest test)")
-    print(f"Country: {test_country} (Nauru)")
+    print(f"Country: {test_country}")
     print(f"⏰ Started at: {time.strftime('%H:%M:%S')}")
     
     # Create output directory
