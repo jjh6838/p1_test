@@ -12,6 +12,8 @@ __pycache__/
 
 # Output files
 outputs_per_country/
+test_outputs/
+test_outputs_single/
 global_supply_analysis.*
 
 # Auto-generated files (users can regenerate)
