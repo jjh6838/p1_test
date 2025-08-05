@@ -39,6 +39,8 @@ energy_facilities_path = r"re_data\Global-Integrated-Power-April-2025.xlsx"
 energy_facilities_df = pd.read_excel(energy_facilities_path, sheet_name="Powerfacilities")
 
 # Convert 'Retired year' to numeric, coercing errors to NaN
+energy_facilities_df['Retired year'] = pd.to_numeric(energy_facilities_df['Retired year'], errors='coerce')
+energy_facilities_df['Start year'] = pd.to_numeric(energy_facilities_df['Start year'], errors='coerce')
 
 # Manual mapping for non-standardized country names
 manual_mapping = {
@@ -85,17 +87,14 @@ energy_facilities_df['ISO3'] = energy_facilities_df['Country/area'].apply(map_co
 # Filter rows with valid ISO3 codes
 energy_facilities_df = energy_facilities_df[energy_facilities_df['ISO3'] != "unknown"]
 
-
-gem_data['Retired year'] = pd.to_numeric(gem_data['Retired year'], errors='coerce')
-gem_data['Start year'] = pd.to_numeric(gem_data['Start year'], errors='coerce')
-
-# Filter for operating status and relevant years
-gem_data = gem_data[
-    (gem_data['Status'] == 'operating') &
-    ((gem_data['Retired year'].isna()) | (gem_data['Retired year'] > 2030)) |
-    (gem_data['Status'].isin(['announced', 'pre-construction', 'construction']) & (gem_data['Start year'] <= 2030))
-]
-
+# First filter for South Korea and operating status
+filtered_gem_df = energy_facilities_df[
+    (energy_facilities_df['Country/area'] == 'South Korea') &
+    (
+        (energy_facilities_df['Status'] == 'operating') &
+        ((energy_facilities_df['Retired year'].isna()) | (energy_facilities_df['Retired year'] > 2030)) |
+        (energy_facilities_df['Status'].isin(['announced', 'pre-construction', 'construction']) & (energy_facilities_df['Start year'] <= 2030))
+    )
 ].copy()  # Add .copy() to avoid SettingWithCopyWarning
 
 # Modify 'Type' column based on conditions
