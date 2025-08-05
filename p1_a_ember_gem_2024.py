@@ -359,7 +359,7 @@ grouped_df = grouped_df[grouped_columns]
 
 ### I want to generate another sheet, Grouped_cur_facilities, which contains facility-level data by country (Latitude, Longtitude, Watt adjusted proportionally)
 # Create a new DataFrame for facility-level data
-grouped_facilities_df = gem_data[['ISO3', 'Country/area', 'Type', 'Capacity (MW)', 'Latitude', 'Longitude', 'GEM location ID']].copy()
+grouped_facilities_df = gem_data[['ISO3', 'Country/area', 'Type', 'Capacity (MW)', 'Latitude', 'Longitude', 'GEM unit/phase ID']].copy()
 # Add ISO3 codes and standardize country names
 grouped_facilities_df['Country Code'] = grouped_facilities_df['Country/area'].apply(map_country_to_iso3)
 grouped_facilities_df['Country Name'] = grouped_facilities_df['Country Code'].apply(map_iso3_to_country_name)
@@ -431,7 +431,7 @@ grouped_facilities_df['Adjusted_Capacity_MW'] = grouped_facilities_df['Capacity 
 # Select and reorder final columns
 grouped_facilities_df = grouped_facilities_df[['Country Name', 'Country Code', 'Type', 'Grouped_Type', 
                                                'Capacity (MW)', 'Adjusted_Capacity_MW', 'Latitude', 
-                                               'Longitude', 'GEM location ID']]
+                                               'Longitude', 'GEM unit/phase ID']]
 
 # Save the main results to an Excel file with two sheets
 output_path = r"outputs_processed_data\p1_a_ember_gem_2024.xlsx"
@@ -445,8 +445,99 @@ print(f"Main country-level analysis saved to {output_path} with two sheets: 'Gra
 # Save the facility-level data to a separate Excel file
 facilities_output_path = r"outputs_processed_data\p1_a_ember_gem_2024_fac_lvl.xlsx"
 
-with pd.ExcelWriter(facilities_output_path) as writer:
-    grouped_facilities_df.to_excel(writer, sheet_name='Grouped_cur_fac_lvl', index=False)
+# For 2030 and 2050, filter out retired facilities
+# First, identify facilities that should be excluded for each projection year
 
-print(f"Facility-level data saved to {facilities_output_path} with sheet: 'Grouped_cur_fac_lvl'")
+# Load the original GEM data again to access retirement year information
+gem_data_full = pd.read_excel(energy_facilities_path, sheet_name="Power facilities")
+gem_data_full['ISO3'] = gem_data_full['Country/area'].apply(map_country_to_iso3)
+gem_data_full = gem_data_full[gem_data_full['ISO3'] != "unknown"]
+
+# Convert retirement and start year columns to numeric
+gem_data_full['Retired year'] = pd.to_numeric(gem_data_full['Retired year'], errors='coerce')
+gem_data_full['Start year'] = pd.to_numeric(gem_data_full['Start year'], errors='coerce')
+
+# Find GEM unit/phase IDs for facilities that should be EXCLUDED for 2030 projections
+# (facilities that retire before or by 2030)
+excluded_2030_ids = gem_data_full[
+    (gem_data_full['Status'] == 'operating') &
+    (gem_data_full['Retired year'].notna()) &
+    (gem_data_full['Retired year'] <= 2030)
+]['GEM unit/phase ID'].tolist()
+
+# Find GEM unit/phase IDs for facilities that should be EXCLUDED for 2050 projections  
+# (facilities that retire before or by 2050)
+excluded_2050_ids = gem_data_full[
+    (gem_data_full['Status'] == 'operating') &
+    (gem_data_full['Retired year'].notna()) &
+    (gem_data_full['Retired year'] <= 2050)
+]['GEM unit/phase ID'].tolist()
+
+print(f"Facilities to exclude for 2030 projection: {len(excluded_2030_ids)}")
+print(f"Facilities to exclude for 2050 projection: {len(excluded_2050_ids)}")
+
+# Create 2030 facility dataframe by removing excluded facilities
+grouped_facilities_df_2030 = grouped_facilities_df[
+    ~grouped_facilities_df['GEM unit/phase ID'].isin(excluded_2030_ids)
+].copy()
+
+# Create 2050 facility dataframe by removing excluded facilities
+grouped_facilities_df_2050 = grouped_facilities_df[
+    ~grouped_facilities_df['GEM unit/phase ID'].isin(excluded_2050_ids)
+].copy()
+
+print(f"Facilities in 2024 baseline: {len(grouped_facilities_df)}")
+print(f"Facilities remaining in 2030: {len(grouped_facilities_df_2030)}")
+print(f"Facilities remaining in 2050: {len(grouped_facilities_df_2050)}")
+
+# Function to merge facilities with same Grouped_Type, Latitude, Longitude
+def merge_facilities_by_location(df):
+    """
+    Merge facilities that have the same Grouped_Type, Latitude, and Longitude.
+    Sum the Adjusted_Capacity_MW and use the first GEM unit/phase ID.
+    """
+    def merge_group(group):
+        first_row = group.iloc[0].copy()
+        first_row['Adjusted_Capacity_MW'] = group['Adjusted_Capacity_MW'].sum()
+        first_row['Capacity (MW)'] = group['Capacity (MW)'].sum()  # Also sum original capacity
+        first_row['Num_of_Merged_Units'] = len(group)
+        return first_row
+    
+    # Group by the specified columns and apply the merge function (fix deprecation warning)
+    merged_df = df.groupby(['Grouped_Type', 'Latitude', 'Longitude'], as_index=False).apply(merge_group, include_groups=False)
+    
+    # Reset index to clean up the dataframe
+    merged_df = merged_df.reset_index(drop=True)
+    
+    return merged_df
+
+# Apply merging to all three facility dataframes
+print("\nMerging facilities by location...")
+print(f"Before merging - 2024: {len(grouped_facilities_df)} facilities")
+grouped_facilities_df_merged = merge_facilities_by_location(grouped_facilities_df)
+print(f"After merging - 2024: {len(grouped_facilities_df_merged)} facilities")
+
+print(f"Before merging - 2030: {len(grouped_facilities_df_2030)} facilities")
+grouped_facilities_df_2030_merged = merge_facilities_by_location(grouped_facilities_df_2030)
+print(f"After merging - 2030: {len(grouped_facilities_df_2030_merged)} facilities")
+
+print(f"Before merging - 2050: {len(grouped_facilities_df_2050)} facilities")
+grouped_facilities_df_2050_merged = merge_facilities_by_location(grouped_facilities_df_2050)
+print(f"After merging - 2050: {len(grouped_facilities_df_2050_merged)} facilities")
+
+# Reorder columns to include the new Num_of_Merged_Units column
+final_columns = ['Country Name', 'Country Code', 'Type', 'Grouped_Type', 
+                'Capacity (MW)', 'Adjusted_Capacity_MW', 'Latitude', 
+                'Longitude', 'GEM unit/phase ID', 'Num_of_Merged_Units']
+
+grouped_facilities_df_merged = grouped_facilities_df_merged[final_columns]
+grouped_facilities_df_2030_merged = grouped_facilities_df_2030_merged[final_columns]
+grouped_facilities_df_2050_merged = grouped_facilities_df_2050_merged[final_columns]
+
+with pd.ExcelWriter(facilities_output_path) as writer:
+    grouped_facilities_df_merged.to_excel(writer, sheet_name='Grouped_cur_fac_lvl', index=False)
+    grouped_facilities_df_2030_merged.to_excel(writer, sheet_name='Grouped_2030_fac_lvl', index=False)
+    grouped_facilities_df_2050_merged.to_excel(writer, sheet_name='Grouped_2050_fac_lvl', index=False)
+
+print(f"Facility-level data saved to {facilities_output_path} with sheets: 'Grouped_cur_fac_lvl' (2024), 'Grouped_2030_fac_lvl' (2030), and 'Grouped_2050_fac_lvl' (2050)")
 
