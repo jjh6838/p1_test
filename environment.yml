@@ -1,45 +1,34 @@
 name: p1_etl
 channels:
   - conda-forge
-  - bioconda
   - defaults
+  - bioconda
 dependencies:
-  # Core Python and essential packages
   - python>=3.10,<3.13
   - pip
-  
-  # Workflow management
+  - setuptools
+  - wheel
   - snakemake>=7.0
-  
-  # Geospatial analysis
   - geopandas>=0.14
   - fiona
   - shapely
   - pyproj
   - rasterio
   - gdal
-  
-  # Data analysis
+  - libgdal
+  - libspatialindex
+  - rtree
   - pandas>=2.0
   - numpy
   - scipy
-  
-  # File I/O
   - openpyxl
   - xlsxwriter
   - pyarrow
-  
-  # Progress tracking
   - tqdm
-  
-  # Plotting (optional)
   - matplotlib
   - seaborn
   - folium
-  
-  # System utilities
   - click
-  
-  # Additional packages via pip
+  - networkx
   - pip:
-    - pyyaml
+      - pyyaml
