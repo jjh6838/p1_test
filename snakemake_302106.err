@@ -1,0 +1,7 @@
+/var/lib/slurm/slurmd/job302106/slurm_script: line 17: module: command not found
+Assuming unrestricted shared filesystem usage.
+host: ouce-cn31
+Building DAG of jobs...
+/usr/bin/bash: line 1: conda: command not found
+WorkflowError:
+Error running conda info. Is conda installed and accessible? Error: Command 'conda info --json' returned non-zero exit status 127.

@@ -1,0 +1,9 @@
+2025-08-06 14:12:57,233 - INFO - ============================================================
+2025-08-06 14:12:57,233 - INFO - STARTING GLOBAL RESULTS COMBINATION
+2025-08-06 14:12:57,233 - INFO - ============================================================
+2025-08-06 14:12:57,234 - INFO - Starting global results combination at 2025-08-06 14:12:57.234533
+2025-08-06 14:12:57,235 - INFO - Found 2 country files to combine
+2025-08-06 14:12:57,473 - INFO - Loaded LKA: 50394 records
+2025-08-06 14:12:57,506 - INFO - Loaded NRU: 11 records
+2025-08-06 14:12:57,506 - INFO - Combining all country data...
+2025-08-06 14:12:57,511 - INFO - Combined dataset: 50405 total records from 2 countries

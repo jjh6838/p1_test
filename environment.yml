@@ -1,4 +1,4 @@
-name: global_supply_analysis
+name: p1_etl
 channels:
   - conda-forge
   - bioconda

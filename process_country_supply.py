@@ -15,6 +15,9 @@ from pathlib import Path
 import networkx as nx
 from shapely.geometry import LineString, MultiLineString, Point, Polygon
 from shapely.ops import unary_union
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from functools import partial
+import multiprocessing as mp
 
 def get_country_bbox(admin_boundaries, buffer=0.1):
     """Get bounding box for a country with buffer"""
@@ -26,6 +29,67 @@ def get_country_bbox(admin_boundaries, buffer=0.1):
     maxx += buffer
     maxy += buffer
     return [minx, miny, maxx, maxy]
+
+def calculate_centroids_chunk(row_chunk, cols, windowed_transform):
+    """Calculate centroids for a chunk of rows"""
+    centroids_x = []
+    centroids_y = []
+    
+    for row in row_chunk:
+        for col in range(cols):
+            # Convert pixel coordinates to geographic coordinates
+            x, y = rasterio.transform.xy(windowed_transform, row, col)
+            centroids_x.append(x)
+            centroids_y.append(y)
+    
+    return centroids_x, centroids_y
+
+def calculate_nearest_facility_chunk(centroid_chunk, facilities_gdf):
+    """Calculate nearest facility for a chunk of centroids"""
+    results = []
+    
+    # Convert to appropriate projected CRS for distance calculations
+    # Use UTM zone based on the centroid of the data
+    if not centroid_chunk.empty and not facilities_gdf.empty:
+        # Get approximate center to determine appropriate UTM zone
+        center_lon = centroid_chunk.geometry.centroid.x.mean()
+        center_lat = centroid_chunk.geometry.centroid.y.mean()
+        
+        # Calculate UTM zone
+        utm_zone = int((center_lon + 180) / 6) + 1
+        utm_crs = f"EPSG:{32600 + utm_zone}" if center_lat >= 0 else f"EPSG:{32700 + utm_zone}"
+        
+        # Project both datasets to UTM for accurate distance calculation
+        centroids_utm = centroid_chunk.to_crs(utm_crs)
+        facilities_utm = facilities_gdf.to_crs(utm_crs)
+    else:
+        centroids_utm = centroid_chunk
+        facilities_utm = facilities_gdf
+    
+    for idx, centroid in centroids_utm.iterrows():
+        # Find nearest facility using projected coordinates
+        distances = facilities_utm.geometry.distance(centroid.geometry)
+        if len(distances) > 0:
+            nearest_idx = distances.idxmin()
+            nearest_facility = facilities_gdf.loc[nearest_idx]  # Use original for attribute access
+            
+            result = {
+                'index': idx,
+                'nearest_facility_distance': distances.min(),
+                'nearest_facility_type': nearest_facility.get('Grouped_Type', ''),
+                'nearest_facility_capacity': nearest_facility.get('Adjusted_Capacity_MW', np.nan),
+                'nearest_facility_gem_id': nearest_facility.get('GEM unit/phase ID', '')
+            }
+        else:
+            result = {
+                'index': idx,
+                'nearest_facility_distance': np.nan,
+                'nearest_facility_type': '',
+                'nearest_facility_capacity': np.nan,
+                'nearest_facility_gem_id': ''
+            }
+        results.append(result)
+    return results
 
 def split_intersecting_edges(lines):
     """Split lines at their intersections and return all unique segments."""
@@ -51,7 +115,25 @@ def split_intersecting_edges(lines):
         return final_segments
     return []
 
-def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
+def connect_points_to_grid_chunk(point_chunk, grid_nodes, point_type):
+    """Connect a chunk of points to nearest grid nodes"""
+    connections = []
+    for point in point_chunk:
+        point_coord = (point.x, point.y)
+        
+        # Find nearest node in the grid network
+        if grid_nodes:
+            nearest_node = min(grid_nodes, 
+                             key=lambda n: Point(n).distance(point))
+            
+            # Add edge if within distance threshold (10km for centroids)
+            distance = Point(nearest_node).distance(point)
+            if point_type == 'pop_centroid' and distance > 10000:
+                continue
+            connections.append((point_coord, nearest_node, distance))
+    return connections
+
+def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf, n_threads=1):
     """Create network graph from facilities, grid lines, and population centroids"""
     # Initialize empty graph
     G = nx.Graph()
@@ -93,21 +175,45 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
         G.add_edge(coords[0], coords[-1], weight=line.length)
     
     # 6. Connect facilities and centroids to nearest grid nodes
-    for point_gdf, point_type in [(facilities_gdf, 'facility'), (centroids_gdf, 'pop_centroid')]:
-        for point in point_gdf.geometry:
-            point_coord = (point.x, point.y)
-            
-            # Find nearest node in the grid network
-            grid_nodes = [n for n, d in G.nodes(data=True) if d['type'] == 'grid_line']
-            if grid_nodes:
-                nearest_node = min(grid_nodes, 
-                                 key=lambda n: Point(n).distance(point))
+    grid_nodes = [n for n, d in G.nodes(data=True) if d['type'] == 'grid_line']
+    
+    if n_threads > 1 and (len(facilities_gdf) + len(centroids_gdf)) > 100:
+        print(f"Using {n_threads} threads for network connections...")
+        
+        # Process facilities and centroids in parallel
+        for point_gdf, point_type in [(facilities_gdf, 'facility'), (centroids_gdf, 'pop_centroid')]:
+            if len(point_gdf) > 0:
+                # Split points into chunks
+                points = list(point_gdf.geometry)
+                chunk_size = max(10, len(points) // n_threads)
+                chunks = [points[i:i+chunk_size] for i in range(0, len(points), chunk_size)]
                 
-                # Add edge if within distance threshold (10km for centroids)
-                distance = Point(nearest_node).distance(point)
-                if point_type == 'pop_centroid' and distance > 10000:
-                    continue
-                G.add_edge(point_coord, nearest_node, weight=distance)
+                with ThreadPoolExecutor(max_workers=n_threads) as executor:
+                    connection_results = list(executor.map(
+                        partial(connect_points_to_grid_chunk, grid_nodes=grid_nodes, point_type=point_type),
+                        chunks
+                    ))
+                
+                # Add connections to graph
+                for chunk_connections in connection_results:
+                    for point_coord, nearest_node, distance in chunk_connections:
+                        G.add_edge(point_coord, nearest_node, weight=distance)
+    else:
+        # Serial processing
+        for point_gdf, point_type in [(facilities_gdf, 'facility'), (centroids_gdf, 'pop_centroid')]:
+            for point in point_gdf.geometry:
+                point_coord = (point.x, point.y)
+                
+                # Find nearest node in the grid network
+                if grid_nodes:
+                    nearest_node = min(grid_nodes, 
+                                     key=lambda n: Point(n).distance(point))
+                    
+                    # Add edge if within distance threshold (10km for centroids)
+                    distance = Point(nearest_node).distance(point)
+                    if point_type == 'pop_centroid' and distance > 10000:
+                        continue
+                    G.add_edge(point_coord, nearest_node, weight=distance)
     
     return G
 
@@ -172,9 +278,9 @@ def load_grid_lines(country_bbox, country_boundaries):
         print(f"Error loading grid data: {e}")
         return gpd.GeoDataFrame()
 
-def process_country_supply(country_iso3, output_dir="outputs_per_country"):
+def process_country_supply(country_iso3, output_dir="outputs_per_country", n_threads=1):
     """Process supply analysis for a single country"""
-    print(f"Processing country: {country_iso3}")
+    print(f"Processing country: {country_iso3} with {n_threads} threads")
     
     # Set your common CRS (WGS84)
     COMMON_CRS = "EPSG:4326"
@@ -217,18 +323,40 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
             # Get the transform for the windowed data
             windowed_transform = rasterio.windows.transform(window, src.transform)
             
-            # Calculate centroids for each cell
-            print("Calculating cell centroids...")
+            # Get dimensions
             rows, cols = pop_data.shape
-            centroids_x = []
-            centroids_y = []
             
-            for row in range(rows):
-                for col in range(cols):
-                    # Convert pixel coordinates to geographic coordinates
-                    x, y = rasterio.transform.xy(windowed_transform, row, col)
-                    centroids_x.append(x)
-                    centroids_y.append(y)
+            # Calculate centroids for each cell
+            print(f"Calculating cell centroids for {rows}x{cols} grid using {n_threads} threads...")
+            
+            if n_threads > 1 and rows > 100:
+                # Parallel processing for large grids
+                chunk_size = max(10, rows // n_threads)
+                row_chunks = [list(range(i, min(i + chunk_size, rows))) for i in range(0, rows, chunk_size)]
+                
+                with ThreadPoolExecutor(max_workers=n_threads) as executor:
+                    centroid_results = list(executor.map(
+                        partial(calculate_centroids_chunk, cols=cols, windowed_transform=windowed_transform),
+                        row_chunks
+                    ))
+                
+                # Combine results
+                centroids_x = []
+                centroids_y = []
+                for chunk_x, chunk_y in centroid_results:
+                    centroids_x.extend(chunk_x)
+                    centroids_y.extend(chunk_y)
+            else:
+                # Serial processing for small grids
+                centroids_x = []
+                centroids_y = []
+                
+                for row in range(rows):
+                    for col in range(cols):
+                        # Convert pixel coordinates to geographic coordinates
+                        x, y = rasterio.transform.xy(windowed_transform, row, col)
+                        centroids_x.append(x)
+                        centroids_y.append(y)
             
             # Create centroids GeoDataFrame
             centroids_gdf = gpd.GeoDataFrame(
@@ -392,7 +520,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     if not facilities_gdf.empty and not grid_lines_gdf.empty:
         try:
             print("Creating network graph...")
-            network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_filtered)
+            network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_filtered, n_threads)
             
             print(f"Network created with {network_graph.number_of_nodes()} nodes and {network_graph.number_of_edges()} edges")
             
@@ -418,17 +546,61 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
                 centroids_filtered['nearest_facility_capacity'] = np.nan
                 centroids_filtered['nearest_facility_gem_id'] = ''
                 
-                for idx, centroid in centroids_filtered.iterrows():
-                    # Find nearest facility
-                    distances = facilities_gdf.geometry.distance(centroid.geometry)
-                    if len(distances) > 0:
-                        nearest_idx = distances.idxmin()
-                        nearest_facility = facilities_gdf.loc[nearest_idx]
+                print(f"Calculating nearest facilities for {len(centroids_filtered)} centroids using {n_threads} threads...")
+                
+                if n_threads > 1 and len(centroids_filtered) > 100:
+                    # Parallel processing for large datasets
+                    chunk_size = max(10, len(centroids_filtered) // n_threads)
+                    chunks = [centroids_filtered.iloc[i:i+chunk_size] for i in range(0, len(centroids_filtered), chunk_size)]
+                    
+                    with ThreadPoolExecutor(max_workers=n_threads) as executor:
+                        chunk_results = list(executor.map(
+                            partial(calculate_nearest_facility_chunk, facilities_gdf=facilities_gdf),
+                            chunks
+                        ))
+                    
+                    # Combine results
+                    for chunk_result in chunk_results:
+                        for result in chunk_result:
+                            idx = result['index']
+                            centroids_filtered.loc[idx, 'nearest_facility_distance'] = result['nearest_facility_distance']
+                            centroids_filtered.loc[idx, 'nearest_facility_type'] = result['nearest_facility_type']
+                            centroids_filtered.loc[idx, 'nearest_facility_capacity'] = result['nearest_facility_capacity']
+                            centroids_filtered.loc[idx, 'nearest_facility_gem_id'] = result['nearest_facility_gem_id']
+                else:
+                    # Serial processing for small datasets or single thread
+                    # Convert to appropriate projected CRS for distance calculations
+                    if not centroids_filtered.empty and not facilities_gdf.empty:
+                        # Get approximate center to determine appropriate UTM zone
+                        center_lon = centroids_filtered.geometry.centroid.x.mean()
+                        center_lat = centroids_filtered.geometry.centroid.y.mean()
                         
-                        centroids_filtered.loc[idx, 'nearest_facility_distance'] = distances.min()
-                        centroids_filtered.loc[idx, 'nearest_facility_type'] = nearest_facility.get('Grouped_Type', '')
-                        centroids_filtered.loc[idx, 'nearest_facility_capacity'] = nearest_facility.get('Adjusted_Capacity_MW', np.nan)
-                        centroids_filtered.loc[idx, 'nearest_facility_gem_id'] = nearest_facility.get('GEM unit/phase ID', '')
+                        # Calculate UTM zone
+                        utm_zone = int((center_lon + 180) / 6) + 1
+                        utm_crs = f"EPSG:{32600 + utm_zone}" if center_lat >= 0 else f"EPSG:{32700 + utm_zone}"
+                        
+                        # Project both datasets to UTM for accurate distance calculation
+                        centroids_utm = centroids_filtered.to_crs(utm_crs)
+                        facilities_utm = facilities_gdf.to_crs(utm_crs)
+                        
+                        for idx, centroid in centroids_utm.iterrows():
+                            # Find nearest facility using projected coordinates
+                            distances = facilities_utm.geometry.distance(centroid.geometry)
+                            if len(distances) > 0:
+                                nearest_idx = distances.idxmin()
+                                nearest_facility = facilities_gdf.loc[nearest_idx]  # Use original for attributes
+                                
+                                centroids_filtered.loc[idx, 'nearest_facility_distance'] = distances.min()
+                                centroids_filtered.loc[idx, 'nearest_facility_type'] = nearest_facility.get('Grouped_Type', '')
+                                centroids_filtered.loc[idx, 'nearest_facility_capacity'] = nearest_facility.get('Adjusted_Capacity_MW', np.nan)
+                                centroids_filtered.loc[idx, 'nearest_facility_gem_id'] = nearest_facility.get('GEM unit/phase ID', '')
+                    else:
+                        # Fallback for empty datasets
+                        for idx, centroid in centroids_filtered.iterrows():
+                            centroids_filtered.loc[idx, 'nearest_facility_distance'] = np.nan
+                            centroids_filtered.loc[idx, 'nearest_facility_type'] = ''
+                            centroids_filtered.loc[idx, 'nearest_facility_capacity'] = np.nan
+                            centroids_filtered.loc[idx, 'nearest_facility_gem_id'] = ''
                 
                 print(f"Added facility proximity information to centroids")
             
@@ -540,10 +712,28 @@ def main():
     parser.add_argument('country_iso3', help='ISO3 country code')
     parser.add_argument('--output-dir', default='outputs_per_country', help='Output directory')
     parser.add_argument('--no-network', action='store_true', help='Skip network analysis')
+    parser.add_argument('--threads', type=int, default=1, help='Number of threads to use for processing')
     
     args = parser.parse_args()
     
-    result = process_country_supply(args.country_iso3, args.output_dir)
+    # Set the number of threads for parallel processing
+    if args.threads > 1:
+        print(f"Using {args.threads} threads for parallel processing")
+        # Configure parallel processing libraries
+        import os
+        os.environ['OMP_NUM_THREADS'] = str(args.threads)
+        os.environ['MKL_NUM_THREADS'] = str(args.threads)
+        os.environ['OPENBLAS_NUM_THREADS'] = str(args.threads)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(args.threads)
+        
+        # Set pandas and numpy to use multiple threads
+        try:
+            import numba
+            numba.set_num_threads(args.threads)
+        except ImportError:
+            pass
+    
+    result = process_country_supply(args.country_iso3, args.output_dir, n_threads=args.threads)
     if result:
         print(f"Successfully processed {args.country_iso3}")
         return 0

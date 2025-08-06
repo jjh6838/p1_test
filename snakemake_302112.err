@@ -1,0 +1,7 @@
+Assuming unrestricted shared filesystem usage.
+host: ouce-cn80
+Building DAG of jobs...
+LockException:
+Error: Directory cannot be locked. Please make sure that no other Snakemake process is trying to create the same files in the following directory:
+/lustre/soge1/users/lina4376/dphil_p1/p1_test
+If you are sure that no other instances of snakemake are running on this directory, the remaining lock was likely caused by a kill signal or a power loss. It can be removed with the --unlock argument.

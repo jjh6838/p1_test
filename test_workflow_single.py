@@ -6,9 +6,10 @@ Simple test script for 1 country only - fastest test
 import subprocess
 import sys
 import time
+import argparse
 from pathlib import Path
 
-def test_one_country():
+def test_one_country(n_threads=1):
     """Test workflow with 1 small country for quick validation"""
     
     start_time = time.time()
@@ -17,6 +18,7 @@ def test_one_country():
     
     print("🧪 Testing workflow with 1 country (fastest test)")
     print(f"Country: {test_country}")
+    print(f"Threads: {n_threads}")
     print(f"⏰ Started at: {time.strftime('%H:%M:%S')}")
     
     # Create output directory
@@ -35,7 +37,8 @@ def test_one_country():
     print(f"\n1. Testing {test_country}...")
     step_start = time.time()
     try:
-        cmd = [sys.executable, "process_country_supply.py", test_country, "--output-dir", output_dir]
+        cmd = [sys.executable, "process_country_supply.py", test_country, 
+               "--output-dir", output_dir, "--threads", str(n_threads)]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         step_time = time.time() - step_start
         print(f"✅ {test_country} processing succeeded ({step_time:.1f}s)")
@@ -78,5 +81,10 @@ def test_one_country():
     return True
 
 if __name__ == "__main__":
-    success = test_one_country()
+    parser = argparse.ArgumentParser(description='Test single country workflow')
+    parser.add_argument('--threads', type=int, default=1, help='Number of threads to use')
+    
+    args = parser.parse_args()
+    
+    success = test_one_country(n_threads=args.threads)
     sys.exit(0 if success else 1)

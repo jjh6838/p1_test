@@ -12,12 +12,13 @@ def test_two_countries():
     """Test workflow with 2 small countries"""
     
     start_time = time.time()
-    test_countries = ["LKA", "JAM"]  # Small, reliable countries (TUV, NRU)
-    output_dir = "test_outputs"
+    test_countries = ["LKA", "NRU"]  # Small, reliable countries (TUV, NRU)
+    output_dir = "outputs_per_country"  # Use main output directory
     
     print("🧪 Testing workflow with 2 countries")
     print(f"Countries: {test_countries}")
     print(f"⏰ Started at: {time.strftime('%H:%M:%S')}")
+    print(f"📁 Output directory: {output_dir}")
     
     # Create output directory
     Path(output_dir).mkdir(exist_ok=True)
