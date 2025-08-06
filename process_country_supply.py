@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Supply analysis per country - adapted for Snakemake workflow
+Supply analysis per country - adapted for Snakemake workflow with network analysis
 """
 import pandas as pd
 import numpy as np
@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 import argparse
 import sys
 from pathlib import Path
+import networkx as nx
+from shapely.geometry import LineString, MultiLineString, Point, Polygon
+from shapely.ops import unary_union
 
 def get_country_bbox(admin_boundaries, buffer=0.1):
     """Get bounding box for a country with buffer"""
@@ -23,6 +26,151 @@ def get_country_bbox(admin_boundaries, buffer=0.1):
     maxx += buffer
     maxy += buffer
     return [minx, miny, maxx, maxy]
+
+def split_intersecting_edges(lines):
+    """Split lines at their intersections and return all unique segments."""
+    # Merge all lines
+    merged = unary_union(lines)
+    
+    # Find all intersection points
+    if isinstance(merged, (LineString, MultiLineString)):
+        # Create a list of all segments
+        segments = []
+        if isinstance(merged, LineString):
+            segments.append(merged)
+        else:
+            segments.extend(list(merged.geoms))
+            
+        # Split each segment at intersection points
+        final_segments = []
+        for segment in segments:
+            coords = list(segment.coords)
+            for i in range(len(coords) - 1):
+                final_segments.append(LineString([coords[i], coords[i + 1]]))
+                
+        return final_segments
+    return []
+
+def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
+    """Create network graph from facilities, grid lines, and population centroids"""
+    # Initialize empty graph
+    G = nx.Graph()
+    
+    # 1. Process grid lines and split at intersections
+    single_lines = []
+    for _, row in grid_lines_gdf.iterrows():
+        if isinstance(row.geometry, MultiLineString):
+            single_lines.extend(list(row.geometry.geoms))
+        else:
+            single_lines.append(row.geometry)
+    
+    # Split lines at intersections
+    split_lines = split_intersecting_edges(single_lines)
+    print(f"Original line count: {len(single_lines)}, After splitting: {len(split_lines)}")
+    
+    # 2. Create nodes at all line endpoints and intersections
+    nodes = set()
+    for line in split_lines:
+        coords = list(line.coords)
+        nodes.add(coords[0])
+        nodes.add(coords[-1])
+    
+    # 3. Add facility and centroid nodes
+    facility_nodes = set((point.x, point.y) for point in facilities_gdf.geometry)
+    pop_centroid_nodes = set((point.x, point.y) for point in centroids_gdf.geometry)
+    
+    # 4. Add all nodes to the graph with their types
+    for node in nodes:
+        G.add_node(node, pos=node, type='grid_line')
+    for node in facility_nodes:
+        G.add_node(node, pos=node, type='facility')
+    for node in pop_centroid_nodes:
+        G.add_node(node, pos=node, type='pop_centroid')
+    
+    # 5. Create edges from split lines
+    for line in split_lines:
+        coords = list(line.coords)
+        G.add_edge(coords[0], coords[-1], weight=line.length)
+    
+    # 6. Connect facilities and centroids to nearest grid nodes
+    for point_gdf, point_type in [(facilities_gdf, 'facility'), (centroids_gdf, 'pop_centroid')]:
+        for point in point_gdf.geometry:
+            point_coord = (point.x, point.y)
+            
+            # Find nearest node in the grid network
+            grid_nodes = [n for n, d in G.nodes(data=True) if d['type'] == 'grid_line']
+            if grid_nodes:
+                nearest_node = min(grid_nodes, 
+                                 key=lambda n: Point(n).distance(point))
+                
+                # Add edge if within distance threshold (10km for centroids)
+                distance = Point(nearest_node).distance(point)
+                if point_type == 'pop_centroid' and distance > 10000:
+                    continue
+                G.add_edge(point_coord, nearest_node, weight=distance)
+    
+    return G
+
+def load_energy_facilities(country_iso3, year=2024):
+    """Load energy facilities data for a specific country and year"""
+    try:
+        # Define sheet names for different years
+        sheet_mapping = {
+            2024: 'Grouped_cur_fac_lvl',
+            2030: 'Grouped_2030_fac_lvl', 
+            2050: 'Grouped_2050_fac_lvl'
+        }
+        
+        sheet_name = sheet_mapping.get(year, 'Grouped_cur_fac_lvl')
+        
+        # Load facilities data
+        facilities_df = pd.read_excel("outputs_processed_data/p1_a_ember_gem_2024_fac_lvl.xlsx", 
+                                    sheet_name=sheet_name)
+        
+        # Filter for the specified country
+        country_facilities = facilities_df[facilities_df['Country Code'] == country_iso3].copy()
+        
+        if country_facilities.empty:
+            print(f"No facilities found for {country_iso3} in {year}")
+            return gpd.GeoDataFrame()
+        
+        # Create GeoDataFrame from facilities
+        geometry = gpd.points_from_xy(country_facilities['Longitude'], country_facilities['Latitude'])
+        facilities_gdf = gpd.GeoDataFrame(country_facilities, geometry=geometry, crs="EPSG:4326")
+        
+        print(f"Loaded {len(facilities_gdf)} facilities for {country_iso3} in {year}")
+        return facilities_gdf
+        
+    except Exception as e:
+        print(f"Error loading facilities data for {country_iso3}: {e}")
+        return gpd.GeoDataFrame()
+
+def load_grid_lines(country_bbox, country_boundaries):
+    """Load and clip grid lines for the country"""
+    try:
+        # Load global grid data
+        grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg')
+        
+        # Clip to country bounding box first for performance
+        minx, miny, maxx, maxy = country_bbox
+        bbox_geom = gpd.GeoDataFrame([1], geometry=[
+            Polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)])
+        ], crs="EPSG:4326")
+        
+        grid_clipped = gpd.clip(grid_lines, bbox_geom)
+        
+        # Further clip to exact country boundaries
+        if not grid_clipped.empty:
+            grid_country = gpd.clip(grid_clipped, country_boundaries)
+            print(f"Loaded {len(grid_country)} grid line segments for country")
+            return grid_country
+        else:
+            print("No grid lines found in country area")
+            return gpd.GeoDataFrame()
+            
+    except Exception as e:
+        print(f"Error loading grid data: {e}")
+        return gpd.GeoDataFrame()
 
 def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     """Process supply analysis for a single country"""
@@ -230,7 +378,80 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     centroids_filtered['GID_0'] = country_iso3
     centroids_filtered['NAME_0'] = country_name
     
-    # Keep the specified columns for simplified output - now including population projections
+    # === NETWORK ANALYSIS ===
+    print(f"\n=== NETWORK ANALYSIS for {country_iso3} ===")
+    
+    # Load energy facilities for 2024 (baseline year)
+    facilities_gdf = load_energy_facilities(country_iso3, year=2024)
+    
+    # Load grid lines
+    grid_lines_gdf = load_grid_lines(country_bbox, admin_boundaries)
+    
+    # Perform network analysis only if we have both facilities and grid data
+    network_results = {}
+    if not facilities_gdf.empty and not grid_lines_gdf.empty:
+        try:
+            print("Creating network graph...")
+            network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_filtered)
+            
+            print(f"Network created with {network_graph.number_of_nodes()} nodes and {network_graph.number_of_edges()} edges")
+            
+            # Calculate basic network metrics
+            network_results = {
+                'total_nodes': network_graph.number_of_nodes(),
+                'total_edges': network_graph.number_of_edges(),
+                'grid_nodes': len([n for n, d in network_graph.nodes(data=True) if d['type'] == 'grid_line']),
+                'facility_nodes': len([n for n, d in network_graph.nodes(data=True) if d['type'] == 'facility']),
+                'centroid_nodes': len([n for n, d in network_graph.nodes(data=True) if d['type'] == 'pop_centroid'])
+            }
+            
+            print(f"Network composition:")
+            print(f"  Grid nodes: {network_results['grid_nodes']}")
+            print(f"  Facility nodes: {network_results['facility_nodes']}")
+            print(f"  Population centroid nodes: {network_results['centroid_nodes']}")
+            
+            # Add facility information to centroids if available
+            if len(facilities_gdf) > 0:
+                # Calculate distance to nearest facility for each centroid
+                centroids_filtered['nearest_facility_distance'] = np.nan
+                centroids_filtered['nearest_facility_type'] = ''
+                centroids_filtered['nearest_facility_capacity'] = np.nan
+                centroids_filtered['nearest_facility_gem_id'] = ''
+                
+                for idx, centroid in centroids_filtered.iterrows():
+                    # Find nearest facility
+                    distances = facilities_gdf.geometry.distance(centroid.geometry)
+                    if len(distances) > 0:
+                        nearest_idx = distances.idxmin()
+                        nearest_facility = facilities_gdf.loc[nearest_idx]
+                        
+                        centroids_filtered.loc[idx, 'nearest_facility_distance'] = distances.min()
+                        centroids_filtered.loc[idx, 'nearest_facility_type'] = nearest_facility.get('Grouped_Type', '')
+                        centroids_filtered.loc[idx, 'nearest_facility_capacity'] = nearest_facility.get('Adjusted_Capacity_MW', np.nan)
+                        centroids_filtered.loc[idx, 'nearest_facility_gem_id'] = nearest_facility.get('GEM unit/phase ID', '')
+                
+                print(f"Added facility proximity information to centroids")
+            
+        except Exception as e:
+            print(f"Warning: Network analysis failed: {e}")
+            network_results = {}
+    else:
+        if facilities_gdf.empty:
+            print("No energy facilities found for network analysis")
+        if grid_lines_gdf.empty:
+            print("No grid lines found for network analysis")
+    
+    # Save network analysis results
+    if network_results:
+        network_summary_file = output_path / f"network_summary_{country_iso3}.txt"
+        with open(network_summary_file, 'w') as f:
+            f.write(f"Network Analysis Summary for {country_iso3}\n")
+            f.write("=" * 50 + "\n")
+            for key, value in network_results.items():
+                f.write(f"{key}: {value}\n")
+        print(f"Network summary saved to {network_summary_file}")
+    
+    # Keep the specified columns for simplified output - now including network analysis results
     final_columns = [
         'geometry',
         'GID_0',
@@ -241,7 +462,11 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         'Population_2050_centroid',     # 2050 population projection per centroid
         'Total_Demand_2024_centroid',
         'Total_Demand_2030_centroid', 
-        'Total_Demand_2050_centroid'
+        'Total_Demand_2050_centroid',
+        'nearest_facility_distance',    # Distance to nearest energy facility
+        'nearest_facility_type',        # Type of nearest facility (e.g., Solar, Wind, Fossil)
+        'nearest_facility_capacity',    # Capacity of nearest facility in MW
+        'nearest_facility_gem_id'       # GEM unit/phase ID of nearest facility
         ]
     
     # Only keep columns that exist in the dataframe
@@ -261,7 +486,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     centroids_simplified[csv_columns].to_csv(csv_file, index=False)
     print(f"CSV saved to {csv_file}")
     
-    # Print summary statistics - now including population projections
+    # Print summary statistics - now including population projections and network analysis
     print(f"\n=== SUMMARY for {country_iso3} ===")
     print(f"Population centroids: {len(centroids_simplified):,}")
     print(f"Total population (2023 baseline): {centroids_simplified['Population_centroid'].sum():,.0f}")
@@ -284,6 +509,29 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
                 per_capita = total_demand / pop_year if pop_year > 0 else 0
                 print(f"Total demand {year}: {total_demand:,.0f} MWh ({per_capita:.2f} MWh/capita)")
     
+    # Network analysis summary
+    if 'nearest_facility_distance' in centroids_simplified.columns:
+        facility_data = centroids_simplified.dropna(subset=['nearest_facility_distance'])
+        if len(facility_data) > 0:
+            print(f"\nNetwork Analysis Results:")
+            print(f"Centroids with facility access: {len(facility_data):,} out of {len(centroids_simplified):,}")
+            print(f"Average distance to nearest facility: {facility_data['nearest_facility_distance'].mean():.2f} degrees")
+            print(f"Median distance to nearest facility: {facility_data['nearest_facility_distance'].median():.2f} degrees")
+            
+            # Facility type breakdown
+            if 'nearest_facility_type' in centroids_simplified.columns:
+                facility_types = facility_data['nearest_facility_type'].value_counts()
+                print(f"Nearest facility types:")
+                for ftype, count in facility_types.items():
+                    if ftype:  # Skip empty strings
+                        print(f"  {ftype}: {count} centroids")
+    
+    if network_results:
+        print(f"\nNetwork Statistics:")
+        print(f"Total network nodes: {network_results.get('total_nodes', 'N/A')}")
+        print(f"Total network edges: {network_results.get('total_edges', 'N/A')}")
+        print(f"Energy facilities in network: {network_results.get('facility_nodes', 'N/A')}")
+    
     return str(output_file)
 
 def main():
@@ -291,6 +539,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process supply analysis for a country')
     parser.add_argument('country_iso3', help='ISO3 country code')
     parser.add_argument('--output-dir', default='outputs_per_country', help='Output directory')
+    parser.add_argument('--no-network', action='store_true', help='Skip network analysis')
     
     args = parser.parse_args()
     
