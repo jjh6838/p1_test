@@ -309,7 +309,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", n_thr
     
     # Simplify geometry for faster processing
     print("Simplifying geometry...")
-    admin_boundaries['geometry'] = admin_boundaries['geometry'].simplify(tolerance=0.1, preserve_topology=True)
+    admin_boundaries['geometry'] = admin_boundaries['geometry'].simplify(tolerance=0.001, preserve_topology=True)
     # Note: Tolerance should be adjusted to 0.001 for better accuracy; currently set to 0.1 for test (faster processing)
 
     # Load and mask population raster (2023 baseline)
