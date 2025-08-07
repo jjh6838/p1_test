@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python>=3.10,<3.13
+  - python
   - pandas>=2.0
   - geopandas>=0.14
   - fiona

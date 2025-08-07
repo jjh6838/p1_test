@@ -1,0 +1,2563 @@
+conda 25.7.0
+[INFO] Launching Snakemake at Thu  7 Aug 05:52:57 UTC 2025
+=== Environment Debug Info ===
+=== Environment Debug Info ===
+=== Environment Debug Info ===
+=== Environment Debug Info ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python version: Python 3.13.5
+Python version: Python 3.13.5
+Conda info:
+Conda info:
+Python version: Python 3.13.5
+Python version: Python 3.13.5
+Conda info:
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+=== Running actual processing ===
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Python version: Python 3.13.5
+Conda info:
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+=== Running actual processing ===
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+=== Running actual processing ===
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+=== Running actual processing ===
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+=== Running actual processing ===
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Python version: Python 3.13.5
+Conda info:
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Conda info:
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python version: Python 3.13.5
+Conda info:
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+=== Environment Debug Info ===
+Current environment: 11c9c975ea58842a90ee6bafb4f23147_
+Python location: /soge-home/users/lina4376/miniconda3/bin/python
+Python version: Python 3.13.5
+Conda info:
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
+11c9c975ea58842a90ee6bafb4f23147_ * /soge-home/users/lina4376/miniconda3/envs/11c9c975ea58842a90ee6bafb4f23147_
+p1_etl                 /soge-home/users/lina4376/miniconda3/envs/p1_etl
+Checking pandas availability...
+Python executable: /soge-home/users/lina4376/miniconda3/bin/python
+✗ pandas NOT found: No module named 'pandas'
+Available packages:
+Pandas-related packages: None
+=== Running actual processing ===
