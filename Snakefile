@@ -1,7 +1,7 @@
 # Snakemake workflow for global supply analysis
 # Run with: snakemake --cores all --use-conda
 
-import pandas as pd
+## import pandas as pd (removed, not needed for workflow logic)
 from pathlib import Path
 
 # Get list of countries from GADM data
@@ -84,7 +84,15 @@ rule process_country:
         total_cores=lambda wildcards: 16 if wildcards.country in TIER_1_COUNTRIES else 12 if wildcards.country in TIER_2_COUNTRIES else 8 if wildcards.country in TIER_3_COUNTRIES else 4,
         total_mem_mb=lambda wildcards: 64000 if wildcards.country in TIER_1_COUNTRIES else 48000 if wildcards.country in TIER_2_COUNTRIES else 32000 if wildcards.country in TIER_3_COUNTRIES else 16000
     shell:
-        "python process_country_supply.py {params.country} --output-dir {params.output_dir} --threads {threads}"
+        """
+        echo "=== Environment validation for {params.country} ==="
+        echo "Python executable: $(which python)"
+        echo "Python version: $(python --version)"
+        echo "Checking pandas import..."
+        python -c "import pandas; print('pandas version:', pandas.__version__)"
+        echo "=== Starting analysis ==="
+        python process_country_supply.py {params.country} --output-dir {params.output_dir} --threads {threads}
+        """
 
 rule combine_results:
     """Combine all country results into global dataset"""

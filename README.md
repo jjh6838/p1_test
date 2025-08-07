@@ -292,4 +292,8 @@ cat outputs_global/logs/slurm-JOBID.out
 ### to exeucte it on cluster
 (p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ sed -i 's/\r$//' submit_workflow.sh
 (p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ chmod +x submit_workflow.sh
-(p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ squeue -u lina4376
+(p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ sbatch submit_workflow.sh
+
+sed -i 's/\r$//' submit_workflow.sh; chmod +x submit_workflow.sh; sbatch submit_workflow.sh
+
+squeue -u lina4376

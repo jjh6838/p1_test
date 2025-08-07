@@ -572,24 +572,23 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", n_thr
                     # Convert to appropriate projected CRS for distance calculations
                     if not centroids_filtered.empty and not facilities_gdf.empty:
                         # Get approximate center to determine appropriate UTM zone
-                        center_lon = centroids_filtered.geometry.centroid.x.mean()
-                        center_lat = centroids_filtered.geometry.centroid.y.mean()
-                        
+                        center = centroids_filtered.geometry.unary_union.centroid
+                        center_lon = center.x
+                        center_lat = center.y
                         # Calculate UTM zone
                         utm_zone = int((center_lon + 180) / 6) + 1
                         utm_crs = f"EPSG:{32600 + utm_zone}" if center_lat >= 0 else f"EPSG:{32700 + utm_zone}"
-                        
-                        # Project both datasets to UTM for accurate distance calculation
+                        # Project both datasets to UTM for accurate centroid and distance calculation
                         centroids_utm = centroids_filtered.to_crs(utm_crs)
                         facilities_utm = facilities_gdf.to_crs(utm_crs)
-                        
+                        # Calculate centroids in projected CRS
+                        centroids_utm['projected_centroid'] = centroids_utm.geometry.centroid
                         for idx, centroid in centroids_utm.iterrows():
                             # Find nearest facility using projected coordinates
-                            distances = facilities_utm.geometry.distance(centroid.geometry)
+                            distances = facilities_utm.geometry.distance(centroid['projected_centroid'])
                             if len(distances) > 0:
                                 nearest_idx = distances.idxmin()
                                 nearest_facility = facilities_gdf.loc[nearest_idx]  # Use original for attributes
-                                
                                 centroids_filtered.loc[idx, 'nearest_facility_distance'] = distances.min()
                                 centroids_filtered.loc[idx, 'nearest_facility_type'] = nearest_facility.get('Grouped_Type', '')
                                 centroids_filtered.loc[idx, 'nearest_facility_capacity'] = nearest_facility.get('Adjusted_Capacity_MW', np.nan)

@@ -2,13 +2,9 @@ name: p1_etl
 channels:
   - conda-forge
   - defaults
-  - bioconda
 dependencies:
   - python>=3.10,<3.13
-  - pip
-  - setuptools
-  - wheel
-  - snakemake>=7.0
+  - pandas>=2.0
   - geopandas>=0.14
   - fiona
   - shapely
@@ -18,7 +14,6 @@ dependencies:
   - libgdal
   - libspatialindex
   - rtree
-  - pandas>=2.0
   - numpy
   - scipy
   - openpyxl
@@ -30,5 +25,9 @@ dependencies:
   - folium
   - click
   - networkx
+  - pip
+  - setuptools
+  - wheel
   - pip:
       - pyyaml
+      - snakemake
