@@ -514,7 +514,7 @@ for index, row in final_merged_df.iterrows():
 # 7.1: Bring MWh per capita for 2030 for each renewable type from above code, and calculate the 2050 MWh per capita values based on the CAAGR (IEA Pledges) from 2030 to 2050
 # 7.2: Calculate the 2050 MWh targets (MWh) for each renewable type, by multiplying Population 2050 by the 2050 MWh per capita values.
 # Please note that countries with valid NDCs will use the 2030 MWh per capita values as a base, while countries without valid NDCs will use the regional benchmarks for 2030 MWh per capita values.
-# 7.3: Ensure the 2050 values are at least equal to the 2024 values (i.e., the minimum rule!), and adjust proportions to meet the target renewable share (IEA 2050 Pledges targets).
+# 7.3: Ensure the 2050 values are at least equal to the 2030 values (i.e., the minimum rule!), and adjust proportions to meet the target renewable share (IEA 2050 Pledges targets).
 
 # IEA pledge targets for total 2050 renewable shares by income group 
 iea_pledge_re_targets_2050 = {
@@ -594,13 +594,20 @@ for index, row in final_merged_df.iterrows():
     fossil = row.get("Fossil_2050_MWh", 0)
     nuclear = row.get("Nuclear_2050_MWh", 0)
     
-    # Get renewable values for 2024 and 2050
-    renewables_2024 = {energy_type: row.get(energy_type.replace("_2050_MWh", "_2024_MWh"), 0) for energy_type in energy_types_2050}
+    # Get renewable values for 2030 and 2050
+    renewables_2030 = {energy_type: row.get(energy_type.replace("_2050_MWh", "_2030_MWh"), 0) for energy_type in energy_types_2050}
     renewables_2050 = {energy_type: row.get(energy_type, 0) for energy_type in energy_types_2050}
     
     renewables_sum = sum(renewables_2050.values())
     total_gen_2050 = renewables_sum + fossil + nuclear
     
+    # Calculate 2030 total generation for minimum rule check
+    fossil_2030 = row.get("Fossil_2030_MWh", 0)
+    nuclear_2030 = row.get("Nuclear_2030_MWh", 0)
+    renewables_2030_sum = sum(renewables_2030.values())
+    total_gen_2030 = renewables_2030_sum + fossil_2030 + nuclear_2030
+    
+    # First, apply renewable share target scaling (if needed)
     if total_gen_2050 > 0 and target_share_2050 > 0 and renewables_sum > 0:
         if fossil + nuclear == 0:
             desired_renewable_total = renewables_sum
@@ -609,40 +616,63 @@ for index, row in final_merged_df.iterrows():
         else:
             desired_renewable_total = target_share_2050 * (fossil + nuclear) / (1 - target_share_2050)
         
-        # Initial scaling
+        # Initial scaling for renewable share targets
         scaling_factor = desired_renewable_total / renewables_sum
         scaled = {k: v * scaling_factor for k, v in renewables_2050.items()}
         
-        # Enforce minimum = 2024 value (minimum rule)
-        fixed = {k: max(scaled[k], renewables_2024[k]) for k in energy_types_2050}
+        # Apply individual energy type minimum rule (2050 >= 2030 for each type)
+        renewables_2050 = {k: max(scaled[k], renewables_2030[k]) for k in energy_types_2050}
         
-        # If sum is now above target, re-scale only those not fixed at 2024 value
-        fixed_sum = sum(v for k, v in fixed.items() if v == renewables_2024[k])
-        to_scale = [k for k in energy_types_2050 if fixed[k] > renewables_2024[k]]
+        # If sum is now above target, re-scale only those not fixed at 2030 value
+        fixed_sum = sum(v for k, v in renewables_2050.items() if v == renewables_2030[k])
+        to_scale = [k for k in energy_types_2050 if renewables_2050[k] > renewables_2030[k]]
         
         if to_scale:
             remaining = desired_renewable_total - fixed_sum
             if remaining < 0:
-                # If fixed_sum already exceeds target, set all to 2024 value
-                for k in energy_types_2050:
-                    final_merged_df.at[index, k] = renewables_2024[k]
+                # If fixed_sum already exceeds target, set all to 2030 value
+                renewables_2050 = {k: renewables_2030[k] for k in energy_types_2050}
             else:
-                scale_sum = sum(fixed[k] for k in to_scale)
+                scale_sum = sum(renewables_2050[k] for k in to_scale)
                 if scale_sum > 0:
                     rescale_factor = remaining / scale_sum
-                    for k in to_scale:
-                        final_merged_df.at[index, k] = fixed[k] * rescale_factor
-                # Set values that were fixed at 2024 level
-                for k in energy_types_2050:
-                    if fixed[k] == renewables_2024[k]:
-                        final_merged_df.at[index, k] = renewables_2024[k]
+                    for k in energy_types_2050:
+                        if renewables_2050[k] == renewables_2030[k]:
+                            # Keep at 2030 level (already at minimum)
+                            pass
+                        else:
+                            # Scale down proportionally
+                            renewables_2050[k] = renewables_2050[k] * rescale_factor
+    
+    # Update renewables_sum after individual energy type minimum rules
+    renewables_sum = sum(renewables_2050.values())
+    total_gen_2050 = renewables_sum + fossil + nuclear
+    
+    # Then, apply total generation minimum rule (after individual type minimums)
+    if total_gen_2050 < total_gen_2030 and total_gen_2030 > 0:
+        # Scale up renewables proportionally to meet minimum total generation
+        # This applies AFTER individual energy type minimums are enforced
+        
+        if renewables_sum > 0:
+            # Calculate required increase in total generation
+            required_total_increase = total_gen_2030 - total_gen_2050
+            
+            # Scale up renewables proportionally to make up the difference
+            renewable_scaling_factor = (renewables_sum + required_total_increase) / renewables_sum
+            
+            # Apply reasonable bounds to scaling factor to prevent extreme values
+            renewable_scaling_factor = min(renewable_scaling_factor, 5.0)  # Cap at 5x increase
+            
+            # Scale all renewable types proportionally (preserving their relative proportions)
+            renewables_2050 = {k: v * renewable_scaling_factor for k, v in renewables_2050.items()}
         else:
-            for k in energy_types_2050:
-                final_merged_df.at[index, k] = fixed[k]
-    else:
-        # If not enough data, just copy calculated 2050 values as fallback
-        for k in energy_types_2050:
-            final_merged_df.at[index, k] = renewables_2050[k]
+            # If renewables are zero, we can't scale them up
+            # In this rare case, keep original values
+            pass
+    
+    # Apply the final renewable values to the dataframe
+    for k in energy_types_2050:
+        final_merged_df.at[index, k] = renewables_2050[k]
 
 
 # Add after Task 7 to check if targets are being met for both 2030 and 2050
