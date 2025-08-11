@@ -1,0 +1,7 @@
+[INFO] Starting parallel script 1/40 (T1) at Sun 10 Aug 19:52:14 UTC 2025
+[INFO] Processing 1 countries in this batch: AUS
+[INFO] Tier: T1 | Memory: 340G | CPUs: 72 | Time: 12:00:00
+conda 25.7.0
+[INFO] Using Python: /soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+[INFO] Processing AUS (T1)...

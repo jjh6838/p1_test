@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/lustre/soge1/users/lina4376/dphil_p1/p1_test/process_country_supply.py", line 5, in <module>
-    import pandas as pd
-ModuleNotFoundError: No module named 'pandas'
