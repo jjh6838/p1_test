@@ -1,224 +1,41 @@
-# Gl## Status: ✅ PARALLEL-ONLThe workflow is now optimized for parallel processing:
-- **🚀 10 Parallel Jobs**: Countries processed in 10 separate SLURM jobs
-- **⚡ Maximum Speed**: 20-30x faster than sequential processing
-- **🔧 Fixed Environment**: All dependencies resolve properly
-- **📊 Layer-based Outputs**: GPKG files with centroids, grid_lines, facilities layers
-- **🎯 Maximum Node Utilization**: Every node uses full capacity (340GB/72 CPUs)
-- **🛡️ Fault Tolerant**: Individual job failures don't stop entire workflowLOW WITH TIERED RESOURCE ALLOCATION
+# Parallel Supply Analysis — Cluster (Parallel‑Only)
 
-The workflow is now optimized for parallel processing with intelligent resource allocation:
-- **🚀 Maximum Node Utilization**: Every script uses full node capacity (340GB/72 CPUs)
-- **⚡ Maximum Speed**: 20-30x faster than sequential processing
-- **🔧 Fixed Environment**: All dependencies resolve properly
-- **📊 Layer-based Outputs**: GPKG files with centroids, grid_lines, facilities layers
-- **🎯 Cluster Optimized**: Full utilization of every available node
-- **🛡️ Fault Tolerant**: Individual job failures don't stop entire workflow
+Process all countries via 40 parallel SLURM jobs with tiered node usage. Focused, cluster-first instructions.
 
-## Tiered Resource Allocation
-
-| Tier | Countries | Per Script | Memory | CPUs | Time | Examples |
-|------|-----------|------------|--------|------|------|----------|
-| **Tier 1** | Largest | 1 country | 340GB | 72 | 12h | USA, CHN, IND, RUS, BRA |
-| **Tier 2** | Large | 2 countries | 340GB | 72 | 12h | ARG, KAZ, DZA, MEX, IDN |
-| **Tier 3** | Medium | 4 countries | 340GB | 72 | 12h | KOR, FRA, DEU, JPN, GBR |
-| **Other** | Small | 8 countries | 340GB | 72 | 12h | Small island nations, etc. |
-
-**Benefits:**
-- **Maximum Node Utilization**: Each script uses full node capacity (340GB/72 CPUs)
-- **Smart Country Batching**: More countries per node for smaller countries
-- **Optimal Performance**: Full CPU/Memory utilization regardless of country size
-- **Uniform Resource Requests**: Simplified cluster scheduling with consistent specsly Analysis Workflow - PARALLEL PROCESSING ONLY
-
-This workflow processes supply analysis for all countries using parallel SLURM jobs, designed for maximum cluster efficiency and speed.
-
-## Status: ✅ PARALLEL-ONLY WORKFLOW
-
-The workflow is now optimized for parallel processing:
-- **🚀 10 Parallel Jobs**: Countries processed in 10 separate SLURM jobs
-- **⚡ Maximum Speed**: 10-20x faster than sequential processing
-- **� Fixed Environment**: All dependencies resolve properly
-- **📊 Layer-based Outputs**: GPKG files with centroids, grid_lines, facilities layers
-- **🎯 Cluster Optimized**: Full utilization of allocated resources
-- **🛡️ Fault Tolerant**: Individual job failures don't stop entire workflow
-
-## Workflow Steps
+## Status: ✅ Ready for Parallel Execution
+- 40 parallel scripts with tiered batching (1/2/4/8 countries per job)
+- Full node request per job (340GB RAM, 72 CPUs, 12h, Short partition)
+## What you run (Parallel‑only)
 
 ```bash
-# Step 1: Create parallel scripts and submission script
+# 1) Generate scripts on the cluster
 python get_countries.py --create-parallel
-# This creates:
-#   - parallel_scripts/submit_parallel_01.sh to submit_parallel_XX.sh
-#   - submit_all_parallel.sh (master submission script)
 
-# Step 2: Submit all parallel jobs (uses the file created in Step 1)
+# 2) Submit all parallel jobs (note the ./ prefix)
+sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
+chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 ./submit_all_parallel.sh
 
-# Step 3: Monitor progress
+# 3) Monitor
 squeue -u $USER
+tail -f outputs_global/logs/parallel_*.out
 
-# Step 4: Combine results when all/most countries are done
+# 4) Combine when done
 sbatch submit_workflow.sh
 ```
 
-## Monitoring Progress
+Tips
+- Use ./script.sh on Linux/macOS when executing from the current directory
+- If using Windows to prepare files, convert line endings on the cluster if needed
+- sed is a Linux tool; run it on the cluster or use Git Bash/WSL on Windows
 
-```bash
-# Check completion status
-find outputs_per_country -name "*.gpkg" | wc -l
+## Outputs
 
-# Check total countries
-wc -l countries_list.txt
+Per country (in outputs_per_country/):
+- supply_analysis_{ISO3}.gpkg — layers: centroids, grid_lines, facilities
 
-# View recent log activity
-tail -f outputs_global/logs/parallel_*.out
-```
-
-## Output Structure
-
-### Per-Country Outputs (`outputs_per_country/`)
-- `supply_analysis_{COUNTRY}.gpkg` - Multi-layer GeoPackage:
-  - `centroids` - Population centroids with supply/demand analysis
-  - `grid_lines` - Enhanced grid infrastructure 
-  - `facilities` - Energy facilities with capacity info
-- `supply_analysis_{COUNTRY}.csv` - Tabular data for centroids
-
-### Global Outputs (`outputs_global/`)
-- `global_centroids.gpkg/csv` - Combined population centroids
-- `global_grid_lines.gpkg/csv` - Combined grid infrastructure
-- `global_facilities.gpkg/csv` - Combined energy facilities
-- `global_supply_analysis_all_layers.gpkg` - Single file with all layers
-- `global_supply_summary.csv` - Summary by country
-- `global_statistics.csv` - Global totals
-
-## Performance Improvements
-
-### **Performance Comparison**
-
-| Approach | Processing Time | Resource Usage | Advantages |
-|----------|----------------|----------------|------------|
-| **Original Sequential** | 48+ hours | 1 job, 72 CPUs | Simple, single job |
-| **10 Parallel Jobs** | 1-3 hours | 10 jobs, 720 CPUs | **20-50x faster**, fault tolerant |
-
-**Current workflow achieves 20-50x speedup through maximum node utilization!**
-
-## Resource Allocation
-
-### Tiered Parallel Jobs (Maximized Node Specs)
-- **All Tiers**: 340GB memory, 72 CPUs, 12 hours (Short partition)
-- **Tier 1**: 1 big country per node (USA, CHN, IND, RUS, BRA)
-- **Tier 2**: 2 large countries per node (ARG, KAZ, MEX, IDN)
-- **Tier 3**: 4 medium countries per node (KOR, FRA, DEU, JPN)
-- **Other**: 8 small countries per node (Small islands, etc.)
-
-### Combination Job (1 job)
-- **Partition**: Short
-- **Time**: 4 hours
-- **Memory**: 64GB  
-- **CPUs**: 12
-
-**Maximum Node Utilization:** Every job uses full node capacity with smart country batching!
-
-### **10-Node Cluster Optimization**
-- **Maximum Node Utilization**: Each job requests full node specs (340GB/72 CPUs)
-- **Perfect Resource Match**: 10 parallel scripts = 10 available nodes  
-- **Simplified Scheduling**: Uniform resource requests across all jobs
-- **Smart Country Batching**: More countries per node for smaller datasets
-- **12-Hour Time Limit**: All jobs complete within Short partition limit
-
-### **Cluster Resource Utilization**
-- **Before**: ~6% CPU utilization (1 core out of 16)
-- **After**: 100% CPU utilization (10 nodes × 72 cores each = 720 cores total)
-- **Total Workflow Time**: 2-3 weeks → **1-2 days** (~15x improvement)
-- **Node Efficiency**: Every node operates at maximum capacity (340GB/72 CPUs)
-
-## Overview
-
-The workflow:
-1. Extracts country list from energy demand data (`ISO3_code` column in `p1_b_ember_2024_30_50.xlsx`)
-2. Automatically filters to only countries that exist in GADM administrative boundaries  
-3. Processes each valid country independently to calculate population-weighted demand centroids
-4. Combines all country results into a global dataset
-
-**Key Advantage**: Only processes countries that have both energy demand projections AND administrative boundaries, ensuring efficient resource usage.
-
-## Files
-
-### Essential Scripts (10 files)
-- `get_countries.py` - Extracts valid countries from demand data
-- `process_country_supply.py` - **Enhanced** main script with multi-threading support
-- `combine_global_results.py` - Combines all country results into global dataset
-- `Snakefile` - Snakemake workflow with optimized resource allocation
-- `config.yaml` - Configuration parameters
-- `environment.yml` - Conda environment with all dependencies 
-- `test_workflow.py` - Test with 2 countries (LKA, JAM)
-- `test_workflow_single.py` - **Enhanced** test with threading support
-- `test_parallel_performance.py` - **New** benchmark script for performance testing
-
-### Cluster Files (Enhanced)
-- `cluster_config.yaml` - **Optimized** cluster resource settings with tiered allocation
-- `submit_workflow.sh` - Submit workflow to SLURM cluster
-- `submit_test_single.sh` - **New** single-node test with 8 threads
-- `submit_test_multinode.sh` - **New** multi-node test script
-
-## Setup
-
-1. **Environment Setup (Required)**
-   ```bash
-   # Create new conda environment with all dependencies including Snakemake
-   conda env create -f environment.yml
-   conda activate p1_etl  # Updated environment name
-   
-   # Optional: Set strict channel priority (recommended)
-   conda config --set channel_priority strict
-   ```
-
-2. **Data Requirements**
-   Ensure these data files exist:
-   - `bigdata_gadm/gadm_410-levels.gpkg` - GADM administrative boundaries  
-   - `bigdata_gridfinder/grid.gpkg` - Electrical grid data
-   - `bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif` - Population raster
-   - `outputs_processed_data/p1_b_ember_2024_30_50.xlsx` - Energy demand data
-
-## Usage
-
-### Quick Start (Recommended)
-```bash
-# 1. Setup environment (first time only)
-conda env create -f environment.yml
-conda activate p1_etl
-
-# 2. Test options (choose one):
-python test_workflow_single.py --threads 1   # Single-threaded baseline
-python test_workflow_single.py --threads 8   # Multi-threaded test
-python test_parallel_performance.py          # Performance benchmark
-
-# 3. If test passes, run full Snakemake workflow (local)
-snakemake --cores all --use-conda
-
-# 4. For cluster with SLURM executor (Snakemake 9.9.0)
-sed -i 's/\r$//' submit_workflow.sh  # Fix line endings
-chmod +x submit_workflow.sh          # Make executable  
-sbatch submit_workflow.sh            # Submit to cluster
-```
-
-### Cluster Deployment
-```bash
-# Step 1: Create parallel scripts and submission script
-python get_countries.py --create-parallel
-
-# Step 2: Submit all parallel jobs  
-./submit_all_parallel.sh
-
-# Step 3: Monitor job status
-squeue -u $USER
-
-# Step 4: When jobs complete, combine results
-sbatch submit_workflow.sh
-
-# Check logs (after job starts)
-tail -f outputs_global/logs/parallel_*.out
-tail -f outputs_global/logs/combine_global_*.out
-```
+Combined (in outputs_global/), after running submit_workflow.sh:
+- global_supply_analysis_all_layers.gpkg and per-layer GPKGs as applicable
 
 ### Alternative: Manual Processing
 Process individual countries with threading support:
@@ -334,11 +151,13 @@ squeue -u $USER --format="%.10i %.9P %.20j %.8u %.8T %.10M %.6D %R"
 
 ## Troubleshooting
 
-### Fixed Issues ✅
+## Fixed Issues ✅
 - **Environment conflicts**: Resolved dependency issues in `environment.yml`
 - **Snakemake rule conflicts**: Removed duplicate rules causing AmbiguousRuleException
 - **Missing packages**: All required packages now included
 - **Geographic CRS warnings**: Fixed distance calculations using proper UTM projections
+- **Conda activation**: Fixed conda p1_etl environment activation in all 40 parallel scripts
+- **Unicode encoding**: Fixed script generation encoding errors for Windows/Linux compatibility
 
 ### Common Issues
 1. **Missing countries**: The workflow automatically skips countries without GADM boundaries
@@ -356,7 +175,7 @@ squeue -u $USER --format="%.10i %.9P %.20j %.8u %.8T %.10M %.6D %R"
 1. **Large countries** (USA, CHN, RUS) now utilize 72 cores and complete in 4-8 hours (vs 48+ hours)
 2. **Small islands** may have no grid data - script handles gracefully
 3. **Memory usage** maximized at 340GB per node for optimal performance
-4. **Parallelization** - workflow uses 10 nodes simultaneously at maximum capacity
+4. **Parallelization** - workflow uses 40 nodes simultaneously at maximum capacity
 5. **Thread optimization** - All 72 cores per node utilized automatically
 6. **Performance testing** - Run `python test_parallel_performance.py` to benchmark
 
@@ -399,11 +218,14 @@ cat outputs_global/logs/slurm-JOBID.out
 
 
 
-### to exeucte it on cluster
-(p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ sed -i 's/\r$//' submit_workflow.sh
-(p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ chmod +x submit_workflow.sh
-(p1_etl) lina4376@ouce-hn02:~/dphil_p1/p1_test$ sbatch submit_workflow.sh
+### to execute it on cluster
+```bash
+# Transfer files to Linux cluster, then:
+sed -i 's/\r$//' submit_all_parallel.sh; chmod +x submit_all_parallel.sh; ./submit_all_parallel.sh
 
-sed -i 's/\r$//' submit_workflow.sh; chmod +x submit_workflow.sh; sbatch submit_workflow.sh
-
+# Monitor progress:
 squeue -u lina4376
+
+# When parallel jobs complete, combine results:
+sed -i 's/\r$//' submit_workflow.sh; chmod +x submit_workflow.sh; sbatch submit_workflow.sh
+```

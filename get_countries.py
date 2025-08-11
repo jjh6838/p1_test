@@ -80,11 +80,11 @@ def get_country_list():
         print(f"Error processing country list: {e}")
         return []
 
-def create_parallel_scripts(num_scripts=10, countries=None):
+def create_parallel_scripts(num_scripts=40, countries=None):
     """Create parallel shell scripts for country processing with tiered approach
     
-    Optimized for clusters with 10+ nodes available:
-    - 10 parallel scripts = 10 nodes maximum utilization
+    Optimized for clusters with 40+ nodes available:
+    - 40 parallel scripts = 40 nodes maximum utilization
     - Tiered resource allocation for optimal efficiency
     - Smart batching to minimize queue times
     """
@@ -206,7 +206,7 @@ def create_parallel_scripts(num_scripts=10, countries=None):
         config = batch_info["config"]
         
         script_content = f"""#!/bin/bash --login
-#SBATCH --job-name=supply_p{i:02d}_{tier}
+#SBATCH --job-name=p{i:02d}_{tier}
 #SBATCH --partition=Short
 #SBATCH --time={config["time"]}
 #SBATCH --mem={config["mem"]}
@@ -224,15 +224,20 @@ echo "[INFO] Starting parallel script {i}/{len(all_batches)} ({tier.upper()}) at
 echo "[INFO] Processing {len(batch)} countries in this batch: {', '.join(batch)}"
 echo "[INFO] Tier: {tier.upper()} | Memory: {config['mem']} | CPUs: {config['cpus']} | Time: {config['time']}"
 
-# ─── directories ──────────────────────────────────────────────
+# --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
 
-# ─── Conda bootstrap ─────────────────────────────────────────
+# --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
 source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
 
 conda --version
-conda activate p1_etl
+conda activate p1_etl || true
+
+# Use the env's absolute python path to avoid activation issues in batch shells
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: $PY"
+$PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 """
@@ -241,7 +246,7 @@ conda activate p1_etl
         for country in batch:
             script_content += f"""
 echo "[INFO] Processing {country} ({get_tier(country).upper()})..."
-python process_country_supply.py {country} --output-dir outputs_per_country --threads {config['cpus']}
+$PY process_country_supply.py {country} --output-dir outputs_per_country --threads {config['cpus']}
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] {country} completed"
 else
@@ -255,7 +260,7 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
         
         # Write script file
         script_file = scripts_dir / f"submit_parallel_{i:02d}.sh"
-        script_file.write_text(script_content)
+        script_file.write_text(script_content, encoding='utf-8')
         script_file.chmod(0o755)
         
         print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
@@ -263,7 +268,15 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
     # Create master submission script
     master_script = f"""#!/bin/bash
 # Submit all parallel jobs with tiered resource allocation
-echo "Submitting {len(all_batches)} parallel jobs with tiered approach..."
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+conda activate p1_etl
+
+echo "[INFO] Submitting {len(all_batches)} parallel jobs with tiered approach..."
 echo ""
 
 """
@@ -293,7 +306,7 @@ echo "Monitor with: squeue -u $USER"
 """
     
     master_file = Path("submit_all_parallel.sh")
-    master_file.write_text(master_script)
+    master_file.write_text(master_script, encoding='utf-8')
     master_file.chmod(0o755)
     
     print(f"\nCreated {master_file} to submit all parallel jobs")
