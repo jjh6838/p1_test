@@ -1,7 +1,7 @@
 #!/bin/bash --login
-#SBATCH --job-name=supply_p03_t1
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
+#SBATCH --job-name=p03_t1
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
 #SBATCH --mem=340G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 3/40 (T1) at $(date)"
 echo "[INFO] Processing 1 countries in this batch: CAN"
-echo "[INFO] Tier: T1 | Memory: 340G | CPUs: 72 | Time: 12:00:00"
+echo "[INFO] Tier: T1 | Memory: 340G | CPUs: 72 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

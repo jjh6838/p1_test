@@ -1,5 +1,5 @@
 #!/bin/bash --login
-#SBATCH --job-name=supply_p34_other
+#SBATCH --job-name=p34_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
 #SBATCH --mem=340G

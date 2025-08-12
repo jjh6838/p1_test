@@ -1,5 +1,5 @@
 #!/bin/bash --login
-#SBATCH --job-name=supply_p20_t3
+#SBATCH --job-name=p20_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
 #SBATCH --mem=340G

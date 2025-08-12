@@ -1,7 +1,7 @@
 #!/bin/bash --login
-#SBATCH --job-name=supply_p13_t2
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
+#SBATCH --job-name=p13_t2
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
 #SBATCH --mem=340G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 13/40 (T2) at $(date)"
 echo "[INFO] Processing 1 countries in this batch: SDN"
-echo "[INFO] Tier: T2 | Memory: 340G | CPUs: 72 | Time: 12:00:00"
+echo "[INFO] Tier: T2 | Memory: 340G | CPUs: 72 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

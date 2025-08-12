@@ -1,3 +1,0 @@
-/lustre/soge1/users/lina4376/dphil_p1/p1_test/process_country_supply.py:460: DeprecationWarning: The 'unary_union' attribute is deprecated, use the 'union_all()' method instead.
-  center = facilities_gdf.geometry.unary_union.centroid
-slurmstepd: error: *** JOB 303531 ON ouce-cn31 CANCELLED AT 2025-08-11T07:52:27 DUE TO TIME LIMIT ***
