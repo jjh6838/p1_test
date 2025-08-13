@@ -436,10 +436,19 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, connection_lines):
     # 1. GRID_INFRASTRUCTURE: Original grid lines
     if not grid_lines_gdf.empty:
         for idx, grid_line in grid_lines_gdf.iterrows():
-            all_geometries.append(grid_line.geometry)
+            # Calculate distance in km for the line segment
+            line_geom = grid_line.geometry
+            # Project to UTM for accurate distance calculation
+            center_point = line_geom.centroid
+            utm_crs = get_utm_crs(center_point.x, center_point.y)
+            line_utm = gpd.GeoSeries([line_geom], crs=COMMON_CRS).to_crs(utm_crs)
+            distance_km = line_utm.iloc[0].length / 1000.0
+            
+            all_geometries.append(line_geom)
             all_attributes.append({
                 'line_type': 'grid_infrastructure',
-                'line_id': f"grid_{idx}"
+                'line_id': f"grid_{idx}",
+                'distance_km': distance_km
             })
     
     # 2. CENTROID_TO_GRID and GRID_TO_FACILITY from network graph
@@ -459,10 +468,14 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, connection_lines):
                     line_geom = LineString([(coords_wgs84.iloc[0].x, coords_wgs84.iloc[0].y),
                                           (coords_wgs84.iloc[1].x, coords_wgs84.iloc[1].y)])
                     
+                    # Get distance from edge data (already in meters from UTM calculation)
+                    distance_km = edge_data.get('weight', 0) / 1000.0
+                    
                     all_geometries.append(line_geom)
                     all_attributes.append({
                         'line_type': edge_type,
-                        'line_id': f"{edge_type}_{len(all_attributes)}"
+                        'line_id': f"{edge_type}_{len(all_attributes)}",
+                        'distance_km': distance_km
                     })
                 except Exception as e:
                     print(f"Warning: Failed to create {edge_type} line: {e}")
