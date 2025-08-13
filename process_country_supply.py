@@ -563,16 +563,23 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         
         # Layer 3: Facilities
         if not facilities_gdf.empty:
-            facilities_simplified['GID_0'] = country_iso3
+            # Create facilities layer with proper column selection and ordering
             facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 
                                                   'Latitude', 'Longitude', 'Adjusted_Capacity_MW']].copy()
             
-            # Calculate total_mwh using country-specific capacity factors
+            # Add GID_0 as second column
+            facilities_simplified['GID_0'] = country_iso3
+            
+            # Calculate total_mwh using country-specific capacity factors - default to 0 if not found
             capacity_factors = load_conversion_rates(country_iso3)
             facilities_simplified['total_mwh'] = facilities_simplified.apply(
-                lambda row: row.get('Adjusted_Capacity_MW', 0) * 8760 * capacity_factors.get(row.get('Grouped_Type', ''), 0.30) 
+                lambda row: row.get('Adjusted_Capacity_MW', 0) * 8760 * capacity_factors.get(row.get('Grouped_Type', ''), 0) 
                 if row.get('Adjusted_Capacity_MW', 0) > 0 else 0, axis=1
             )
+            
+            # Reorder columns with geometry and GID_0 first
+            columns = ['geometry', 'GID_0'] + [col for col in facilities_simplified.columns if col not in ['geometry', 'GID_0']]
+            facilities_simplified = facilities_simplified[columns]
             
             facilities_simplified.to_file(output_file, layer="facilities", driver="GPKG")
         
