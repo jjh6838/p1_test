@@ -76,6 +76,132 @@ def load_population_centroids(country_bbox, admin_boundaries):
         
         return centroids_gdf
 
+def load_population_and_demand_projections(centroids_gdf, country_iso3):
+    """Load country-level population projections and calculate demand for multiple years"""
+    print("Loading country-level population projections...")
+    
+    # Calculate baseline 2023 population from spatial data
+    total_country_population_2023 = centroids_gdf["Population_centroid"].sum()
+    print(f"Baseline population from spatial data (2023): {total_country_population_2023:,.0f}")
+    
+    try:
+        pop_projections_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
+        
+        # Filter for this country using ISO3_code column
+        country_pop_data = None
+        if 'ISO3_code' in pop_projections_df.columns:
+            country_pop_match = pop_projections_df[pop_projections_df['ISO3_code'] == country_iso3]
+            if not country_pop_match.empty:
+                country_pop_data = country_pop_match.iloc[0]
+                print(f"Found population projections for {country_iso3}")
+            else:
+                print(f"Warning: No population projections found for {country_iso3}")
+        
+        # Extract country-level population totals for each year
+        if country_pop_data is not None:
+            # Convert from thousands to actual population counts
+            pop_2024 = country_pop_data.get('PopTotal_2024', 0) * 1000
+            pop_2030 = country_pop_data.get('PopTotal_2030', 0) * 1000
+            pop_2050 = country_pop_data.get('PopTotal_2050', 0) * 1000
+            
+            print(f"Country population projections:")
+            print(f"  2024: {pop_2024:,.0f}")
+            print(f"  2030: {pop_2030:,.0f}")
+            print(f"  2050: {pop_2050:,.0f}")
+        else:
+            # Use 2023 baseline for all years if no projections available
+            pop_2024 = total_country_population_2023
+            pop_2030 = total_country_population_2023
+            pop_2050 = total_country_population_2023
+            print(f"Using 2023 baseline population for all years: {total_country_population_2023:,.0f}")
+            
+    except Exception as e:
+        print(f"Warning: Could not load population projections for {country_iso3}: {e}")
+        # Use 2023 baseline for all years
+        pop_2024 = total_country_population_2023
+        pop_2030 = total_country_population_2023
+        pop_2050 = total_country_population_2023
+
+    # Load national supply data for this specific country
+    print("Loading supply projections...")
+    try:
+        supply_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
+
+        # Filter for this country using ISO3_code column
+        if 'ISO3_code' in supply_df.columns:
+            country_supply = supply_df[supply_df['ISO3_code'] == country_iso3]
+            if country_supply.empty:
+                print(f"Warning: No supply data found for {country_iso3} in supply file")
+                supply_df = pd.DataFrame()
+            else:
+                supply_df = country_supply
+                print(f"Loaded supply data for {country_iso3}: {len(supply_df)} records")
+        else:
+            print(f"Warning: ISO3_code column not found in supply data")
+            supply_df = pd.DataFrame()
+            
+    except Exception as e:
+        print(f"Warning: Could not load supply data for {country_iso3}: {e}")
+        supply_df = pd.DataFrame()
+
+    # Define supply types and years
+    supply_types = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
+    years = [2024, 2030, 2050]
+    country_populations = {2024: pop_2024, 2030: pop_2030, 2050: pop_2050}
+
+    # First, calculate population share for each centroid based on 2023 spatial distribution
+    population_share = centroids_gdf["Population_centroid"] / total_country_population_2023
+
+    # Calculate spatially distributed population for each year
+    print("\nAllocating population projections to centroids...")
+    for year in years:
+        total_country_population_year = country_populations[year]
+        
+        # Allocate projected population to each centroid using 2023 spatial pattern
+        pop_col = f"Population_{year}_centroid"
+        centroids_gdf[pop_col] = population_share * total_country_population_year
+        
+        print(f"  {year} population allocated: {centroids_gdf[pop_col].sum():,.0f} total")
+
+    # Calculate total demand for each centroid for each year
+    for year in years:
+        print(f"\nProcessing energy demand for year {year}...")
+        
+        # Get country-level population for this year
+        total_country_population_year = country_populations[year]
+        
+        # Calculate total national supply for this year (projected generation)
+        total_national_supply = 0
+        if not supply_df.empty:
+            for supply_type in supply_types:
+                col = f"{supply_type}_{year}_MWh"
+                if col in supply_df.columns:
+                    supply_value = supply_df[col].iloc[0] if not pd.isna(supply_df[col].iloc[0]) else 0
+                    total_national_supply += supply_value
+        
+        # If no supply data, use a default per capita value
+        if total_national_supply == 0:
+            # Default: 0 MWh per person per year (Can put global average 3.2 MWh per person per year if needed but all data have been calculated)
+            total_national_supply = total_country_population_year * 0
+            print(f"Using default supply for {country_iso3} in {year}: {total_national_supply:,.0f} MWh")
+        else:
+            print(f"Total national supply for {year}: {total_national_supply:,.0f} MWh")
+        
+        # Calculate demand using supply-demand equivalence assumption
+        # Demand_centroid = Population_Share_centroid × National_Supply_year
+        demand_col = f"Total_Demand_{year}_centroid"
+        centroids_gdf[demand_col] = population_share * total_national_supply
+        
+        print(f"  Allocated {total_national_supply:,.0f} MWh across {len(centroids_gdf)} centroids")
+        print(f"  Per capita demand: {total_national_supply/total_country_population_year:.2f} MWh/person/year")
+
+    # Filter out centroids with zero population
+    centroids_filtered = centroids_gdf[centroids_gdf["Population_centroid"] > 0].copy()
+    
+    print(f"\nFiltered centroids: {len(centroids_filtered)} with population > 0")
+    
+    return centroids_filtered
+
 def load_conversion_rates(country_iso3):
     """Load country-specific capacity factors for each energy type.
     Excel columns contain annual generation hours (CF * 8760). We divide by 8760 to get capacity factors.
@@ -516,11 +642,8 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         # Add country identifiers
         centroids_gdf['GID_0'] = country_iso3
          
-        # Calculate demand (placeholder - using population as proxy)
-        total_pop = centroids_gdf['Population_centroid'].sum()
-        per_capita_demand = 3.2  # MWh per person per year
-        total_demand = total_pop * per_capita_demand
-        centroids_gdf['Total_Demand_2024_centroid'] = (centroids_gdf['Population_centroid'] / total_pop) * total_demand
+        # Load population and demand projections for multiple years
+        centroids_gdf = load_population_and_demand_projections(centroids_gdf, country_iso3)
         
         connection_lines = []
         
@@ -546,10 +669,15 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         # Create output layers
         output_file = output_path / f"supply_analysis_{country_iso3}.gpkg"
         
-        # Layer 1: Centroids
-        centroids_simplified = centroids_gdf[['geometry', 'GID_0', 'Population_centroid', 
-                                            'Total_Demand_2024_centroid', 'nearest_facility_distance',
-                                            'nearest_facility_type', 'supply_received_mwh', 'supply_status']].copy()
+        # Layer 1: Centroids (include all years data)
+        centroid_columns = ['geometry', 'GID_0', 'Population_centroid', 
+                           'Population_2024_centroid', 'Population_2030_centroid', 'Population_2050_centroid',
+                           'Total_Demand_2024_centroid', 'Total_Demand_2030_centroid', 'Total_Demand_2050_centroid',
+                           'nearest_facility_distance', 'nearest_facility_type', 'supply_received_mwh', 'supply_status']
+        
+        # Only include columns that exist in the dataframe
+        available_columns = [col for col in centroid_columns if col in centroids_gdf.columns]
+        centroids_simplified = centroids_gdf[available_columns].copy()
         centroids_simplified.to_file(output_file, layer="centroids", driver="GPKG")
         
         # Layer 2: Grid Lines (three types)
