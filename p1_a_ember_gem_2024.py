@@ -193,6 +193,20 @@ for category in granular_categories:
     # Calculate the global mean conversion rate as the average of local rates
     global_conversion_rates[category] = sum(local_rates) / len(local_rates) if local_rates else 0
 
+# Calculate global grouped conversion rates
+global_grouped_conversion_rates = {}
+for group, subcategories in grouped_categories.items():
+    # Calculate global capacity for this group across all countries
+    total_global_capacity = 0
+    weighted_sum = 0
+    
+    for category in subcategories:
+        category_capacity = capacity_data[capacity_data['Variable'] == category]['Value'].sum() * 1000  # Convert GW to MW
+        total_global_capacity += category_capacity
+        weighted_sum += global_conversion_rates.get(category, 0) * category_capacity
+    
+    global_grouped_conversion_rates[group] = weighted_sum / total_global_capacity if total_global_capacity > 0 else 0
+
 # Process data for each matching country
 for country_code in matching_country_codes:
     gem_data = gem_data[gem_data['Status'] == 'operating']  # for the current year (i.e., 2024)
@@ -228,9 +242,11 @@ for country_code in matching_country_codes:
         # Use global rate if local rate is zero or missing
         if capacity > 0:
             rate = generation / capacity
+            # If calculated rate is still 0, use global rate as fallback
+            if rate == 0:
+                rate = global_conversion_rates.get(category, 0)
         else:
-            rate = 0
-        if not rate:
+            # No capacity available, use global rate
             rate = global_conversion_rates.get(category, 0)
         granular_conversion_rates[category] = rate
 
@@ -310,6 +326,11 @@ for country_code in matching_country_codes:
             granular_data.get(f'{sub}_Larger_MW', 0) * granular_conversion_rates.get(sub, 0) for sub in subcategories
         )
         grouped_conversion_rate = weighted_sum / total_capacity if total_capacity > 0 else 0
+        
+        # If grouped conversion rate is 0, use global grouped rate as fallback
+        if grouped_conversion_rate == 0:
+            grouped_conversion_rate = global_grouped_conversion_rates.get(group, 0)
+            
         grouped_data[f'{group}_Larger_MW'] = total_capacity
         grouped_data[f'{group}_ConvRate'] = grouped_conversion_rate
         grouped_data[f'{group}_Potential_MWh'] = total_capacity * grouped_conversion_rate

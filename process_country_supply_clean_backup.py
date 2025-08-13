@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 # Suppress warnings
-# warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")
 
 # Constants
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
@@ -44,7 +44,8 @@ def load_admin_boundaries(country_iso3):
     if country_data.empty:
         raise ValueError(f"No boundaries found for country {country_iso3}")
     
-    return country_data
+    country_name = country_data['NAME_0'].iloc[0] if 'NAME_0' in country_data.columns else country_iso3
+    return country_data, country_name
 
 def load_population_centroids(country_bbox, admin_boundaries):
     """Load and process population centroids from raster"""
@@ -105,9 +106,10 @@ def load_grid_lines(country_bbox, admin_boundaries):
         minx, miny, maxx, maxy = country_bbox
         
         # Clip to bounding box then country boundaries
-        from shapely.geometry import Polygon
-        bbox_geom = Polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)])
-        bbox_poly = gpd.GeoDataFrame([1], geometry=[bbox_geom], crs=COMMON_CRS)
+        bbox_poly = gpd.GeoDataFrame([1], geometry=[
+            gpd.GeoSeries([gpd.points_from_xy([minx, maxx, maxx, minx, minx], 
+                                             [miny, miny, maxy, maxy, miny])]).apply(lambda x: x.convex_hull)[0]
+        ], crs=COMMON_CRS)
         
         grid_clipped = gpd.clip(grid_lines, bbox_poly)
         if not grid_clipped.empty:
@@ -358,7 +360,10 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, connection_lines):
             all_geometries.append(grid_line.geometry)
             all_attributes.append({
                 'line_type': 'grid_infrastructure',
-                'line_id': f"grid_{idx}"
+                'line_id': f"grid_{idx}",
+                'from_type': 'grid',
+                'to_type': 'grid',
+                'description': 'Original grid infrastructure'
             })
     
     # 2. CENTROID_TO_GRID and GRID_TO_FACILITY from network graph
@@ -381,7 +386,10 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, connection_lines):
                     all_geometries.append(line_geom)
                     all_attributes.append({
                         'line_type': edge_type,
-                        'line_id': f"{edge_type}_{len(all_attributes)}"
+                        'line_id': f"{edge_type}_{len(all_attributes)}",
+                        'from_type': 'centroid' if edge_type == 'centroid_to_grid' else 'grid',
+                        'to_type': 'grid' if edge_type == 'centroid_to_grid' else 'facility',
+                        'description': f"Network connection: {edge_type.replace('_', ' to ')}"
                     })
                 except Exception as e:
                     print(f"Warning: Failed to create {edge_type} line: {e}")
@@ -410,7 +418,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
     
     try:
         # Load data
-        admin_boundaries = load_admin_boundaries(country_iso3)
+        admin_boundaries, country_name = load_admin_boundaries(country_iso3)
         country_bbox = get_country_bbox(admin_boundaries)
         
         centroids_gdf = load_population_centroids(country_bbox, admin_boundaries)
@@ -421,7 +429,8 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         
         # Add country identifiers
         centroids_gdf['GID_0'] = country_iso3
-         
+        centroids_gdf['NAME_0'] = country_name
+        
         # Calculate demand (placeholder - using population as proxy)
         total_pop = centroids_gdf['Population_centroid'].sum()
         per_capita_demand = 3.2  # MWh per person per year
@@ -443,17 +452,12 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         else:
             print("Skipping network analysis - missing facilities or grid data")
             network_graph = None
-            # Initialize supply columns for skipped analysis
-            centroids_gdf['nearest_facility_distance'] = np.nan
-            centroids_gdf['nearest_facility_type'] = ''
-            centroids_gdf['supply_received_mwh'] = 0.0
-            centroids_gdf['supply_status'] = 'Not Filled'
         
         # Create output layers
         output_file = output_path / f"supply_analysis_{country_iso3}.gpkg"
         
         # Layer 1: Centroids
-        centroids_simplified = centroids_gdf[['geometry', 'GID_0', 'Population_centroid', 
+        centroids_simplified = centroids_gdf[['geometry', 'GID_0', 'NAME_0', 'Population_centroid', 
                                             'Total_Demand_2024_centroid', 'nearest_facility_distance',
                                             'nearest_facility_type', 'supply_received_mwh', 'supply_status']].copy()
         centroids_simplified.to_file(output_file, layer="centroids", driver="GPKG")
@@ -461,10 +465,6 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         # Layer 2: Grid Lines (three types)
         grid_lines_layer = create_grid_lines_layer(grid_lines_gdf, network_graph, connection_lines)
         if not grid_lines_layer.empty:
-            grid_lines_layer['GID_0'] = country_iso3
-            # Reorder columns with GID_0 first
-            columns = ['geometry', 'GID_0'] + [col for col in grid_lines_layer.columns if col not in ['geometry', 'GID_0']]
-            grid_lines_layer = grid_lines_layer[columns]
             grid_lines_layer.to_file(output_file, layer="grid_lines", driver="GPKG")
         
         # Layer 3: Facilities
@@ -472,6 +472,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
             facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 
                                                   'Latitude', 'Longitude', 'Adjusted_Capacity_MW']].copy()
             facilities_simplified['GID_0'] = country_iso3
+            facilities_simplified['NAME_0'] = country_name
             facilities_simplified.to_file(output_file, layer="facilities", driver="GPKG")
         
         print(f"Results saved to {output_file}")
