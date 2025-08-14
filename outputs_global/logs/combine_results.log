@@ -1,0 +1,293 @@
+2025-08-14 17:12:07,866 - INFO - ============================================================
+2025-08-14 17:12:07,867 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-14 17:12:07,867 - INFO - ============================================================
+2025-08-14 17:12:07,868 - INFO - Starting global results combination at 2025-08-14 17:12:07.868796
+2025-08-14 17:12:07,869 - ERROR - No Parquet files found in country subdirectories
+2025-08-14 17:12:07,869 - ERROR - Global results combination failed!
+2025-08-14 17:37:03,120 - INFO - ============================================================
+2025-08-14 17:37:03,122 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-14 17:37:03,122 - INFO - ============================================================
+2025-08-14 17:37:03,123 - INFO - Starting global results combination at 2025-08-14 17:37:03.123526
+2025-08-14 17:37:03,125 - ERROR - No Parquet files found in country subdirectories
+2025-08-14 17:37:03,125 - ERROR - Global results combination failed!
+2025-08-14 17:40:24,034 - INFO - ============================================================
+2025-08-14 17:40:24,035 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-14 17:40:24,036 - INFO - ============================================================
+2025-08-14 17:40:24,037 - INFO - Starting global results combination at 2025-08-14 17:40:24.037521
+2025-08-14 17:40:24,039 - INFO - Processing Parquet files, Output format: gpkg
+2025-08-14 17:40:24,039 - INFO - 
+--- Processing centroids layer ---
+2025-08-14 17:40:24,040 - INFO - Combining centroids layer from 1 Parquet files
+2025-08-14 17:40:25,144 - ERROR - Failed to load centroids from SGP: Assigning CRS to a GeoDataFrame without a geometry column is not supported. Supply geometry using the 'geometry=' keyword argument, or by providing a DataFrame with column name 'geometry'
+2025-08-14 17:40:25,146 - ERROR - No valid centroids data found
+2025-08-14 17:40:25,146 - WARNING - No data available for centroids layer
+2025-08-14 17:40:25,147 - INFO - 
+--- Processing facilities layer ---
+2025-08-14 17:40:25,148 - INFO - Combining facilities layer from 1 Parquet files
+2025-08-14 17:40:25,171 - ERROR - Failed to load facilities from SGP: Assigning CRS to a GeoDataFrame without a geometry column is not supported. Supply geometry using the 'geometry=' keyword argument, or by providing a DataFrame with column name 'geometry'
+2025-08-14 17:40:25,173 - ERROR - No valid facilities data found
+2025-08-14 17:40:25,173 - WARNING - No data available for facilities layer
+2025-08-14 17:40:25,174 - INFO - 
+--- Processing grid_lines layer ---
+2025-08-14 17:40:25,174 - INFO - Combining grid_lines layer from 1 Parquet files
+2025-08-14 17:40:25,200 - ERROR - Failed to load grid_lines from SGP: Assigning CRS to a GeoDataFrame without a geometry column is not supported. Supply geometry using the 'geometry=' keyword argument, or by providing a DataFrame with column name 'geometry'
+2025-08-14 17:40:25,201 - ERROR - No valid grid_lines data found
+2025-08-14 17:40:25,202 - WARNING - No data available for grid_lines layer
+2025-08-14 17:40:25,202 - INFO - 
+--- Processing polylines layer ---
+2025-08-14 17:40:25,203 - INFO - Combining polylines layer from 1 Parquet files
+2025-08-14 17:40:25,228 - ERROR - Failed to load polylines from SGP: Assigning CRS to a GeoDataFrame without a geometry column is not supported. Supply geometry using the 'geometry=' keyword argument, or by providing a DataFrame with column name 'geometry'
+2025-08-14 17:40:25,229 - ERROR - No valid polylines data found
+2025-08-14 17:40:25,230 - WARNING - No data available for polylines layer
+2025-08-14 17:40:25,230 - ERROR - No layers were successfully combined
+2025-08-14 17:40:25,230 - ERROR - Global results combination failed!
+2025-08-14 17:44:26,938 - INFO - ============================================================
+2025-08-14 17:44:26,939 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-14 17:44:26,939 - INFO - ============================================================
+2025-08-14 17:44:26,941 - INFO - Starting global results combination at 2025-08-14 17:44:26.941100
+2025-08-14 17:44:26,944 - INFO - Processing Parquet files, Output format: gpkg
+2025-08-14 17:44:26,944 - INFO - 
+--- Processing centroids layer ---
+2025-08-14 17:44:26,946 - INFO - Combining centroids layer from 1 Parquet files
+2025-08-14 17:44:27,125 - INFO - centroids from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:44:27,126 - INFO - Loaded centroids from SGP: 512 records
+2025-08-14 17:44:27,127 - INFO - Combining centroids data from 1 countries...
+2025-08-14 17:44:27,132 - INFO - Combined centroids: 512 total records (with geometry)
+2025-08-14 17:44:27,132 - INFO - Successfully combined centroids: 512 records
+2025-08-14 17:44:27,133 - INFO - 
+--- Processing facilities layer ---
+2025-08-14 17:44:27,133 - INFO - Combining facilities layer from 1 Parquet files
+2025-08-14 17:44:27,153 - INFO - facilities from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:44:27,154 - INFO - Loaded facilities from SGP: 37 records
+2025-08-14 17:44:27,154 - INFO - Combining facilities data from 1 countries...
+2025-08-14 17:44:27,158 - INFO - Combined facilities: 37 total records (with geometry)
+2025-08-14 17:44:27,159 - INFO - Successfully combined facilities: 37 records
+2025-08-14 17:44:27,159 - INFO - 
+--- Processing grid_lines layer ---
+2025-08-14 17:44:27,161 - INFO - Combining grid_lines layer from 1 Parquet files
+2025-08-14 17:44:27,178 - INFO - grid_lines from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:44:27,179 - INFO - Loaded grid_lines from SGP: 758 records
+2025-08-14 17:44:27,180 - INFO - Combining grid_lines data from 1 countries...
+2025-08-14 17:44:27,184 - INFO - Combined grid_lines: 758 total records (with geometry)
+2025-08-14 17:44:27,184 - INFO - Successfully combined grid_lines: 758 records
+2025-08-14 17:44:27,185 - INFO - 
+--- Processing polylines layer ---
+2025-08-14 17:44:27,187 - INFO - Combining polylines layer from 1 Parquet files
+2025-08-14 17:44:27,208 - INFO - polylines from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:44:27,208 - INFO - Loaded polylines from SGP: 471 records
+2025-08-14 17:44:27,209 - INFO - Combining polylines data from 1 countries...
+2025-08-14 17:44:27,213 - INFO - Combined polylines: 471 total records (with geometry)
+2025-08-14 17:44:27,214 - INFO - Successfully combined polylines: 471 records
+2025-08-14 17:44:27,214 - INFO - Saving global analysis as GPKG: global_supply_analysis.gpkg
+2025-08-14 17:44:27,214 - INFO - Processing centroids: 512 records
+2025-08-14 17:44:29,936 - INFO - Processing facilities: 37 records
+2025-08-14 17:44:30,058 - INFO - Processing grid_lines: 758 records
+2025-08-14 17:44:30,228 - INFO - Processing polylines: 471 records
+2025-08-14 17:44:30,369 - INFO - Global GPKG saved with 4 geometry layers
+2025-08-14 17:44:30,370 - INFO - 
+================================================================================
+2025-08-14 17:44:30,371 - INFO - GLOBAL SUPPLY ANALYSIS SUMMARY
+2025-08-14 17:44:30,371 - INFO - ================================================================================
+2025-08-14 17:44:30,372 - INFO - Countries processed: 1
+2025-08-14 17:44:30,374 - INFO - 
+Global centroid supply status:
+2025-08-14 17:44:30,375 - INFO -   Total centroids: 512
+2025-08-14 17:44:30,376 - INFO -   Filled: 434 centroids (84.8%)
+2025-08-14 17:44:30,377 - INFO -   Partially Filled: 5 centroids (1.0%)
+2025-08-14 17:44:30,378 - INFO -   Not Filled: 73 centroids (14.3%)
+2025-08-14 17:44:30,378 - INFO -   No Demand: 0 centroids (0.0%)
+2025-08-14 17:44:30,380 - INFO - 
+Supplying facility types:
+2025-08-14 17:44:30,381 - INFO -   Fossil: 428 connections
+2025-08-14 17:44:30,381 - INFO -   Solar: 36 connections
+2025-08-14 17:44:30,382 - INFO -   Other Renewables: 7 connections
+2025-08-14 17:44:30,383 - INFO - 
+Global facilities:
+2025-08-14 17:44:30,384 - INFO -   Countries with facilities: 1
+2025-08-14 17:44:30,385 - INFO -   Total facilities: 37
+2025-08-14 17:44:30,387 - INFO -   Facility types:
+2025-08-14 17:44:30,388 - INFO -     Solar: 25 facilities
+2025-08-14 17:44:30,389 - INFO -     Fossil: 10 facilities
+2025-08-14 17:44:30,390 - INFO -     Other Renewables: 2 facilities
+2025-08-14 17:44:30,391 - INFO -   Total global capacity: 70,692,280 MWh/year
+2025-08-14 17:44:30,392 - INFO - 
+Layers successfully combined:
+2025-08-14 17:44:30,392 - INFO -   centroids: 512 records
+2025-08-14 17:44:30,393 - INFO -   facilities: 37 records
+2025-08-14 17:44:30,393 - INFO -   grid_lines: 758 records
+2025-08-14 17:44:30,394 - INFO -   polylines: 471 records
+2025-08-14 17:44:30,394 - INFO - ================================================================================
+2025-08-14 17:44:30,395 - INFO - Global combination completed successfully at 2025-08-14 17:44:30.395845
+2025-08-14 17:44:30,396 - INFO - Global results combination completed successfully!
+2025-08-14 17:46:02,796 - INFO - ============================================================
+2025-08-14 17:46:02,797 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-14 17:46:02,797 - INFO - ============================================================
+2025-08-14 17:46:02,798 - INFO - Starting global results combination at 2025-08-14 17:46:02.798481
+2025-08-14 17:46:02,800 - INFO - Processing Parquet files, Output format: gpkg
+2025-08-14 17:46:02,800 - INFO - 
+--- Processing centroids layer ---
+2025-08-14 17:46:02,801 - INFO - Combining centroids layer from 1 Parquet files
+2025-08-14 17:46:03,498 - INFO - centroids from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:46:03,499 - INFO - Loaded centroids from SGP: 512 records
+2025-08-14 17:46:03,500 - INFO - Combining centroids data from 1 countries...
+2025-08-14 17:46:03,505 - INFO - Combined centroids: 512 total records (with geometry)
+2025-08-14 17:46:03,506 - INFO - Successfully combined centroids: 512 records
+2025-08-14 17:46:03,507 - INFO - 
+--- Processing facilities layer ---
+2025-08-14 17:46:03,509 - INFO - Combining facilities layer from 1 Parquet files
+2025-08-14 17:46:03,557 - INFO - facilities from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:46:03,557 - INFO - Loaded facilities from SGP: 37 records
+2025-08-14 17:46:03,558 - INFO - Combining facilities data from 1 countries...
+2025-08-14 17:46:03,562 - INFO - Combined facilities: 37 total records (with geometry)
+2025-08-14 17:46:03,562 - INFO - Successfully combined facilities: 37 records
+2025-08-14 17:46:03,563 - INFO - 
+--- Processing grid_lines layer ---
+2025-08-14 17:46:03,564 - INFO - Combining grid_lines layer from 1 Parquet files
+2025-08-14 17:46:03,614 - INFO - grid_lines from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:46:03,615 - INFO - Loaded grid_lines from SGP: 758 records
+2025-08-14 17:46:03,617 - INFO - Combining grid_lines data from 1 countries...
+2025-08-14 17:46:03,625 - INFO - Combined grid_lines: 758 total records (with geometry)
+2025-08-14 17:46:03,626 - INFO - Successfully combined grid_lines: 758 records
+2025-08-14 17:46:03,626 - INFO - 
+--- Processing polylines layer ---
+2025-08-14 17:46:03,627 - INFO - Combining polylines layer from 1 Parquet files
+2025-08-14 17:46:03,701 - INFO - polylines from SGP loaded as GeoDataFrame with geometry
+2025-08-14 17:46:03,702 - INFO - Loaded polylines from SGP: 471 records
+2025-08-14 17:46:03,704 - INFO - Combining polylines data from 1 countries...
+2025-08-14 17:46:03,709 - INFO - Combined polylines: 471 total records (with geometry)
+2025-08-14 17:46:03,709 - INFO - Successfully combined polylines: 471 records
+2025-08-14 17:46:03,709 - INFO - Saving global analysis as GPKG: global_supply_analysis.gpkg
+2025-08-14 17:46:03,710 - INFO - Processing centroids: 512 records
+2025-08-14 17:46:06,437 - INFO - Saved centroids to GPKG (with geometry)
+2025-08-14 17:46:06,437 - INFO - Processing facilities: 37 records
+2025-08-14 17:46:06,548 - INFO - Saved facilities to GPKG (with geometry)
+2025-08-14 17:46:06,548 - INFO - Processing grid_lines: 758 records
+2025-08-14 17:46:06,705 - INFO - Saved grid_lines to GPKG (with geometry)
+2025-08-14 17:46:06,706 - INFO - Processing polylines: 471 records
+2025-08-14 17:46:06,841 - INFO - Saved polylines to GPKG (with geometry)
+2025-08-14 17:46:06,841 - INFO - Global GPKG saved with 4 geometry layers
+2025-08-14 17:46:06,842 - INFO - 
+================================================================================
+2025-08-14 17:46:06,842 - INFO - GLOBAL SUPPLY ANALYSIS SUMMARY
+2025-08-14 17:46:06,843 - INFO - ================================================================================
+2025-08-14 17:46:06,843 - INFO - Countries processed: 1
+2025-08-14 17:46:06,844 - INFO - 
+Global centroid supply status:
+2025-08-14 17:46:06,845 - INFO -   Total centroids: 512
+2025-08-14 17:46:06,845 - INFO -   Filled: 434 centroids (84.8%)
+2025-08-14 17:46:06,845 - INFO -   Partially Filled: 5 centroids (1.0%)
+2025-08-14 17:46:06,846 - INFO -   Not Filled: 73 centroids (14.3%)
+2025-08-14 17:46:06,846 - INFO -   No Demand: 0 centroids (0.0%)
+2025-08-14 17:46:06,850 - INFO - 
+Supplying facility types:
+2025-08-14 17:46:06,851 - INFO -   Fossil: 428 connections
+2025-08-14 17:46:06,851 - INFO -   Solar: 36 connections
+2025-08-14 17:46:06,852 - INFO -   Other Renewables: 7 connections
+2025-08-14 17:46:06,853 - INFO - 
+Global facilities:
+2025-08-14 17:46:06,853 - INFO -   Countries with facilities: 1
+2025-08-14 17:46:06,854 - INFO -   Total facilities: 37
+2025-08-14 17:46:06,856 - INFO -   Facility types:
+2025-08-14 17:46:06,857 - INFO -     Solar: 25 facilities
+2025-08-14 17:46:06,857 - INFO -     Fossil: 10 facilities
+2025-08-14 17:46:06,858 - INFO -     Other Renewables: 2 facilities
+2025-08-14 17:46:06,859 - INFO -   Total global capacity: 70,692,280 MWh/year
+2025-08-14 17:46:06,859 - INFO - 
+Layers successfully combined:
+2025-08-14 17:46:06,859 - INFO -   centroids: 512 records
+2025-08-14 17:46:06,860 - INFO -   facilities: 37 records
+2025-08-14 17:46:06,860 - INFO -   grid_lines: 758 records
+2025-08-14 17:46:06,861 - INFO -   polylines: 471 records
+2025-08-14 17:46:06,861 - INFO - ================================================================================
+2025-08-14 17:46:06,862 - INFO - Global combination completed successfully at 2025-08-14 17:46:06.862124
+2025-08-14 17:46:06,864 - INFO - Global results combination completed successfully!
+2025-08-14 18:00:50,043 - INFO - ============================================================
+2025-08-14 18:00:50,044 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-14 18:00:50,045 - INFO - ============================================================
+2025-08-14 18:00:50,047 - INFO - Starting global results combination at 2025-08-14 18:00:50.047510
+2025-08-14 18:00:50,050 - INFO - Processing Parquet files, Output format: gpkg
+2025-08-14 18:00:50,051 - INFO - 
+--- Processing centroids layer ---
+2025-08-14 18:00:50,053 - INFO - Combining centroids layer from 2 Parquet files
+2025-08-14 18:00:50,610 - INFO - centroids from BRN loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,610 - INFO - Loaded centroids from BRN: 1576 records
+2025-08-14 18:00:50,653 - INFO - centroids from SGP loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,654 - INFO - Loaded centroids from SGP: 512 records
+2025-08-14 18:00:50,655 - INFO - Combining centroids data from 2 countries...
+2025-08-14 18:00:50,663 - INFO - Combined centroids: 2088 total records (with geometry)
+2025-08-14 18:00:50,664 - INFO - Successfully combined centroids: 2088 records
+2025-08-14 18:00:50,665 - INFO - 
+--- Processing facilities layer ---
+2025-08-14 18:00:50,666 - INFO - Combining facilities layer from 2 Parquet files
+2025-08-14 18:00:50,707 - INFO - facilities from BRN loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,708 - INFO - Loaded facilities from BRN: 5 records
+2025-08-14 18:00:50,744 - INFO - facilities from SGP loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,745 - INFO - Loaded facilities from SGP: 37 records
+2025-08-14 18:00:50,746 - INFO - Combining facilities data from 2 countries...
+2025-08-14 18:00:50,751 - INFO - Combined facilities: 42 total records (with geometry)
+2025-08-14 18:00:50,752 - INFO - Successfully combined facilities: 42 records
+2025-08-14 18:00:50,753 - INFO - 
+--- Processing grid_lines layer ---
+2025-08-14 18:00:50,755 - INFO - Combining grid_lines layer from 2 Parquet files
+2025-08-14 18:00:50,792 - INFO - grid_lines from BRN loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,792 - INFO - Loaded grid_lines from BRN: 1941 records
+2025-08-14 18:00:50,826 - INFO - grid_lines from SGP loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,827 - INFO - Loaded grid_lines from SGP: 758 records
+2025-08-14 18:00:50,828 - INFO - Combining grid_lines data from 2 countries...
+2025-08-14 18:00:50,834 - INFO - Combined grid_lines: 2699 total records (with geometry)
+2025-08-14 18:00:50,835 - INFO - Successfully combined grid_lines: 2699 records
+2025-08-14 18:00:50,835 - INFO - 
+--- Processing polylines layer ---
+2025-08-14 18:00:50,837 - INFO - Combining polylines layer from 2 Parquet files
+2025-08-14 18:00:50,892 - INFO - polylines from BRN loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,892 - INFO - Loaded polylines from BRN: 1580 records
+2025-08-14 18:00:50,934 - INFO - polylines from SGP loaded as GeoDataFrame with geometry
+2025-08-14 18:00:50,934 - INFO - Loaded polylines from SGP: 471 records
+2025-08-14 18:00:50,936 - INFO - Combining polylines data from 2 countries...
+2025-08-14 18:00:50,943 - INFO - Combined polylines: 2051 total records (with geometry)
+2025-08-14 18:00:50,944 - INFO - Successfully combined polylines: 2051 records
+2025-08-14 18:00:50,945 - INFO - Saving global analysis as GPKG: global_supply_analysis.gpkg
+2025-08-14 18:00:50,945 - INFO - Processing centroids: 2088 records
+2025-08-14 18:00:53,842 - INFO - Saved centroids to GPKG (with geometry)
+2025-08-14 18:00:53,843 - INFO - Processing facilities: 42 records
+2025-08-14 18:00:53,972 - INFO - Saved facilities to GPKG (with geometry)
+2025-08-14 18:00:53,973 - INFO - Processing grid_lines: 2699 records
+2025-08-14 18:00:54,299 - INFO - Saved grid_lines to GPKG (with geometry)
+2025-08-14 18:00:54,300 - INFO - Processing polylines: 2051 records
+2025-08-14 18:00:54,684 - INFO - Saved polylines to GPKG (with geometry)
+2025-08-14 18:00:54,685 - INFO - Global GPKG saved with 4 geometry layers
+2025-08-14 18:00:54,687 - INFO - 
+================================================================================
+2025-08-14 18:00:54,688 - INFO - GLOBAL SUPPLY ANALYSIS SUMMARY
+2025-08-14 18:00:54,690 - INFO - ================================================================================
+2025-08-14 18:00:54,692 - INFO - Countries processed: 2
+2025-08-14 18:00:54,698 - INFO - 
+Global centroid supply status:
+2025-08-14 18:00:54,700 - INFO -   Total centroids: 2,088
+2025-08-14 18:00:54,703 - INFO -   Filled: 2,010 centroids (96.3%)
+2025-08-14 18:00:54,704 - INFO -   Partially Filled: 5 centroids (0.2%)
+2025-08-14 18:00:54,707 - INFO -   Not Filled: 73 centroids (3.5%)
+2025-08-14 18:00:54,709 - INFO -   No Demand: 0 centroids (0.0%)
+2025-08-14 18:00:54,716 - INFO - 
+Supplying facility types:
+2025-08-14 18:00:54,717 - INFO -   Fossil: 1,981 connections
+2025-08-14 18:00:54,717 - INFO -   Solar: 63 connections
+2025-08-14 18:00:54,719 - INFO -   Other Renewables: 7 connections
+2025-08-14 18:00:54,720 - INFO - 
+Global facilities:
+2025-08-14 18:00:54,721 - INFO -   Countries with facilities: 2
+2025-08-14 18:00:54,722 - INFO -   Total facilities: 42
+2025-08-14 18:00:54,723 - INFO -   Facility types:
+2025-08-14 18:00:54,724 - INFO -     Solar: 27 facilities
+2025-08-14 18:00:54,727 - INFO -     Fossil: 13 facilities
+2025-08-14 18:00:54,728 - INFO -     Other Renewables: 2 facilities
+2025-08-14 18:00:54,731 - INFO -   Total global capacity: 76,301,155 MWh/year
+2025-08-14 18:00:54,733 - INFO - 
+Layers successfully combined:
+2025-08-14 18:00:54,733 - INFO -   centroids: 2,088 records
+2025-08-14 18:00:54,734 - INFO -   facilities: 42 records
+2025-08-14 18:00:54,735 - INFO -   grid_lines: 2,699 records
+2025-08-14 18:00:54,737 - INFO -   polylines: 2,051 records
+2025-08-14 18:00:54,737 - INFO - ================================================================================
+2025-08-14 18:00:54,738 - INFO - Global combination completed successfully at 2025-08-14 18:00:54.738149
+2025-08-14 18:00:54,743 - INFO - Global results combination completed successfully!

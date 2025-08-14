@@ -954,17 +954,24 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     
     return layers
 
-def process_country_supply(country_iso3, output_dir="outputs_per_country"):
+def process_country_supply(country_iso3, output_dir="outputs_per_country", test_mode=False):
     """
     Main function to process supply analysis for a country
     
-    Creates 4 output layers:
-    - centroids: Population centers with demand and supply allocation
-    - facilities: Energy generation facilities with capacity, supply, and allocation data
-    - grid_lines: Electrical grid infrastructure and connections
-    - polylines: Active supply connections between centroids and facilities
+    Args:
+        country_iso3: ISO3 country code
+        output_dir: Output directory for results
+        test_mode: If True, generates full GPKG with all layers for testing.
+                  If False, generates lightweight Parquet files for global analysis.
+    
+    Test mode creates 4 layers: centroids, facilities, grid_lines, polylines (full data)
+    Production mode creates 4 parquet files with essential columns for global analysis:
+    - centroids: geometry, GID_0, supplying_facility_type, supply_status
+    - facilities: geometry, GID_0, Grouped_Type, total_mwh
+    - grid_lines: geometry, GID_0, line_type
+    - polylines: geometry, GID_0, facility_type
     """
-    print(f"Processing {country_iso3}...")
+    print(f"Processing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
     
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
@@ -1048,27 +1055,6 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
             # Sort facilities by total capacity (largest first)
             facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
             print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
-            
-            # Check if demand exceeds total facility capacity and scale proportionally if needed
-            total_demand_mwh = centroids_gdf[demand_col].sum()
-            total_facility_capacity_mwh = sum(facility_remaining.values())
-            
-            if total_demand_mwh > total_facility_capacity_mwh and total_facility_capacity_mwh > 0:
-                scaling_factor = total_demand_mwh / total_facility_capacity_mwh
-                print(f"\nDemand ({total_demand_mwh:,.0f} MWh) exceeds facility capacity ({total_facility_capacity_mwh:,.0f} MWh)")
-                print(f"Scaling all facility capacities by factor {scaling_factor:.3f} to meet demand")
-                
-                # Scale up all facility capacities proportionally
-                for idx in facility_remaining.keys():
-                    facility_remaining[idx] *= scaling_factor
-                
-                # Update facility_capacities list with scaled values
-                for facility_info in facility_capacities:
-                    facility_info['total_capacity'] *= scaling_factor
-                
-                print(f"New total facility capacity: {sum(facility_remaining.values()):,.0f} MWh")
-            else:
-                print(f"Facility capacity ({total_facility_capacity_mwh:,.0f} MWh) sufficient for demand ({total_demand_mwh:,.0f} MWh)")
             
             # Process each facility and allocate to nearest centroids
             for facility_info in facility_capacities:
@@ -1185,11 +1171,45 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         # Create all layers
         layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, capacity_factors, facility_supplied, facility_remaining)
         
-        # Write outputs
-        output_file = output_path / f"supply_analysis_{country_iso3}.gpkg"
-        
-        for layer_name, layer_data in layers.items():
-            layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
+        # Write outputs based on mode
+        if test_mode:
+            # Test mode: Full GPKG output for detailed analysis
+            output_file = output_path / f"p1_{country_iso3}.gpkg"
+            
+            for layer_name, layer_data in layers.items():
+                layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
+            
+            print(f"Test mode: Full GPKG saved to {output_file}")
+            output_result = str(output_file)
+        else:
+            # Production mode: Lightweight Parquet files for global analysis
+            parquet_dir = output_path / "parquet"
+            parquet_dir.mkdir(exist_ok=True)
+            
+            # Define essential columns for each layer
+            parquet_schemas = {
+                'centroids': ['geometry', 'GID_0', 'supplying_facility_type', 'supply_status'],
+                'facilities': ['geometry', 'GID_0', 'Grouped_Type', 'total_mwh'],
+                'grid_lines': ['geometry', 'GID_0', 'line_type'],
+                'polylines': ['geometry', 'GID_0', 'facility_type']
+            }
+            
+            output_files = []
+            for layer_name, layer_data in layers.items():
+                if layer_name in parquet_schemas and not layer_data.empty:
+                    # Select only essential columns
+                    essential_columns = parquet_schemas[layer_name]
+                    available_columns = [col for col in essential_columns if col in layer_data.columns]
+                    
+                    if available_columns:
+                        layer_essential = layer_data[available_columns].copy()
+                        parquet_file = parquet_dir / f"{layer_name}_{country_iso3}.parquet"
+                        layer_essential.to_parquet(parquet_file)
+                        output_files.append(str(parquet_file))
+                        print(f"  Saved {layer_name}: {len(layer_essential)} records → {parquet_file.name}")
+            
+            print(f"Production mode: {len(output_files)} Parquet files saved to {parquet_dir}")
+            output_result = str(parquet_dir)
         
         # Generate summary statistics for 2024
         print(f"\n{'='*60}")
@@ -1233,9 +1253,9 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         
         print(f"{'='*60}")
         
-        print(f"Results saved to {output_file}")
+        print(f"Results saved to {output_result}")
         print(f"Processing completed using {MAX_WORKERS} parallel workers")
-        return str(output_file)
+        return output_result
     except Exception as e:
         print(f"Error processing {country_iso3}: {e}")
         return None
@@ -1244,8 +1264,10 @@ def main():
     parser = argparse.ArgumentParser(description='Process supply analysis for a country')
     parser.add_argument('country_iso3', help='ISO3 country code')
     parser.add_argument('--output-dir', default='outputs_per_country', help='Output directory')
+    parser.add_argument('--test', action='store_true', 
+                       help='Test mode: generate full GPKG with all layers for detailed analysis')
     args = parser.parse_args()
-    result = process_country_supply(args.country_iso3, args.output_dir)
+    result = process_country_supply(args.country_iso3, args.output_dir, test_mode=args.test)
     if result:
         print(f"Successfully processed {args.country_iso3}")
         return 0

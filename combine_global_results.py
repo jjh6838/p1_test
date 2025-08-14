@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Combine all country supply analysis results into global dataset
+Production mode only - processes Parquet files for efficient global analysis
 """
 import pandas as pd
 import geopandas as gpd
@@ -30,46 +31,70 @@ def setup_logging(log_file=None):
     )
     return logging.getLogger(__name__)
 
+def find_parquet_files(input_dir, layer_name):
+    """Find all parquet files for a specific layer across all countries"""
+    input_path = Path(input_dir)
+    parquet_files = []
+    
+    # Look for parquet files in the main parquet directory
+    parquet_dir = input_path / "parquet"
+    if parquet_dir.exists():
+        pattern = f"{layer_name}_*.parquet"
+        matching_files = list(parquet_dir.glob(pattern))
+        parquet_files.extend(matching_files)
+    
+    return parquet_files
+
 def combine_layer_data(input_dir, layer_name, countries_list=None):
-    """Combine data from a specific layer across all countries"""
+    """Combine data from a specific layer across all countries (Parquet files only)"""
     
     input_path = Path(input_dir)
     
-    # Find all country GPKG files (updated from parquet)
-    country_files = list(input_path.glob("supply_analysis_*.gpkg"))
+    # Find all parquet files for this layer
+    parquet_files = find_parquet_files(input_path, layer_name)
     
     if countries_list:
         # Filter to only specified countries
-        country_files = [f for f in country_files if f.stem.split('_')[-1] in countries_list]
+        filtered_files = []
+        for file_path in parquet_files:
+            country_code = file_path.stem.split('_')[-1]
+            if country_code in countries_list:
+                filtered_files.append(file_path)
+        parquet_files = filtered_files
     
-    if not country_files:
-        logging.warning(f"No country files found for layer {layer_name}")
+    if not parquet_files:
+        logging.warning(f"No Parquet files found for layer {layer_name}")
         return None
     
-    logging.info(f"Combining {layer_name} layer from {len(country_files)} countries")
+    logging.info(f"Combining {layer_name} layer from {len(parquet_files)} Parquet files")
     
     # Read and combine data from this layer
     layer_data_list = []
     failed_countries = []
     
-    for file_path in tqdm(country_files, desc=f"Processing {layer_name}"):
+    for file_path in tqdm(parquet_files, desc=f"Processing {layer_name}"):
         try:
             country_code = file_path.stem.split('_')[-1]
             
-            # Check if this layer exists in the file
+            # Read the parquet file using geopandas for proper geometry handling
             try:
-                layers = gpd.list_layers(file_path)
-                layer_names = [layer[0] for layer in layers]
-            except:
-                logging.warning(f"Could not read layers from {country_code}")
-                continue
-            
-            if layer_name not in layer_names:
-                logging.warning(f"Layer '{layer_name}' not found in {country_code}")
-                continue
-            
-            # Read the specific layer
-            layer_data = gpd.read_file(file_path, layer=layer_name)
+                layer_data = gpd.read_parquet(file_path)
+                logging.info(f"{layer_name} from {country_code} loaded as GeoDataFrame with geometry")
+            except Exception:
+                # Fallback to pandas if geopandas fails
+                layer_data = pd.read_parquet(file_path)
+                # Check if there's a geometry column and convert it
+                if 'geometry' in layer_data.columns:
+                    from shapely import wkt
+                    # Try to convert from WKT if stored as text
+                    try:
+                        layer_data['geometry'] = layer_data['geometry'].apply(wkt.loads)
+                        layer_data = gpd.GeoDataFrame(layer_data, crs='EPSG:4326')
+                        logging.info(f"{layer_name} from {country_code} converted from WKT to GeoDataFrame")
+                    except Exception:
+                        logging.info(f"{layer_name} from {country_code} has geometry column but conversion failed")
+                else:
+                    logging.info(f"{layer_name} from {country_code} has no geometry column (production mode)")
             
             if layer_data.empty:
                 logging.warning(f"Empty {layer_name} data for {country_code}")
@@ -90,15 +115,96 @@ def combine_layer_data(input_dir, layer_name, countries_list=None):
     logging.info(f"Combining {layer_name} data from {len(layer_data_list)} countries...")
     combined_data = pd.concat(layer_data_list, ignore_index=True)
     
-    logging.info(f"Combined {layer_name}: {len(combined_data)} total records")
+    # Only ensure it's a GeoDataFrame if it has geometry
+    if 'geometry' in combined_data.columns and not combined_data['geometry'].isna().all():
+        combined_data = gpd.GeoDataFrame(combined_data, crs='EPSG:4326')
+        logging.info(f"Combined {layer_name}: {len(combined_data)} total records (with geometry)")
+    else:
+        logging.info(f"Combined {layer_name}: {len(combined_data)} total records (tabular data only)")
     
     if failed_countries:
         logging.warning(f"Failed to process {layer_name} from {len(failed_countries)} countries: {failed_countries}")
     
     return combined_data
 
-def combine_global_results(input_dir="outputs_per_country", output_file="outputs_global/global_supply_analysis.parquet", countries_list=None):
-    """Combine all country results into global datasets by layer"""
+def generate_global_summary(combined_layers, logger):
+    """Generate and log global summary statistics"""
+    logger.info("\n" + "="*80)
+    logger.info("GLOBAL SUPPLY ANALYSIS SUMMARY")
+    logger.info("="*80)
+    
+    # Get centroids and facilities data
+    centroids_gdf = combined_layers.get('centroids')
+    facilities_gdf = combined_layers.get('facilities')
+    
+    if centroids_gdf is not None:
+        # Country count
+        countries = centroids_gdf['GID_0'].nunique()
+        logger.info(f"Countries processed: {countries}")
+        
+        # Supply status summary
+        if 'supply_status' in centroids_gdf.columns:
+            status_counts = centroids_gdf['supply_status'].value_counts()
+            total_centroids = len(centroids_gdf)
+            
+            logger.info(f"\nGlobal centroid supply status:")
+            logger.info(f"  Total centroids: {total_centroids:,}")
+            for status in ['Filled', 'Partially Filled', 'Not Filled', 'No Demand']:
+                count = status_counts.get(status, 0)
+                pct = (count / total_centroids * 100) if total_centroids > 0 else 0
+                logger.info(f"  {status}: {count:,} centroids ({pct:.1f}%)")
+        
+        # Facility type summary
+        if 'supplying_facility_type' in centroids_gdf.columns:
+            # Parse comma-separated facility types
+            all_types = []
+            for types_str in centroids_gdf['supplying_facility_type'].dropna():
+                if types_str and types_str != '':
+                    types = [t.strip() for t in str(types_str).split(',')]
+                    all_types.extend(types)
+            
+            if all_types:
+                type_counts = pd.Series(all_types).value_counts()
+                logger.info(f"\nSupplying facility types:")
+                for ftype, count in type_counts.head(10).items():
+                    if ftype:  # Skip empty strings
+                        logger.info(f"  {ftype}: {count:,} connections")
+    
+    if facilities_gdf is not None:
+        # Facility summary
+        facility_countries = facilities_gdf['GID_0'].nunique()
+        total_facilities = len(facilities_gdf)
+        logger.info(f"\nGlobal facilities:")
+        logger.info(f"  Countries with facilities: {facility_countries}")
+        logger.info(f"  Total facilities: {total_facilities:,}")
+        
+        if 'Grouped_Type' in facilities_gdf.columns:
+            facility_type_counts = facilities_gdf['Grouped_Type'].value_counts()
+            logger.info(f"  Facility types:")
+            for ftype, count in facility_type_counts.items():
+                logger.info(f"    {ftype}: {count:,} facilities")
+        
+        if 'total_mwh' in facilities_gdf.columns:
+            total_capacity = facilities_gdf['total_mwh'].sum()
+            logger.info(f"  Total global capacity: {total_capacity:,.0f} MWh/year")
+    
+    # Layer summary
+    logger.info(f"\nLayers successfully combined:")
+    for layer_name, layer_data in combined_layers.items():
+        logger.info(f"  {layer_name}: {len(layer_data):,} records")
+    
+    logger.info("="*80)
+
+def combine_global_results(input_dir="outputs_per_country", output_file="global_supply_analysis.gpkg", 
+                         countries_list=None):
+    """
+    Combine all country results into global datasets by layer (Parquet input mode)
+    
+    Args:
+        input_dir: Directory containing country subdirectories with Parquet files
+        output_file: Output file (supports .gpkg, .parquet extensions)
+        countries_list: Optional list of countries to include
+    """
     
     # Setup logging
     logger = setup_logging()
@@ -116,186 +222,104 @@ def combine_global_results(input_dir="outputs_per_country", output_file="outputs
         logger.error(f"Input directory {input_dir} does not exist")
         return False
     
-    # Find all country GPKG files (updated from parquet)
-    country_files = list(input_path.glob("supply_analysis_*.gpkg"))
+    # Check for Parquet files
+    parquet_dir = input_path / "parquet"
+    has_parquet = parquet_dir.exists() and list(parquet_dir.glob("*.parquet"))
     
-    # Filter by countries list if provided
-    if countries_list:
-        country_files = [f for f in country_files if f.stem.split('_')[-1] in countries_list]
-        logger.info(f"Filtered to {len(country_files)} countries from provided list")
-    
-    if not country_files:
-        logger.error(f"No country files found in {input_dir}")
+    if not has_parquet:
+        logger.error(f"No Parquet files found in {parquet_dir}")
+        logger.error("Expected structure: outputs_per_country/parquet/layer_ISO3.parquet")
         return False
     
-    logger.info(f"Found {len(country_files)} country files to combine")
+    # Determine output format from file extension
+    output_format = 'gpkg' if output_file.endswith('.gpkg') else 'parquet'
     
-    # Define layers to process
-    layers_to_process = ['centroids', 'grid_lines', 'facilities']
+    logger.info(f"Processing Parquet files, Output format: {output_format}")
     
-    results = {}
+    # Define layers to combine
+    layers_to_combine = ['centroids', 'facilities', 'grid_lines', 'polylines']
     
-    # Process each layer
-    for layer_name in layers_to_process:
-        logger.info(f"Processing {layer_name} layer...")
+    # Combine each layer
+    combined_layers = {}
+    
+    for layer_name in layers_to_combine:
+        logger.info(f"\n--- Processing {layer_name} layer ---")
         
-        combined_data = combine_layer_data(input_path, layer_name)
+        combined_data = combine_layer_data(
+            input_dir=input_dir,
+            layer_name=layer_name,
+            countries_list=countries_list
+        )
         
         if combined_data is not None and not combined_data.empty:
-            results[layer_name] = combined_data
-            
-            # Save layer data
-            layer_file_gpkg = output_dir / f"global_{layer_name}.gpkg"
-            layer_file_csv = output_dir / f"global_{layer_name}.csv"
-            
-            # Save as GPKG (with geometry)
-            combined_data.to_file(layer_file_gpkg, driver="GPKG")
-            logger.info(f"Saved {layer_name} to {layer_file_gpkg}")
-            
-            # Save as CSV (without geometry)
-            csv_data = combined_data.drop('geometry', axis=1) if 'geometry' in combined_data.columns else combined_data
-            csv_data.to_csv(layer_file_csv, index=False)
-            logger.info(f"Saved {layer_name} to {layer_file_csv}")
-            
+            combined_layers[layer_name] = combined_data
+            logger.info(f"Successfully combined {layer_name}: {len(combined_data)} records")
         else:
-            logger.warning(f"No data found for {layer_name} layer")
+            logger.warning(f"No data available for {layer_name} layer")
     
-    # Process centroids layer for legacy compatibility
-    if 'centroids' in results:
-        centroids_data = results['centroids']
+    if not combined_layers:
+        logger.error("No layers were successfully combined")
+        return False
+    
+    # Save combined data based on output format
+    if output_format == 'gpkg':
+        # Save as GPKG with multiple layers (only for data with geometry)
+        logger.info(f"Saving global analysis as GPKG: {output_path}")
         
-        # Save as legacy parquet format
-        centroids_data.to_parquet(output_file)
-        logger.info(f"Saved legacy format to {output_file}")
+        layers_with_geometry = {}
+        layers_without_geometry = {}
         
-        # Save as CSV without geometry for easier analysis
-        csv_file = Path(output_file).with_suffix('.csv')
-        centroids_data.drop('geometry', axis=1).to_csv(csv_file, index=False)
-        logger.info(f"Saved legacy CSV to {csv_file}")
-    else:
-        # Fallback to original approach if no centroids layer
-        logger.warning("No centroids layer found, attempting original parquet combination...")
-        
-        # Try to find parquet files as fallback
-        parquet_files = list(input_path.glob("supply_analysis_*.parquet"))
-        if parquet_files:
-            all_data = []
-            for file_path in tqdm(parquet_files, desc="Combining parquet files"):
-                try:
-                    country_data = gpd.read_parquet(file_path)
-                    all_data.append(country_data)
-                    country = file_path.stem.split('_')[-1]
-                    logger.info(f"Loaded {country}: {len(country_data)} records")
-                except Exception as e:
-                    country = file_path.stem.split('_')[-1]
-                    logger.error(f"Failed to load {country}: {e}")
+        for layer_name, layer_data in combined_layers.items():
+            logger.info(f"Processing {layer_name}: {len(layer_data)} records")
             
-            if all_data:
-                global_df = gpd.pd.concat(all_data, ignore_index=True)
-                global_df.to_parquet(output_file)
-                results['centroids'] = global_df  # For summary generation
-    
-    # Create a combined GPKG with all layers
-    if results:
-        logger.info("Creating combined GPKG with all layers...")
-        combined_gpkg = output_dir / "global_supply_analysis_all_layers.gpkg"
-        
-        for layer_name, data in results.items():
-            data.to_file(combined_gpkg, driver="GPKG", layer=layer_name)
-            logger.info(f"Added {layer_name} layer to combined GPKG")
-        
-        logger.info(f"Combined GPKG saved to {combined_gpkg}")
-    
-    # Generate summary statistics (updated logic)
-    if 'centroids' in results:
-        centroids_data = results['centroids']
-        
-        # Expected columns after the update
-        expected_columns = [
-            'Population_centroid',
-            'GID_0',
-            'NAME_0', 
-            'Total_Demand_2024_centroid',
-            'Total_Demand_2030_centroid',
-            'Total_Demand_2050_centroid',
-            'geometry'
-        ]
-        
-        # Summary statistics
-        print(f"\n=== GLOBAL SUMMARY ===")
-        print(f"Total countries: {centroids_data['GID_0'].nunique()}")
-        print(f"Total population centroids: {len(centroids_data):,}")
-        print(f"Total population (2025 baseline): {centroids_data['Population_centroid'].sum():,.0f}")
-        
-        # Summary for all three years
-        years = [2024, 2030, 2050]
-        for year in years:
-            demand_col = f"Total_Demand_{year}_centroid"
-            if demand_col in centroids_data.columns:
-                total_demand = centroids_data[demand_col].sum()
-                avg_per_capita = total_demand / centroids_data['Population_centroid'].sum()
-                print(f"Global demand {year}: {total_demand:,.0f} MWh ({avg_per_capita:.2f} MWh/capita)")
-        
-        # Updated column validation
-        for col in expected_columns:
-            if col not in centroids_data.columns:
-                print(f"Warning: Expected column '{col}' not found")
+            # Check if it has geometry and is a GeoDataFrame
+            if isinstance(layer_data, gpd.GeoDataFrame) and 'geometry' in layer_data.columns:
+                layers_with_geometry[layer_name] = layer_data
+                layer_data.to_file(output_path, layer=layer_name, driver="GPKG")
+                logger.info(f"Saved {layer_name} to GPKG (with geometry)")
             else:
-                print(f"✓ Column '{col}': {centroids_data[col].count():,} non-null values")
+                layers_without_geometry[layer_name] = layer_data
+                # Save as CSV for non-geometry data
+                csv_file = output_dir / f"global_{layer_name}.csv"
+                layer_data.to_csv(csv_file, index=False)
+                logger.info(f"Saved {layer_name} to CSV (tabular data): {csv_file.name}")
         
-        # Create summary by country
-        country_summary = centroids_data.groupby('GID_0').agg({
-            'Population_centroid': ['count', 'sum'],
-            'Total_Demand_2030_centroid': 'sum',
-            'Total_Demand_2050_centroid': 'sum'
-        }).round(0)
-        country_summary.columns = ['Num_Centroids', 'Total_Population', 'Demand_2030_MWh', 'Demand_2050_MWh']
-        
-        # Save summary statistics
-        summary_file = Path(output_file).with_suffix('.csv').with_name('global_supply_summary.csv')
-        country_summary.to_csv(summary_file)
-        
-        print(f"\nSaving global dataset to {output_file}...")
-        print(f"Global dataset saved to:")
-        print(f"  - {output_file} (parquet with geometry)")
-        print(f"  - {Path(output_file).with_suffix('.csv')} (CSV without geometry)")
-        print(f"  - {summary_file} (summary by country)")
-        
-        # Print layer outputs
-        print(f"\nLayer-based outputs:")
-        for layer_name in results.keys():
-            print(f"  - global_{layer_name}.gpkg (GIS data)")
-            print(f"  - global_{layer_name}.csv (tabular data)")
-        
-        if results:
-            print(f"  - global_supply_analysis_all_layers.gpkg (combined GIS)")
-        
-        # Global totals
-        total_population = centroids_data['Population_centroid'].sum()
-        total_demand_2030 = centroids_data['Total_Demand_2030_centroid'].sum()
-        
-        print(f"\nGlobal totals:")
-        print(f"  Total population: {total_population:,.0f}")
-        print(f"  Total demand 2030: {total_demand_2030:,.0f} MWh")
-        print(f"  Average demand per capita 2030: {total_demand_2030/total_population:.1f} MWh/person")
+        if layers_with_geometry:
+            logger.info(f"Global GPKG saved with {len(layers_with_geometry)} geometry layers")
+        if layers_without_geometry:
+            logger.info(f"Additional {len(layers_without_geometry)} layers saved as CSV files")
     
-    logger.info(f"Global results combination completed at {datetime.now()}")
+    else:
+        # Save as individual Parquet files
+        logger.info(f"Saving global analysis as Parquet files in: {output_dir}")
+        
+        for layer_name, layer_data in combined_layers.items():
+            parquet_file = output_dir / f"global_{layer_name}.parquet"
+            layer_data.to_parquet(parquet_file)
+            logger.info(f"Saved {layer_name}: {len(layer_data)} records → {parquet_file.name}")
+    
+    # Generate global summary
+    generate_global_summary(combined_layers, logger)
+    
+    logger.info(f"Global combination completed successfully at {datetime.now()}")
     return True
 
 def main():
     """Main function for command line usage"""
-    parser = argparse.ArgumentParser(description='Combine country supply analysis results')
-    parser.add_argument('--input-dir', default='outputs_per_country', help='Input directory with country files')
-    parser.add_argument('--output-file', default='outputs_global/global_supply_analysis.parquet', help='Output file name')
-    parser.add_argument('--countries-file', help='File with list of countries to process (optional)')
-    parser.add_argument('--log-file', default='outputs_global/logs/combine_results.log', help='Log file path')
+    parser = argparse.ArgumentParser(description='Combine country supply analysis results into global dataset (Production mode - Parquet files)')
+    parser.add_argument('--input-dir', default='outputs_per_country', 
+                       help='Input directory with country subdirectories containing Parquet files')
+    parser.add_argument('--output', default='global_supply_analysis.gpkg', 
+                       help='Output file (.gpkg for visualization, .parquet for data)')
+    parser.add_argument('--countries-file', 
+                       help='File with list of countries to process (optional)')
     
     args = parser.parse_args()
     
     # Setup logging
-    logger = setup_logging(Path(args.log_file))
+    logger = setup_logging()
     logger.info("="*60)
-    logger.info("STARTING GLOBAL RESULTS COMBINATION")
+    logger.info("STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)")
     logger.info("="*60)
     
     # Load countries list if specified
@@ -304,12 +328,20 @@ def main():
         countries_list = [c.strip() for c in Path(args.countries_file).read_text().splitlines() if c.strip()]
         logger.info(f"Processing specific countries from {args.countries_file}: {len(countries_list)} countries")
     
-    success = combine_global_results(args.input_dir, args.output_file, countries_list)
+    success = combine_global_results(
+        input_dir=args.input_dir,
+        output_file=args.output,
+        countries_list=countries_list
+    )
     
     if success:
         logger.info("Global results combination completed successfully!")
+        print(f"\n🎉 Success! Global analysis saved to: {args.output}")
+        if args.output.endswith('.gpkg'):
+            print("💡 You can now open this GPKG file in QGIS for global visualization!")
     else:
         logger.error("Global results combination failed!")
+        print("\n❌ Failed to create global analysis. Check the logs for details.")
     
     return 0 if success else 1
 
