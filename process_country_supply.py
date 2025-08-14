@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Clean supply analysis per country with network-based grid lines
-Produces exactly 3 layers: centroids, facilities, grid_lines
+Produces 4 layers: centroids, facilities, grid_lines, polylines
 """
 
 import warnings
@@ -343,14 +343,15 @@ def split_intersecting_edges(lines):
         return final_segments
     return []
 
-def stitch_network_components(network_graph, max_distance_km=50):
+def stitch_network_components(network_graph, max_distance_km=10):
     """
-    Connect disconnected network components by adding edges between closest nodes
-    of different components that are within max_distance_km of each other.
+    Connect disconnected network components using minimum spanning tree approach.
+    Each component connects to only one other component (its nearest neighbor).
+    Uses Jeju approach: 10km threshold, closest pair between components.
     
     Parameters:
     - network_graph: NetworkX graph
-    - max_distance_km: Maximum distance in kilometers to connect components
+    - max_distance_km: Maximum distance in kilometers to connect components (default: 10km)
     
     Returns:
     - Modified NetworkX graph with connected components
@@ -378,32 +379,61 @@ def stitch_network_components(network_graph, max_distance_km=50):
     max_distance_m = max_distance_km * 1000  # Convert to meters
     connections_added = 0
     
-    # For each pair of significant components, find the closest nodes and connect if within distance threshold
-    for i in range(len(significant_components)):
-        for j in range(i + 1, len(significant_components)):
-            component1 = significant_components[i]
-            component2 = significant_components[j]
-            
-            min_distance = float('inf')
+    # Sort components by size (largest first) and create indexed list
+    component_sizes = [(i, len(comp)) for i, comp in enumerate(significant_components)]
+    component_sizes.sort(key=lambda x: x[1], reverse=True)  # Sort by size, largest first
+    
+    print(f"Component sizes: {[size for _, size in component_sizes]} nodes")
+    
+    # Use minimum spanning tree approach: start with largest component, connect others one by one
+    # This creates a connected network with minimal connections
+    unconnected_components = [idx for idx, _ in component_sizes[1:]]  # All except the largest
+    connected_components = [component_sizes[0][0]]  # Start with largest component
+    
+    print(f"Starting with largest component (index {connected_components[0]}, {component_sizes[0][1]} nodes)")
+    
+    if unconnected_components:
+        
+        # Connect remaining components one by one to the nearest already-connected component
+        while unconnected_components:
             best_connection = None
+            best_distance = float('inf')
+            best_component_idx = None
             
-            # Find the closest pair of nodes between the two components
-            for node1 in component1:
-                for node2 in component2:
-                    if isinstance(node1, tuple) and isinstance(node2, tuple) and len(node1) == 2 and len(node2) == 2:
-                        # Calculate Euclidean distance between nodes (already in UTM)
-                        distance = ((node1[0] - node2[0]) ** 2 + (node1[1] - node2[1]) ** 2) ** 0.5
-                        
-                        if distance < min_distance:
-                            min_distance = distance
-                            best_connection = (node1, node2)
+            # Find the shortest connection between any unconnected component and any connected component
+            for unconnected_idx in unconnected_components:
+                unconnected_component = significant_components[unconnected_idx]
+                
+                for connected_idx in connected_components:
+                    connected_component = significant_components[connected_idx]
+                    
+                    # Find closest pair between these two components
+                    for node1 in unconnected_component:
+                        for node2 in connected_component:
+                            if isinstance(node1, tuple) and isinstance(node2, tuple) and len(node1) == 2 and len(node2) == 2:
+                                distance = ((node1[0] - node2[0]) ** 2 + (node1[1] - node2[1]) ** 2) ** 0.5
+                                
+                                if distance < best_distance:
+                                    best_distance = distance
+                                    best_connection = (node1, node2)
+                                    best_component_idx = unconnected_idx
             
-            # Add edge if within distance threshold
-            if best_connection and min_distance <= max_distance_m:
+            # Add the best connection if within distance threshold
+            if best_connection and best_distance <= max_distance_m:
                 node1, node2 = best_connection
-                network_graph.add_edge(node1, node2, weight=min_distance, edge_type='component_stitch')
+                network_graph.add_edge(node1, node2, weight=best_distance, edge_type='component_stitch')
                 connections_added += 1
-                print(f"  Connected components {i+1} and {j+1}: {min_distance/1000:.2f}km")
+                
+                # Move the connected component from unconnected to connected list
+                connected_components.append(best_component_idx)
+                unconnected_components.remove(best_component_idx)
+                
+                component_size = len(significant_components[best_component_idx])
+                print(f"  Connected component {best_component_idx+1} ({component_size} nodes) to network: {best_distance/1000:.2f}km")
+            else:
+                # No more components can be connected within distance threshold
+                print(f"  Remaining {len(unconnected_components)} components are beyond {max_distance_km}km threshold")
+                break
     
     # Check final connectivity
     final_components = len(list(nx.connected_components(network_graph)))
@@ -478,17 +508,17 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
                 distance = Point(nearest_grid).distance(point)
                 
                 # Connect with distance threshold
-                max_distance = 50000  # 50km for facilities, unlimited for centroids
-                if point_type == 'pop_centroid' or distance <= max_distance:
+                max_distance = 50000  # 50km for both facilities and centroids
+                if distance <= max_distance:
                     edge_type = 'centroid_to_grid' if point_type == 'pop_centroid' else 'grid_to_facility'
                     G.add_edge(point_coord, nearest_grid, weight=distance, edge_type=edge_type)
-    
+                    
     # Store UTM CRS for coordinate conversion
     G.graph['utm_crs'] = utm_crs
     print(f"Network created: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     
-    # Stitch disconnected components within 50km
-    G = stitch_network_components(G, max_distance_km=50)
+    # Stitch disconnected components within 10km (Jeju approach)
+    G = stitch_network_components(G, max_distance_km=10)
     
     return G
 
@@ -559,79 +589,6 @@ def find_available_facilities_within_radius(centroid_geom, facilities_gdf, utm_c
     
     return within_radius
 
-def calculate_centroid_facility_distances_manual(centroids_gdf, facilities_gdf, network_graph):
-    """
-    Calculate network distances from centroids to facilities using manual distance calculation.
-    
-    Parameters:
-    - centroids_gdf: GeoDataFrame of centroids
-    - facilities_gdf: GeoDataFrame of facilities  
-    - network_graph: NetworkX graph with grid infrastructure
-    
-    Returns:
-    - Dictionary with centroid indices as keys and distance data as values
-    """
-    if facilities_gdf.empty or network_graph is None:
-        return {}
-    
-    # Get UTM CRS for accurate distance calculations
-    center_point = centroids_gdf.geometry.unary_union.centroid
-    utm_crs = get_utm_crs(center_point.x, center_point.y)
-    
-    distances = {}
-    
-    for centroid_idx, centroid_row in centroids_gdf.iterrows():
-        # Find facilities within 100km radius for performance
-        nearby_facilities = find_available_facilities_within_radius(
-            centroid_row.geometry, facilities_gdf, utm_crs, radius_km=100
-        )
-        
-        if nearby_facilities.empty:
-            distances[centroid_idx] = {}
-            continue
-        
-        # Find nearest network node to centroid
-        centroid_node = find_nearest_network_node(centroid_row.geometry, network_graph)
-        if centroid_node is None:
-            distances[centroid_idx] = {}
-            continue
-        
-        facility_distances = {}
-        
-        for facility_idx, facility_row in nearby_facilities.iterrows():
-            # Find nearest network node to facility
-            facility_node = find_nearest_network_node(facility_row.geometry, network_graph)
-            if facility_node is None:
-                continue
-            
-            try:
-                # Use manual distance calculation
-                distance_result = calculate_network_distance_manual(network_graph, centroid_node, facility_node)
-                
-                if distance_result is not None:
-                    facility_distances[facility_idx] = {
-                        'distance_km': distance_result['distance_km'],
-                        'path_nodes': distance_result['path_nodes'],
-                        'path_segments': distance_result['path_segments'],
-                        'total_segments': distance_result['total_segments'],
-                        'facility_type': facility_row.get('Grouped_Type', 'Unknown'),
-                        'capacity_mw': facility_row.get('Adjusted_Capacity_MW', 0),
-                        'total_mwh': facility_row.get('total_mwh', 0),
-                        'centroid_node': centroid_node,
-                        'facility_node': facility_node
-                    }
-            except Exception as e:
-                print(f"Error calculating distance from centroid {centroid_idx} to facility {facility_idx}: {e}")
-                continue
-        
-        distances[centroid_idx] = facility_distances
-    
-    return distances
-
-def create_candidate_polyline_layer(centroid_facility_distances, network_graph, country_iso3):
-    """Deprecated: not used. Returns empty GeoDataFrame."""
-    return gpd.GeoDataFrame()
-
 def create_polyline_layer(active_connections, network_graph, country_iso3):
     """Create polyline layer showing actual network paths for active supply connections only"""
     all_geometries = []
@@ -641,12 +598,10 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
         return gpd.GeoDataFrame()
     
     utm_crs = network_graph.graph.get('utm_crs', 'EPSG:3857')
-    
-    # Reduced verbosity: no count print
-    
+
     for connection in active_connections:
         centroid_idx = connection.get('centroid_idx')
-        facility_idx = connection.get('facility_idx')
+        facility_gem_id = connection.get('facility_gem_id')
         path_nodes = connection.get('path_nodes', [])
         
         try:
@@ -660,22 +615,22 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
                 all_geometries.append(polyline_geom)
                 all_attributes.append({
                     'centroid_idx': centroid_idx,
-                    'facility_idx': facility_idx,
+                    'facility_gem_id': facility_gem_id,
                     'facility_type': connection.get('facility_type'),
                     'distance_km': connection.get('distance_km'),
                     'supply_mwh': connection.get('supply_mwh'),
-                    'connection_id': f"C{centroid_idx}_F{facility_idx}",
+                    'connection_id': f"C{centroid_idx}_F{facility_gem_id}",
                     'active_supply': 'Yes'
                 })
         except Exception as e:
-            print(f"Warning: Failed to create polyline for centroid {centroid_idx} to facility {facility_idx}: {e}")
+            print(f"Warning: Failed to create polyline for centroid {centroid_idx} to facility {facility_gem_id}: {e}")
     
     if all_geometries:
         polylines_layer = gpd.GeoDataFrame(all_attributes, geometry=all_geometries, crs=COMMON_CRS)
         polylines_layer['GID_0'] = country_iso3
         
         # Safe column selection to avoid KeyErrors
-        preferred = ['geometry', 'GID_0', 'connection_id', 'centroid_idx', 'facility_idx', 'facility_type', 'distance_km', 'supply_mwh', 'active_supply']
+        preferred = ['geometry', 'GID_0', 'connection_id', 'centroid_idx', 'facility_gem_id', 'facility_type', 'distance_km', 'supply_mwh', 'active_supply']
         existing = [c for c in preferred if c in polylines_layer.columns]
         others = [c for c in polylines_layer.columns if c not in existing]
         polylines_layer = polylines_layer[existing + others]
@@ -684,7 +639,17 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
     return gpd.GeoDataFrame()
 
 def calculate_network_distance_manual(network_graph, start_node, end_node):
-    """Calculate distance by manually finding and summing network segments"""
+    """
+    Calculate shortest path distance between two nodes in the network graph
+    
+    Parameters:
+    - network_graph: NetworkX graph with weighted edges
+    - start_node: Starting node coordinates (tuple)
+    - end_node: Ending node coordinates (tuple)
+    
+    Returns:
+    - Dictionary with distance info and path details, or None if no path exists
+    """
     try:
         # Use NetworkX to get the path nodes (but we'll calculate distance manually)
         path_nodes = nx.shortest_path(network_graph, start_node, end_node, weight='weight')
@@ -721,7 +686,17 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
         return None
 
 def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
-    """Calculate distances from centroids to facilities using manual network calculation"""
+    """
+    Calculate network distances from all centroids to nearby facilities
+    
+    Parameters:
+    - centroids_gdf: GeoDataFrame of population centroids
+    - facilities_gdf: GeoDataFrame of energy facilities
+    - network_graph: NetworkX graph with grid infrastructure
+    
+    Returns:
+    - List of dictionaries with centroid indices and their facility distances
+    """
     centroid_facility_distances = []
     
     # Create coordinate mappings
@@ -757,6 +732,11 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
                     )
                     if distance_result is not None:
                         euclidean_distance = centroid.geometry.distance(facility.geometry) * 111.32
+                        
+                        # Get GEM ID with better null handling
+                        gem_id_raw = facility.get('GEM unit/phase ID', '')
+                        gem_id = str(gem_id_raw) if pd.notna(gem_id_raw) and gem_id_raw != '' else ''
+                        
                         distances.append({
                             'facility_idx': facility_idx,
                             'distance_km': distance_result['distance_km'],
@@ -767,103 +747,13 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
                             'facility_capacity': facility.get('Adjusted_Capacity_MW', 0),
                             'facility_lat': facility.geometry.y,
                             'facility_lon': facility.geometry.x,
-                            'gem_id': facility.get('GEM unit/phase ID', ''),
+                            'gem_id': gem_id,
                             'euclidean_distance_km': euclidean_distance,
                             'network_path': distance_result['path_nodes']
                         })
         distances.sort(key=lambda x: x['distance_km'])
         centroid_facility_distances.append({'centroid_idx': centroid_idx, 'distances': distances})
     return centroid_facility_distances
-
-def allocate_supply(centroids_gdf, facilities_gdf, centroid_facility_distances, country_iso3):
-    """Allocate supply to centroids based on distance-only priority and facility capacity."""
-    capacity_factors = load_conversion_rates(country_iso3)
-    
-    # Initialize facility remaining capacities (MWh/year)
-    facility_remaining = {}
-    for idx, facility in facilities_gdf.iterrows():
-        capacity_mw = facility.get('Adjusted_Capacity_MW', 0) or 0
-        energy_type = facility.get('Grouped_Type', '') or ''
-        cf = capacity_factors.get(energy_type, 0.30)
-        facility_remaining[idx] = capacity_mw * 8760 * cf if capacity_mw > 0 else 0
-    
-    # Prepare centroid columns
-    if 'nearest_facility_distance' not in centroids_gdf.columns:
-        centroids_gdf['nearest_facility_distance'] = np.nan
-    if 'nearest_facility_type' not in centroids_gdf.columns:
-        centroids_gdf['nearest_facility_type'] = ''
-    centroids_gdf['supply_received_mwh'] = 0.0
-    centroids_gdf['supply_status'] = 'Not Filled'
-    
-    active_connections = []
-    demand_col = 'Total_Demand_2024_centroid'
-    
-    # Sort by demand descending
-    for _, centroid in centroids_gdf.sort_values(demand_col, ascending=False).iterrows():
-        centroid_idx = centroid.name
-        remaining_demand = float(centroid.get(demand_col, 0) or 0)
-        if remaining_demand <= 0:
-            continue
-        
-        # Find precomputed distances for this centroid
-        centroid_distances = None
-        for item in centroid_facility_distances:
-            if item['centroid_idx'] == centroid_idx:
-                centroid_distances = item['distances']
-                break
-        if not centroid_distances:
-            continue
-        
-        # Filter facilities with remaining capacity and sort by shortest distance
-        available = []
-        for fi in centroid_distances:
-            fidx = fi.get('facility_idx')
-            if facility_remaining.get(fidx, 0) > 0:
-                available.append(fi)
-        available.sort(key=lambda x: x.get('distance_km', float('inf')))
-        if not available:
-            continue
-        
-        # Record nearest facility info
-        nearest = available[0]
-        centroids_gdf.loc[centroid_idx, 'nearest_facility_distance'] = nearest.get('distance_km', np.nan)
-        centroids_gdf.loc[centroid_idx, 'nearest_facility_type'] = nearest.get('facility_type', '')
-        
-        # Allocate from closest facilities until demand is met or supply exhausted
-        for fi in available:
-            if remaining_demand <= 0:
-                break
-            fidx = fi.get('facility_idx')
-            avail_supply = float(facility_remaining.get(fidx, 0) or 0)
-            if avail_supply <= 0:
-                continue
-            allocated = min(remaining_demand, avail_supply)
-            centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] += allocated
-            facility_remaining[fidx] = avail_supply - allocated
-            remaining_demand -= allocated
-            
-            # Track active connection for polylines
-            active_connections.append({
-                'centroid_idx': centroid_idx,
-                'facility_idx': fidx,
-                'centroid_lat': centroid.geometry.y,
-                'centroid_lon': centroid.geometry.x,
-                'facility_lat': fi.get('facility_lat'),
-                'facility_lon': fi.get('facility_lon'),
-                'network_path': fi.get('network_path'),
-                'supply_mwh': allocated,
-                'distance_km': fi.get('distance_km'),
-                'facility_type': fi.get('facility_type'),
-                'path_nodes': fi.get('path_nodes', [])
-            })
-        
-        # Update supply status
-        if remaining_demand <= 0:
-            centroids_gdf.loc[centroid_idx, 'supply_status'] = 'Filled'
-        elif centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] > 0:
-            centroids_gdf.loc[centroid_idx, 'supply_status'] = 'Partially Filled'
-    
-    return centroids_gdf, active_connections
 
 def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     """Create grid lines layer with grid_infrastructure, centroid_to_grid, grid_to_facility, component_stitch."""
@@ -902,8 +792,74 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
         return gpd.GeoDataFrame(all_attributes, geometry=all_geometries, crs=COMMON_CRS)
     return gpd.GeoDataFrame()
 
+def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, capacity_factors=None, facility_supplied=None, facility_remaining=None):
+    """Create all output layers for the GPKG file: centroids, facilities, grid_lines, and polylines"""
+    layers = {}
+    
+    # Centroids layer - population centers with demand and supply allocation results
+    centroid_columns = ['geometry', 'GID_0', 'Population_centroid',
+                        'Population_2024_centroid', 'Population_2030_centroid', 'Population_2050_centroid',
+                        'Total_Demand_2024_centroid', 'Total_Demand_2030_centroid', 'Total_Demand_2050_centroid',
+                        'supplying_facility_distance', 'supplying_facility_type', 'supplying_facility_gem_id', 
+                        'supply_received_mwh', 'supply_status']
+    available_columns = [c for c in centroid_columns if c in centroids_gdf.columns]
+    centroids_layer = centroids_gdf[available_columns].copy()
+    
+    # Add centroid_idx column for spatial analysis tracking
+    centroids_layer['centroid_idx'] = centroids_layer.index
+    
+    layers['centroids'] = centroids_layer
+    
+    # Grid lines layer - electrical grid infrastructure and connections
+    grid_lines_layer = create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections)
+    if not grid_lines_layer.empty:
+        grid_lines_layer['GID_0'] = country_iso3
+        cols = ['geometry', 'GID_0'] + [c for c in grid_lines_layer.columns if c not in ['geometry', 'GID_0']]
+        layers['grid_lines'] = grid_lines_layer[cols]
+    
+    # Facilities layer - energy generation facilities with capacity, production, and allocation data
+    if not facilities_gdf.empty:
+        facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 'Latitude', 'Longitude', 'Adjusted_Capacity_MW']].copy()
+        facilities_simplified['GID_0'] = country_iso3
+        
+        # Use provided capacity factors or load them if not provided
+        if capacity_factors is None:
+            capacity_factors = load_conversion_rates(country_iso3)
+        
+        # Calculate annual energy production potential
+        facilities_simplified['total_mwh'] = facilities_simplified.apply(
+            lambda r: (r.get('Adjusted_Capacity_MW', 0) or 0) * 8760 * capacity_factors.get(r.get('Grouped_Type', ''), 0), axis=1
+        )
+        
+        # Add supply allocation tracking columns
+        if facility_supplied is not None and facility_remaining is not None:
+            facilities_simplified['supplied_mwh'] = facilities_simplified.index.map(lambda idx: facility_supplied.get(idx, 0.0))
+            facilities_simplified['remaining_mwh'] = facilities_simplified.index.map(lambda idx: facility_remaining.get(idx, 0.0))
+        else:
+            # Default values if no allocation data available
+            facilities_simplified['supplied_mwh'] = 0.0
+            facilities_simplified['remaining_mwh'] = facilities_simplified['total_mwh']
+        
+        cols = ['geometry', 'GID_0'] + [c for c in facilities_simplified.columns if c not in ['geometry', 'GID_0']]
+        layers['facilities'] = facilities_simplified[cols]
+    
+    # Polylines layer - active supply connections between centroids and facilities
+    polylines_layer = create_polyline_layer(active_connections, network_graph, country_iso3)
+    if not polylines_layer.empty:
+        layers['polylines'] = polylines_layer
+    
+    return layers
+
 def process_country_supply(country_iso3, output_dir="outputs_per_country"):
-    """Main function to process supply analysis for a country"""
+    """
+    Main function to process supply analysis for a country
+    
+    Creates 4 output layers:
+    - centroids: Population centers with demand and supply allocation
+    - facilities: Energy generation facilities with capacity, supply, and allocation data
+    - grid_lines: Electrical grid infrastructure and connections
+    - polylines: Active supply connections between centroids and facilities
+    """
     print(f"Processing {country_iso3}...")
     
     output_path = Path(output_dir)
@@ -926,55 +882,231 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         
         # Default outputs
         network_graph = None
-        polylines_layer = gpd.GeoDataFrame()
         active_connections = []
+        capacity_factors = None
+        facility_supplied = None
+        facility_remaining = None
         
+        # Process network and allocate supply if facilities and grid exist
         if not facilities_gdf.empty and not grid_lines_gdf.empty:
+            # Load conversion rates once for reuse
+            capacity_factors = load_conversion_rates(country_iso3)
+            
+            # Create network graph
             network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf)
+            
+            # Calculate distances between centroids and facilities
             centroid_facility_distances = calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph)
-            centroids_gdf, active_connections = allocate_supply(centroids_gdf, facilities_gdf, centroid_facility_distances, country_iso3)
-            polylines_layer = create_polyline_layer(active_connections, network_graph, country_iso3)
-        else:
-            # Initialize supply columns if network is skipped
-            centroids_gdf['nearest_facility_distance'] = np.nan
-            centroids_gdf['nearest_facility_type'] = ''
+            
+            # Initialize facility remaining capacities (MWh/year) and track supplied amounts
+            facility_remaining = {}
+            facility_supplied = {}
+            for idx, facility in facilities_gdf.iterrows():
+                capacity_mw = facility.get('Adjusted_Capacity_MW', 0) or 0
+                energy_type = facility.get('Grouped_Type', '') or ''
+                cf = capacity_factors.get(energy_type, 0.30)
+                total_mwh = capacity_mw * 8760 * cf if capacity_mw > 0 else 0
+                facility_remaining[idx] = total_mwh
+                facility_supplied[idx] = 0.0
+            
+            # Prepare centroid columns for supply allocation
+            if 'supplying_facility_distance' not in centroids_gdf.columns:
+                centroids_gdf['supplying_facility_distance'] = np.nan
+            if 'supplying_facility_type' not in centroids_gdf.columns:
+                centroids_gdf['supplying_facility_type'] = ''
+            if 'supplying_facility_gem_id' not in centroids_gdf.columns:
+                centroids_gdf['supplying_facility_gem_id'] = ''
             centroids_gdf['supply_received_mwh'] = 0.0
             centroids_gdf['supply_status'] = 'Not Filled'
+            
+            demand_col = 'Total_Demand_2024_centroid'
+            
+            # Initialize centroid tracking columns (supporting multiple facilities)
+            centroids_gdf['supplying_facility_distance'] = ''
+            centroids_gdf['supplying_facility_type'] = ''
+            centroids_gdf['supplying_facility_gem_id'] = ''
+            centroids_gdf['supply_received_mwh'] = 0.0
+            centroids_gdf['supply_status'] = 'Not Filled'
+            
+            # Create facility-to-centroids mapping sorted by capacity (largest first)
+            facility_capacities = []
+            for idx, facility in facilities_gdf.iterrows():
+                total_capacity = facility_remaining.get(idx, 0)
+                if total_capacity > 0:
+                    facility_capacities.append({
+                        'facility_idx': idx,
+                        'total_capacity': total_capacity,
+                        'gem_id': str(facility.get('GEM unit/phase ID', '')) if pd.notna(facility.get('GEM unit/phase ID', '')) else '',
+                        'facility_type': facility.get('Grouped_Type', ''),
+                        'geometry': facility.geometry
+                    })
+            
+            # Sort facilities by total capacity (largest first)
+            facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
+            print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
+            
+            # Process each facility and allocate to nearest centroids
+            for facility_info in facility_capacities:
+                facility_idx = facility_info['facility_idx']
+                remaining_capacity = facility_remaining.get(facility_idx, 0)
+                
+                if remaining_capacity <= 0:
+                    continue
+                
+                # Find centroids that can reach this facility
+                facility_centroid_distances = []
+                for item in centroid_facility_distances:
+                    centroid_idx = item['centroid_idx']
+                    
+                    # Find this facility in the centroid's distance list
+                    facility_distance_info = None
+                    for distance_info in item['distances']:
+                        if distance_info.get('facility_idx') == facility_idx:
+                            facility_distance_info = distance_info
+                            break
+                    
+                    if facility_distance_info:
+                        centroid_demand = float(centroids_gdf.loc[centroid_idx, demand_col] or 0)
+                        centroid_received = float(centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] or 0)
+                        remaining_demand = centroid_demand - centroid_received
+                        
+                        if remaining_demand > 0:  # Only consider centroids with unmet demand
+                            # Get the centroid's nearest facility distance (to any facility)
+                            nearest_facility_distance = item['distances'][0]['distance_km'] if item['distances'] else float('inf')
+                            
+                            facility_centroid_distances.append({
+                                'centroid_idx': centroid_idx,
+                                'distance_to_this_facility': facility_distance_info.get('distance_km'),
+                                'nearest_facility_distance': nearest_facility_distance,
+                                'remaining_demand': remaining_demand,
+                                'path_nodes': facility_distance_info.get('path_nodes', []),
+                                'centroid_geom': centroids_gdf.loc[centroid_idx, 'geometry']
+                            })
+                
+                # Sort centroids by their distance to this specific facility
+                facility_centroid_distances.sort(key=lambda x: x['distance_to_this_facility'])
+                
+                # Allocate capacity to centroids prioritized by nearest facility distance
+                for centroid_info in facility_centroid_distances:
+                    if remaining_capacity <= 0:
+                        break
+                    
+                    centroid_idx = centroid_info['centroid_idx']
+                    remaining_demand = centroid_info['remaining_demand']
+                    distance_km = centroid_info['distance_to_this_facility']
+                    
+                    # Allocate supply
+                    allocated = min(remaining_demand, remaining_capacity)
+                    centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] += allocated
+                    facility_remaining[facility_idx] -= allocated
+                    facility_supplied[facility_idx] += allocated
+                    remaining_capacity -= allocated
+                    
+                    # Update centroid facility tracking (comma-separated for multiple facilities)
+                    current_distances = centroids_gdf.loc[centroid_idx, 'supplying_facility_distance']
+                    current_types = centroids_gdf.loc[centroid_idx, 'supplying_facility_type']
+                    current_gem_ids = centroids_gdf.loc[centroid_idx, 'supplying_facility_gem_id']
+                    
+                    # Append new facility info
+                    new_distance = f"{distance_km:.2f}"
+                    new_type = facility_info['facility_type']
+                    new_gem_id = facility_info['gem_id']
+                    
+                    if current_distances == '':
+                        centroids_gdf.loc[centroid_idx, 'supplying_facility_distance'] = new_distance
+                        centroids_gdf.loc[centroid_idx, 'supplying_facility_type'] = new_type
+                        centroids_gdf.loc[centroid_idx, 'supplying_facility_gem_id'] = new_gem_id
+                    else:
+                        centroids_gdf.loc[centroid_idx, 'supplying_facility_distance'] = f"{current_distances}, {new_distance}"
+                        centroids_gdf.loc[centroid_idx, 'supplying_facility_type'] = f"{current_types}, {new_type}"
+                        centroids_gdf.loc[centroid_idx, 'supplying_facility_gem_id'] = f"{current_gem_ids}, {new_gem_id}"
+                    
+                    # Track active connection for polylines
+                    active_connections.append({
+                        'centroid_idx': centroid_idx,
+                        'facility_gem_id': facility_info['gem_id'],
+                        'centroid_lat': centroid_info['centroid_geom'].y,
+                        'centroid_lon': centroid_info['centroid_geom'].x,
+                        'facility_lat': facility_info['geometry'].y,
+                        'facility_lon': facility_info['geometry'].x,
+                        'network_path': centroid_info['path_nodes'],
+                        'supply_mwh': allocated,
+                        'distance_km': distance_km,
+                        'facility_type': facility_info['facility_type'],
+                        'path_nodes': centroid_info['path_nodes']
+                    })
+            
+            # Update supply status for all centroids
+            for centroid_idx, centroid in centroids_gdf.iterrows():
+                demand = float(centroid.get(demand_col, 0) or 0)
+                received = float(centroid.get('supply_received_mwh', 0) or 0)
+                
+                if demand <= 0:
+                    centroids_gdf.loc[centroid_idx, 'supply_status'] = 'No Demand'
+                elif received >= demand:
+                    centroids_gdf.loc[centroid_idx, 'supply_status'] = 'Filled'
+                elif received > 0:
+                    centroids_gdf.loc[centroid_idx, 'supply_status'] = 'Partially Filled'
+                else:
+                    centroids_gdf.loc[centroid_idx, 'supply_status'] = 'Not Filled'
+        else:
+            # Initialize supply columns if network processing is skipped
+            centroids_gdf['supplying_facility_distance'] = np.nan
+            centroids_gdf['supplying_facility_type'] = ''
+            centroids_gdf['supplying_facility_gem_id'] = ''
+            centroids_gdf['supply_received_mwh'] = 0.0
+            centroids_gdf['supply_status'] = 'Not Filled'
+        
+        # Create all layers
+        layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, capacity_factors, facility_supplied, facility_remaining)
         
         # Write outputs
         output_file = output_path / f"supply_analysis_{country_iso3}.gpkg"
         
-        # Centroids layer
-        centroid_columns = ['geometry', 'GID_0', 'Population_centroid',
-                            'Population_2024_centroid', 'Population_2030_centroid', 'Population_2050_centroid',
-                            'Total_Demand_2024_centroid', 'Total_Demand_2030_centroid', 'Total_Demand_2050_centroid',
-                            'nearest_facility_distance', 'nearest_facility_type', 'supply_received_mwh', 'supply_status']
-        available_columns = [c for c in centroid_columns if c in centroids_gdf.columns]
-        centroids_gdf[available_columns].to_file(output_file, layer="centroids", driver="GPKG")
+        for layer_name, layer_data in layers.items():
+            layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
         
-        # Grid lines layer
-        grid_lines_layer = create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections)
-        if not grid_lines_layer.empty:
-            grid_lines_layer['GID_0'] = country_iso3
-            cols = ['geometry', 'GID_0'] + [c for c in grid_lines_layer.columns if c not in ['geometry', 'GID_0']]
-            grid_lines_layer = grid_lines_layer[cols]
-            grid_lines_layer.to_file(output_file, layer="grid_lines", driver="GPKG")
+        # Generate summary statistics for 2024
+        print(f"\n{'='*60}")
+        print(f"SUPPLY ANALYSIS SUMMARY FOR {country_iso3} (2024)")
+        print(f"{'='*60}")
         
-        # Facilities layer
-        if not facilities_gdf.empty:
-            facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 'Latitude', 'Longitude', 'Adjusted_Capacity_MW']].copy()
-            facilities_simplified['GID_0'] = country_iso3
-            cf_map = load_conversion_rates(country_iso3)
-            facilities_simplified['total_mwh'] = facilities_simplified.apply(
-                lambda r: (r.get('Adjusted_Capacity_MW', 0) or 0) * 8760 * cf_map.get(r.get('Grouped_Type', ''), 0), axis=1
-            )
-            cols = ['geometry', 'GID_0'] + [c for c in facilities_simplified.columns if c not in ['geometry', 'GID_0']]
-            facilities_simplified = facilities_simplified[cols]
-            facilities_simplified.to_file(output_file, layer="facilities", driver="GPKG")
+        # Calculate demand statistics
+        demand_col_2024 = 'Total_Demand_2024_centroid'
+        total_needed_mwh = centroids_gdf[demand_col_2024].sum()
+        print(f"Total needed energy (demand): {total_needed_mwh:,.0f} MWh")
         
-        # Polylines layer
-        if not polylines_layer.empty:
-            polylines_layer.to_file(output_file, layer="polylines", driver="GPKG")
+        # Calculate supply statistics from facilities
+        if facility_supplied is not None and facility_remaining is not None:
+            total_supplied_mwh = sum(facility_supplied.values())
+            total_remaining_mwh = sum(facility_remaining.values())
+            total_facility_capacity = total_supplied_mwh + total_remaining_mwh
+            
+            supplied_pct = (total_supplied_mwh / total_facility_capacity * 100) if total_facility_capacity > 0 else 0
+            remaining_pct = (total_remaining_mwh / total_facility_capacity * 100) if total_facility_capacity > 0 else 0
+            
+            print(f"Total supplied energy: {total_supplied_mwh:,.0f} MWh ({supplied_pct:.1f}% of facility capacity)")
+            print(f"Total remaining capacity: {total_remaining_mwh:,.0f} MWh ({remaining_pct:.1f}% of facility capacity)")
+            
+            # Calculate additional energy needed
+            total_additionally_needed_mwh = max(0, total_needed_mwh - total_supplied_mwh)
+            print(f"Total additionally needed: {total_additionally_needed_mwh:,.0f} MWh")
+        else:
+            print("Total supplied energy: 0 MWh (no facilities processed)")
+            print("Total remaining capacity: 0 MWh (no facilities processed)")
+            print(f"Total additionally needed: {total_needed_mwh:,.0f} MWh")
+        
+        # Calculate centroid status statistics
+        status_counts = centroids_gdf['supply_status'].value_counts()
+        total_centroids = len(centroids_gdf)
+        
+        print(f"\nCentroid supply status:")
+        for status in ['Filled', 'Partially Filled', 'Not Filled', 'No Demand']:
+            count = status_counts.get(status, 0)
+            pct = (count / total_centroids * 100) if total_centroids > 0 else 0
+            print(f"  {status}: {count:,} centroids ({pct:.1f}%)")
+        
+        print(f"{'='*60}")
         
         print(f"Results saved to {output_file}")
         return str(output_file)
