@@ -13,10 +13,12 @@ import networkx as nx
 from pathlib import Path
 import argparse
 import sys
+import os
 from shapely.geometry import Point, LineString, MultiLineString
 from shapely.ops import unary_union
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
+import multiprocessing as mp
 
 # Suppress warnings
 # warnings.filterwarnings("ignore")
@@ -25,6 +27,10 @@ from functools import partial
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 YEARS = [2024, 2030, 2050]
 SUPPLY_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
+
+# Get optimal number of workers based on available CPUs
+MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
+print(f"Parallel processing configured for {MAX_WORKERS} workers")
 
 def get_utm_crs(lon, lat):
     """Get appropriate UTM CRS for given coordinates"""
@@ -47,7 +53,7 @@ def load_admin_boundaries(country_iso3):
     return country_data
 
 def load_population_centroids(country_bbox, admin_boundaries):
-    """Load and process population centroids from raster"""
+    """Load and process population centroids from raster with parallel coordinate processing"""
     minx, miny, maxx, maxy = country_bbox
     
     with rasterio.open('bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif') as src:
@@ -56,13 +62,37 @@ def load_population_centroids(country_bbox, admin_boundaries):
         windowed_transform = rasterio.windows.transform(window, src.transform)
         
         rows, cols = pop_data.shape
+        total_pixels = rows * cols
+        
+        print(f"Processing {total_pixels:,} population pixels using parallel workers...")
+        
+        # Create coordinate pairs in parallel
+        def process_pixel_batch(start_idx, end_idx):
+            batch_x, batch_y = [], []
+            for idx in range(start_idx, end_idx):
+                row = idx // cols
+                col = idx % cols
+                x, y = rasterio.transform.xy(windowed_transform, row, col)
+                batch_x.append(x)
+                batch_y.append(y)
+            return batch_x, batch_y
+        
+        # Split work into batches
+        batch_size = max(1, total_pixels // MAX_WORKERS)
         centroids_x, centroids_y = [], []
         
-        for row in range(rows):
-            for col in range(cols):
-                x, y = rasterio.transform.xy(windowed_transform, row, col)
-                centroids_x.append(x)
-                centroids_y.append(y)
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            for i in range(0, total_pixels, batch_size):
+                end_idx = min(i + batch_size, total_pixels)
+                futures.append(executor.submit(process_pixel_batch, i, end_idx))
+            
+            for future in futures:
+                batch_x, batch_y = future.result()
+                centroids_x.extend(batch_x)
+                centroids_y.extend(batch_y)
+        
+        print(f"Coordinate processing completed for {len(centroids_x):,} pixels")
         
         centroids_gdf = gpd.GeoDataFrame(
             geometry=gpd.points_from_xy(centroids_x, centroids_y),
@@ -328,20 +358,51 @@ def load_grid_lines(country_bbox, admin_boundaries):
     return gpd.GeoDataFrame()
 
 def split_intersecting_edges(lines):
-    """Split lines at intersections"""
-    merged = unary_union(lines)
-    
-    if isinstance(merged, (LineString, MultiLineString)):
-        segments = [merged] if isinstance(merged, LineString) else list(merged.geoms)
-        final_segments = []
+    """Split lines at intersections with parallel processing for large datasets"""
+    if len(lines) > 1000:  # Use parallel processing for large datasets
+        print(f"Processing {len(lines)} grid lines using parallel workers...")
         
-        for segment in segments:
-            coords = list(segment.coords)
-            for i in range(len(coords) - 1):
-                final_segments.append(LineString([coords[i], coords[i + 1]]))
+        # Split lines into batches for parallel processing
+        batch_size = max(1, len(lines) // MAX_WORKERS)
+        batches = [lines[i:i+batch_size] for i in range(0, len(lines), batch_size)]
         
-        return final_segments
-    return []
+        def process_batch(batch_lines):
+            batch_merged = unary_union(batch_lines)
+            if isinstance(batch_merged, (LineString, MultiLineString)):
+                segments = [batch_merged] if isinstance(batch_merged, LineString) else list(batch_merged.geoms)
+                batch_segments = []
+                for segment in segments:
+                    coords = list(segment.coords)
+                    for i in range(len(coords) - 1):
+                        batch_segments.append(LineString([coords[i], coords[i + 1]]))
+                return batch_segments
+            return []
+        
+        # Process batches in parallel
+        all_segments = []
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(process_batch, batch) for batch in batches]
+            for i, future in enumerate(futures):
+                batch_segments = future.result()
+                all_segments.extend(batch_segments)
+                print(f"  Processed grid batch {i+1}/{len(batches)}")
+        
+        return all_segments
+    else:
+        # Use original method for smaller datasets
+        merged = unary_union(lines)
+        
+        if isinstance(merged, (LineString, MultiLineString)):
+            segments = [merged] if isinstance(merged, LineString) else list(merged.geoms)
+            final_segments = []
+            
+            for segment in segments:
+                coords = list(segment.coords)
+                for i in range(len(coords) - 1):
+                    final_segments.append(LineString([coords[i], coords[i + 1]]))
+            
+            return final_segments
+        return []
 
 def stitch_network_components(network_graph, max_distance_km=10):
     """
@@ -685,38 +746,13 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         return None
 
-def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
+def process_centroid_distances_batch(centroid_batch, network_graph, facilities_gdf, centroid_mapping, facility_mapping, utm_crs):
     """
-    Calculate network distances from all centroids to nearby facilities
-    
-    Parameters:
-    - centroids_gdf: GeoDataFrame of population centroids
-    - facilities_gdf: GeoDataFrame of energy facilities
-    - network_graph: NetworkX graph with grid infrastructure
-    
-    Returns:
-    - List of dictionaries with centroid indices and their facility distances
+    Process a batch of centroids for distance calculations in parallel
     """
-    centroid_facility_distances = []
+    batch_results = []
     
-    # Create coordinate mappings
-    centroid_mapping = {}
-    facility_mapping = {}
-    
-    for node, data in network_graph.nodes(data=True):
-        if data.get('type') == 'pop_centroid':
-            centroid_mapping[data.get('centroid_idx')] = node
-        elif data.get('type') == 'facility':
-            facility_mapping[data.get('facility_idx')] = node
-    
-    # Get UTM CRS for distance calculations
-    center_point = centroids_gdf.geometry.unary_union.centroid
-    utm_crs = get_utm_crs(center_point.x, center_point.y)
-    
-    # Removed verbose progress print
-    # print(f"Processing {len(centroids_gdf)} centroids for distance calculation...")
-    
-    for centroid_idx, centroid in centroids_gdf.iterrows():
+    for centroid_idx, centroid in centroid_batch.iterrows():
         network_centroid = centroid_mapping.get(centroid_idx)
         distances = []
         
@@ -752,8 +788,76 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
                             'network_path': distance_result['path_nodes']
                         })
         distances.sort(key=lambda x: x['distance_km'])
-        centroid_facility_distances.append({'centroid_idx': centroid_idx, 'distances': distances})
-    return centroid_facility_distances
+        batch_results.append({'centroid_idx': centroid_idx, 'distances': distances})
+    
+    return batch_results
+
+def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
+    """
+    Calculate network distances from all centroids to nearby facilities using parallel processing
+    
+    Parameters:
+    - centroids_gdf: GeoDataFrame of population centroids
+    - facilities_gdf: GeoDataFrame of energy facilities
+    - network_graph: NetworkX graph with grid infrastructure
+    
+    Returns:
+    - List of dictionaries with centroid indices and their facility distances
+    """
+    print(f"Calculating distances for {len(centroids_gdf)} centroids using {MAX_WORKERS} parallel workers...")
+    
+    # Create coordinate mappings
+    centroid_mapping = {}
+    facility_mapping = {}
+    
+    for node, data in network_graph.nodes(data=True):
+        if data.get('type') == 'pop_centroid':
+            centroid_mapping[data.get('centroid_idx')] = node
+        elif data.get('type') == 'facility':
+            facility_mapping[data.get('facility_idx')] = node
+    
+    # Get UTM CRS for distance calculations
+    center_point = centroids_gdf.geometry.unary_union.centroid
+    utm_crs = get_utm_crs(center_point.x, center_point.y)
+    
+    # Split centroids into batches for parallel processing
+    batch_size = max(1, len(centroids_gdf) // MAX_WORKERS)
+    centroid_batches = []
+    
+    for i in range(0, len(centroids_gdf), batch_size):
+        batch = centroids_gdf.iloc[i:i+batch_size]
+        centroid_batches.append(batch)
+    
+    print(f"Processing {len(centroid_batches)} batches with average size {batch_size}")
+    
+    # Process batches in parallel using ThreadPoolExecutor (better for I/O bound operations)
+    all_results = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # Create partial function with fixed arguments
+        process_func = partial(
+            process_centroid_distances_batch,
+            network_graph=network_graph,
+            facilities_gdf=facilities_gdf,
+            centroid_mapping=centroid_mapping,
+            facility_mapping=facility_mapping,
+            utm_crs=utm_crs
+        )
+        
+        # Submit all batches
+        future_to_batch = {executor.submit(process_func, batch): i for i, batch in enumerate(centroid_batches)}
+        
+        # Collect results
+        for future in future_to_batch:
+            batch_idx = future_to_batch[future]
+            try:
+                batch_results = future.result()
+                all_results.extend(batch_results)
+                print(f"  Completed batch {batch_idx + 1}/{len(centroid_batches)}")
+            except Exception as exc:
+                print(f"  Batch {batch_idx} generated an exception: {exc}")
+    
+    print(f"Distance calculation completed for {len(all_results)} centroids")
+    return all_results
 
 def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     """Create grid lines layer with grid_infrastructure, centroid_to_grid, grid_to_facility, component_stitch."""
@@ -945,6 +1049,27 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
             facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
             print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
             
+            # Check if demand exceeds total facility capacity and scale proportionally if needed
+            total_demand_mwh = centroids_gdf[demand_col].sum()
+            total_facility_capacity_mwh = sum(facility_remaining.values())
+            
+            if total_demand_mwh > total_facility_capacity_mwh and total_facility_capacity_mwh > 0:
+                scaling_factor = total_demand_mwh / total_facility_capacity_mwh
+                print(f"\nDemand ({total_demand_mwh:,.0f} MWh) exceeds facility capacity ({total_facility_capacity_mwh:,.0f} MWh)")
+                print(f"Scaling all facility capacities by factor {scaling_factor:.3f} to meet demand")
+                
+                # Scale up all facility capacities proportionally
+                for idx in facility_remaining.keys():
+                    facility_remaining[idx] *= scaling_factor
+                
+                # Update facility_capacities list with scaled values
+                for facility_info in facility_capacities:
+                    facility_info['total_capacity'] *= scaling_factor
+                
+                print(f"New total facility capacity: {sum(facility_remaining.values()):,.0f} MWh")
+            else:
+                print(f"Facility capacity ({total_facility_capacity_mwh:,.0f} MWh) sufficient for demand ({total_demand_mwh:,.0f} MWh)")
+            
             # Process each facility and allocate to nearest centroids
             for facility_info in facility_capacities:
                 facility_idx = facility_info['facility_idx']
@@ -1109,6 +1234,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country"):
         print(f"{'='*60}")
         
         print(f"Results saved to {output_file}")
+        print(f"Processing completed using {MAX_WORKERS} parallel workers")
         return str(output_file)
     except Exception as e:
         print(f"Error processing {country_iso3}: {e}")
