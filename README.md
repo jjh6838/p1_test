@@ -221,7 +221,9 @@ cat outputs_global/logs/slurm-JOBID.out
 ### to execute it on cluster
 ```bash
 # Transfer files to Linux cluster, then:
-sed -i 's/\r$//' submit_all_parallel.sh; chmod +x submit_all_parallel.sh; ./submit_all_parallel.sh
+sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
+chmod +x submit_all_parallel.sh parallel_scripts/*.sh
+./submit_all_parallel.sh
 
 # Monitor progress:
 squeue -u lina4376

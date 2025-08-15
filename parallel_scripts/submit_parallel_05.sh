@@ -1,7 +1,7 @@
 #!/bin/bash --login
 #SBATCH --job-name=p05_t1
-#SBATCH --partition=Medium
-#SBATCH --time=48:00:00
+#SBATCH --partition="Long"
+#SBATCH --time=96:00:00
 #SBATCH --mem=340G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing IND (T1)..."
-$PY process_country_supply.py IND --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py IND --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] IND completed"
 else

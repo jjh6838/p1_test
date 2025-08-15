@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing ITA (T3)..."
-$PY process_country_supply.py ITA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py ITA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ITA completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing JPN (T3)..."
-$PY process_country_supply.py JPN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py JPN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] JPN completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing KEN (T3)..."
-$PY process_country_supply.py KEN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KEN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KEN completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing KOR (T3)..."
-$PY process_country_supply.py KOR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KOR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KOR completed"
 else

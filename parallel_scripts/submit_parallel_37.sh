@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing LUX (OTHER)..."
-$PY process_country_supply.py LUX --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LUX --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LUX completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing LVA (OTHER)..."
-$PY process_country_supply.py LVA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LVA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LVA completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing MDA (OTHER)..."
-$PY process_country_supply.py MDA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MDA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MDA completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing MDV (OTHER)..."
-$PY process_country_supply.py MDV --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MDV --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MDV completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing MKD (OTHER)..."
-$PY process_country_supply.py MKD --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MKD --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MKD completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing MLT (OTHER)..."
-$PY process_country_supply.py MLT --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MLT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MLT completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing MNE (OTHER)..."
-$PY process_country_supply.py MNE --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MNE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MNE completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing MOZ (OTHER)..."
-$PY process_country_supply.py MOZ --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MOZ --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MOZ completed"
 else

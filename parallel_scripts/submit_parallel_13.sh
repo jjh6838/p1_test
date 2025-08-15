@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing SDN (T2)..."
-$PY process_country_supply.py SDN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SDN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SDN completed"
 else

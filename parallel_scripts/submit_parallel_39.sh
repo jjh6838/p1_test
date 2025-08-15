@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing PAN (OTHER)..."
-$PY process_country_supply.py PAN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py PAN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PAN completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing PRI (OTHER)..."
-$PY process_country_supply.py PRI --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py PRI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PRI completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing PRK (OTHER)..."
-$PY process_country_supply.py PRK --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py PRK --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PRK completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing PRT (OTHER)..."
-$PY process_country_supply.py PRT --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py PRT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PRT completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing PSE (OTHER)..."
-$PY process_country_supply.py PSE --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py PSE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PSE completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing PYF (OTHER)..."
-$PY process_country_supply.py PYF --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py PYF --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PYF completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing QAT (OTHER)..."
-$PY process_country_supply.py QAT --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py QAT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] QAT completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing ROU (OTHER)..."
-$PY process_country_supply.py ROU --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py ROU --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ROU completed"
 else

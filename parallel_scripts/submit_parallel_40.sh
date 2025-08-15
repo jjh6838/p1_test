@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing RWA (OTHER)..."
-$PY process_country_supply.py RWA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py RWA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] RWA completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing SEN (OTHER)..."
-$PY process_country_supply.py SEN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SEN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SEN completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing SGP (OTHER)..."
-$PY process_country_supply.py SGP --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SGP --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SGP completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing SLB (OTHER)..."
-$PY process_country_supply.py SLB --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SLB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SLB completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing SLE (OTHER)..."
-$PY process_country_supply.py SLE --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SLE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SLE completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing SLV (OTHER)..."
-$PY process_country_supply.py SLV --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SLV --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SLV completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing SRB (OTHER)..."
-$PY process_country_supply.py SRB --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SRB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SRB completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing SSD (OTHER)..."
-$PY process_country_supply.py SSD --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SSD --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SSD completed"
 else
@@ -99,7 +99,7 @@ else
 fi
 
 echo "[INFO] Processing STP (OTHER)..."
-$PY process_country_supply.py STP --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py STP --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] STP completed"
 else
@@ -107,7 +107,7 @@ else
 fi
 
 echo "[INFO] Processing SUR (OTHER)..."
-$PY process_country_supply.py SUR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SUR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SUR completed"
 else
@@ -115,7 +115,7 @@ else
 fi
 
 echo "[INFO] Processing SVK (OTHER)..."
-$PY process_country_supply.py SVK --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SVK --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SVK completed"
 else
@@ -123,7 +123,7 @@ else
 fi
 
 echo "[INFO] Processing SVN (OTHER)..."
-$PY process_country_supply.py SVN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SVN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SVN completed"
 else
@@ -131,7 +131,7 @@ else
 fi
 
 echo "[INFO] Processing SWZ (OTHER)..."
-$PY process_country_supply.py SWZ --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SWZ --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SWZ completed"
 else
@@ -139,7 +139,7 @@ else
 fi
 
 echo "[INFO] Processing SYC (OTHER)..."
-$PY process_country_supply.py SYC --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SYC --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SYC completed"
 else
@@ -147,7 +147,7 @@ else
 fi
 
 echo "[INFO] Processing SYR (OTHER)..."
-$PY process_country_supply.py SYR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py SYR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] SYR completed"
 else
@@ -155,7 +155,7 @@ else
 fi
 
 echo "[INFO] Processing TGO (OTHER)..."
-$PY process_country_supply.py TGO --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TGO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TGO completed"
 else
@@ -163,7 +163,7 @@ else
 fi
 
 echo "[INFO] Processing TJK (OTHER)..."
-$PY process_country_supply.py TJK --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TJK --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TJK completed"
 else
@@ -171,7 +171,7 @@ else
 fi
 
 echo "[INFO] Processing TLS (OTHER)..."
-$PY process_country_supply.py TLS --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TLS --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TLS completed"
 else
@@ -179,7 +179,7 @@ else
 fi
 
 echo "[INFO] Processing TON (OTHER)..."
-$PY process_country_supply.py TON --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TON --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TON completed"
 else
@@ -187,7 +187,7 @@ else
 fi
 
 echo "[INFO] Processing TTO (OTHER)..."
-$PY process_country_supply.py TTO --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TTO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TTO completed"
 else
@@ -195,7 +195,7 @@ else
 fi
 
 echo "[INFO] Processing TUN (OTHER)..."
-$PY process_country_supply.py TUN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TUN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TUN completed"
 else
@@ -203,7 +203,7 @@ else
 fi
 
 echo "[INFO] Processing TWN (OTHER)..."
-$PY process_country_supply.py TWN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py TWN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] TWN completed"
 else
@@ -211,7 +211,7 @@ else
 fi
 
 echo "[INFO] Processing UGA (OTHER)..."
-$PY process_country_supply.py UGA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py UGA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] UGA completed"
 else
@@ -219,7 +219,7 @@ else
 fi
 
 echo "[INFO] Processing URY (OTHER)..."
-$PY process_country_supply.py URY --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py URY --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] URY completed"
 else
@@ -227,7 +227,7 @@ else
 fi
 
 echo "[INFO] Processing VCT (OTHER)..."
-$PY process_country_supply.py VCT --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py VCT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] VCT completed"
 else
@@ -235,7 +235,7 @@ else
 fi
 
 echo "[INFO] Processing VIR (OTHER)..."
-$PY process_country_supply.py VIR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py VIR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] VIR completed"
 else
@@ -243,7 +243,7 @@ else
 fi
 
 echo "[INFO] Processing VNM (OTHER)..."
-$PY process_country_supply.py VNM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py VNM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] VNM completed"
 else
@@ -251,7 +251,7 @@ else
 fi
 
 echo "[INFO] Processing VUT (OTHER)..."
-$PY process_country_supply.py VUT --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py VUT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] VUT completed"
 else
@@ -259,7 +259,7 @@ else
 fi
 
 echo "[INFO] Processing WSM (OTHER)..."
-$PY process_country_supply.py WSM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py WSM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] WSM completed"
 else

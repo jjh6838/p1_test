@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing ISL (OTHER)..."
-$PY process_country_supply.py ISL --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py ISL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ISL completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing ISR (OTHER)..."
-$PY process_country_supply.py ISR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py ISR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ISR completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing JAM (OTHER)..."
-$PY process_country_supply.py JAM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py JAM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] JAM completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing JOR (OTHER)..."
-$PY process_country_supply.py JOR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py JOR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] JOR completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing KGZ (OTHER)..."
-$PY process_country_supply.py KGZ --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KGZ --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KGZ completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing KHM (OTHER)..."
-$PY process_country_supply.py KHM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KHM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KHM completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing KIR (OTHER)..."
-$PY process_country_supply.py KIR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KIR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KIR completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing KNA (OTHER)..."
-$PY process_country_supply.py KNA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KNA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KNA completed"
 else

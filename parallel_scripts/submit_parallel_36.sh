@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing KWT (OTHER)..."
-$PY process_country_supply.py KWT --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py KWT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KWT completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing LAO (OTHER)..."
-$PY process_country_supply.py LAO --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LAO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LAO completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing LBN (OTHER)..."
-$PY process_country_supply.py LBN --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LBN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LBN completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing LBR (OTHER)..."
-$PY process_country_supply.py LBR --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LBR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LBR completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing LCA (OTHER)..."
-$PY process_country_supply.py LCA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LCA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LCA completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing LKA (OTHER)..."
-$PY process_country_supply.py LKA --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LKA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LKA completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing LSO (OTHER)..."
-$PY process_country_supply.py LSO --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LSO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LSO completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing LTU (OTHER)..."
-$PY process_country_supply.py LTU --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py LTU --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LTU completed"
 else

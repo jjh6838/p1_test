@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing MUS (OTHER)..."
-$PY process_country_supply.py MUS --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MUS --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MUS completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing MWI (OTHER)..."
-$PY process_country_supply.py MWI --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py MWI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MWI completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing NAM (OTHER)..."
-$PY process_country_supply.py NAM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py NAM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NAM completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing NCL (OTHER)..."
-$PY process_country_supply.py NCL --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py NCL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NCL completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing NIC (OTHER)..."
-$PY process_country_supply.py NIC --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py NIC --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NIC completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing NLD (OTHER)..."
-$PY process_country_supply.py NLD --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py NLD --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NLD completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing NPL (OTHER)..."
-$PY process_country_supply.py NPL --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py NPL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NPL completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing NRU (OTHER)..."
-$PY process_country_supply.py NRU --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py NRU --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NRU completed"
 else

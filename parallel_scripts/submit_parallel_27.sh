@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing ZMB (T3)..."
-$PY process_country_supply.py ZMB --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py ZMB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ZMB completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing ZWE (T3)..."
-$PY process_country_supply.py ZWE --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py ZWE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ZWE completed"
 else

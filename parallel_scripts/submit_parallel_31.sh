@@ -35,7 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing COM (OTHER)..."
-$PY process_country_supply.py COM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py COM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] COM completed"
 else
@@ -43,7 +43,7 @@ else
 fi
 
 echo "[INFO] Processing CPV (OTHER)..."
-$PY process_country_supply.py CPV --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py CPV --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CPV completed"
 else
@@ -51,7 +51,7 @@ else
 fi
 
 echo "[INFO] Processing CRI (OTHER)..."
-$PY process_country_supply.py CRI --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py CRI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CRI completed"
 else
@@ -59,7 +59,7 @@ else
 fi
 
 echo "[INFO] Processing CUB (OTHER)..."
-$PY process_country_supply.py CUB --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py CUB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CUB completed"
 else
@@ -67,7 +67,7 @@ else
 fi
 
 echo "[INFO] Processing CYM (OTHER)..."
-$PY process_country_supply.py CYM --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py CYM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CYM completed"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 echo "[INFO] Processing CYP (OTHER)..."
-$PY process_country_supply.py CYP --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py CYP --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CYP completed"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[INFO] Processing CZE (OTHER)..."
-$PY process_country_supply.py CZE --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py CZE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CZE completed"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 echo "[INFO] Processing DJI (OTHER)..."
-$PY process_country_supply.py DJI --output-dir outputs_per_country --threads 72
+$PY process_country_supply.py DJI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] DJI completed"
 else
