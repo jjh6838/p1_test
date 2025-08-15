@@ -34,6 +34,9 @@ SUPPLY_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil
 MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
 print(f"Parallel processing configured for {MAX_WORKERS} workers")
 
+# Cache for storing calculated paths
+path_cache = {}
+
 @contextmanager
 def timer(name):
     """Simple timer context manager"""
@@ -682,11 +685,18 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
     Returns:
     - Dictionary with distance info and path details, or None if no path exists
     """
+    # Create cache key (sort nodes to ensure bidirectional caching)
+    cache_key = tuple(sorted([start_node, end_node]))
+    
+    # Check cache first
+    if cache_key in path_cache:
+        return path_cache[cache_key].copy() if path_cache[cache_key] else None
+    
     try:
-        # Use NetworkX to get the path nodes (but we'll calculate distance manually)
+        # Original path calculation
         path_nodes = nx.shortest_path(network_graph, start_node, end_node, weight='weight')
         
-        # Manually sum the weights of each edge in the path
+        # Calculate distances as before
         total_distance = 0
         path_segments = []
         
@@ -696,7 +706,7 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
             
             # Get edge data
             edge_data = network_graph[current_node][next_node]
-            segment_weight = edge_data.get('weight', 0)  # Should be in meters
+            segment_weight = edge_data.get('weight', 0)
             edge_type = edge_data.get('edge_type', 'unknown')
             
             total_distance += segment_weight
@@ -707,14 +717,20 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
                 'edge_type': edge_type
             })
         
-        return {
+        result = {
             'distance_km': total_distance / 1000.0,
             'path_nodes': path_nodes,
             'path_segments': path_segments,
             'total_segments': len(path_segments)
         }
         
+        # Cache the result
+        path_cache[cache_key] = result
+        return result
+        
     except (nx.NetworkXNoPath, nx.NodeNotFound):
+        # Cache negative result too
+        path_cache[cache_key] = None
         return None
 
 def process_centroid_distances_batch(centroid_batch, network_graph, facilities_gdf, centroid_mapping, facility_mapping, utm_crs):
@@ -938,6 +954,10 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
 
 def process_country_supply(country_iso3, output_dir="outputs_per_country", test_mode=False):
     """Main function to process supply analysis for a country"""
+    # Clear path cache for each country
+    global path_cache
+    path_cache = {}
+    
     print(f"\nProcessing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
     total_start = time.time()
     
