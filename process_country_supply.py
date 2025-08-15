@@ -19,6 +19,8 @@ from shapely.ops import unary_union
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 import multiprocessing as mp
+import time
+from contextlib import contextmanager
 
 # Suppress warnings
 # warnings.filterwarnings("ignore")
@@ -31,6 +33,16 @@ SUPPLY_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil
 # Get optimal number of workers based on available CPUs
 MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
 print(f"Parallel processing configured for {MAX_WORKERS} workers")
+
+@contextmanager
+def timer(name):
+    """Simple timer context manager"""
+    start = time.time()
+    try:
+        yield
+    finally:
+        elapsed = time.time() - start
+        print(f"  [{name}]: {elapsed:.2f}s")
 
 def get_utm_crs(lon, lat):
     """Get appropriate UTM CRS for given coordinates"""
@@ -53,7 +65,7 @@ def load_admin_boundaries(country_iso3):
     return country_data
 
 def load_population_centroids(country_bbox, admin_boundaries):
-    """Load and process population centroids from raster with parallel coordinate processing"""
+    """Load and process population centroids - optimized to skip zero pixels"""
     minx, miny, maxx, maxy = country_bbox
     
     with rasterio.open('bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif') as src:
@@ -61,49 +73,36 @@ def load_population_centroids(country_bbox, admin_boundaries):
         pop_data = src.read(1, window=window)
         windowed_transform = rasterio.windows.transform(window, src.transform)
         
-        rows, cols = pop_data.shape
-        total_pixels = rows * cols
+        # OPTIMIZATION: Only process non-zero pixels
+        nonzero_mask = pop_data > 0
+        nonzero_indices = np.where(nonzero_mask)
         
-        print(f"Processing {total_pixels:,} population pixels using parallel workers...")
+        total_pixels = pop_data.size
+        nonzero_pixels = len(nonzero_indices[0])
+        print(f"Population raster: {nonzero_pixels:,} populated pixels out of {total_pixels:,} total ({nonzero_pixels/total_pixels*100:.1f}%)")
         
-        # Create coordinate pairs in parallel
-        def process_pixel_batch(start_idx, end_idx):
-            batch_x, batch_y = [], []
-            for idx in range(start_idx, end_idx):
-                row = idx // cols
-                col = idx % cols
-                x, y = rasterio.transform.xy(windowed_transform, row, col)
-                batch_x.append(x)
-                batch_y.append(y)
-            return batch_x, batch_y
+        if nonzero_pixels == 0:
+            print("No population in this area")
+            return gpd.GeoDataFrame(geometry=[], crs=COMMON_CRS)
         
-        # Split work into batches
-        batch_size = max(1, total_pixels // MAX_WORKERS)
-        centroids_x, centroids_y = [], []
+        # Vectorized coordinate transformation - much faster
+        rows, cols = nonzero_indices
+        xs, ys = rasterio.transform.xy(windowed_transform, rows, cols)
         
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = []
-            for i in range(0, total_pixels, batch_size):
-                end_idx = min(i + batch_size, total_pixels)
-                futures.append(executor.submit(process_pixel_batch, i, end_idx))
-            
-            for future in futures:
-                batch_x, batch_y = future.result()
-                centroids_x.extend(batch_x)
-                centroids_y.extend(batch_y)
-        
-        print(f"Coordinate processing completed for {len(centroids_x):,} pixels")
-        
+        # Create GeoDataFrame directly
         centroids_gdf = gpd.GeoDataFrame(
-            geometry=gpd.points_from_xy(centroids_x, centroids_y),
+            {
+                'geometry': gpd.points_from_xy(xs, ys),
+                'Population_centroid': pop_data[nonzero_mask]
+            },
             crs=COMMON_CRS
         )
-        centroids_gdf["Population_centroid"] = pop_data.flatten()
         
-        # Filter to country boundaries and remove zero population
+        # Filter to country boundaries
         centroids_gdf = gpd.sjoin(centroids_gdf, admin_boundaries, how='inner', predicate='within')
-        centroids_gdf = centroids_gdf[centroids_gdf["Population_centroid"] > 0].copy()
+        centroids_gdf = centroids_gdf.drop(columns=['index_right'])
         
+        print(f"Loaded {len(centroids_gdf):,} population centroids within country boundaries")
         return centroids_gdf
 
 def load_population_and_demand_projections(centroids_gdf, country_iso3):
@@ -277,13 +276,43 @@ def load_grid_lines(country_bbox, admin_boundaries):
     return gpd.GeoDataFrame()
 
 def split_intersecting_edges(lines):
-    """Split lines at intersections with parallel processing for large datasets"""
-    if len(lines) > 1000:  # Use parallel processing for large datasets
-        print(f"Processing {len(lines)} grid lines using parallel workers...")
+    """Split lines at intersections with adaptive processing for very large datasets"""
+    num_lines = len(lines)
+    
+    if num_lines > 10000:  # Very large grid networks (like CHN)
+        print(f"Processing {num_lines:,} grid lines using chunked approach...")
         
-        # Split lines into batches for parallel processing
-        batch_size = max(1, len(lines) // MAX_WORKERS)
-        batches = [lines[i:i+batch_size] for i in range(0, len(lines), batch_size)]
+        # Process in chunks to avoid memory issues
+        chunk_size = 500  # Smaller chunks for very large datasets
+        all_segments = []
+        
+        for i in range(0, num_lines, chunk_size):
+            chunk_end = min(i + chunk_size, num_lines)
+            chunk_lines = lines[i:chunk_end]
+            
+            # Process chunk
+            chunk_merged = unary_union(chunk_lines)
+            
+            if isinstance(chunk_merged, (LineString, MultiLineString)):
+                segments = [chunk_merged] if isinstance(chunk_merged, LineString) else list(chunk_merged.geoms)
+                for segment in segments:
+                    coords = list(segment.coords)
+                    for j in range(len(coords) - 1):
+                        all_segments.append(LineString([coords[j], coords[j + 1]]))
+            
+            # Progress report
+            if (i + chunk_size) % 5000 == 0:
+                print(f"    Processed {i + chunk_size:,}/{num_lines:,} grid lines...")
+        
+        print(f"Split into {len(all_segments):,} segments")
+        return all_segments
+        
+    elif num_lines > 1000:  # Original parallel processing
+        print(f"Processing {num_lines:,} grid lines using {MAX_WORKERS} parallel workers...")
+        
+        # Your existing parallel processing code here...
+        batch_size = max(1, num_lines // MAX_WORKERS)
+        batches = [lines[i:i+batch_size] for i in range(0, num_lines, batch_size)]
         
         def process_batch(batch_lines):
             batch_merged = unary_union(batch_lines)
@@ -425,8 +454,8 @@ def stitch_network_components(network_graph, max_distance_km=10):
 def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     """Create network graph from facilities, grid lines, and centroids"""
     # Get UTM CRS for accurate distance calculations
-    center_lon = facilities_gdf.geometry.unary_union.centroid.x if not facilities_gdf.empty else grid_lines_gdf.geometry.unary_union.centroid.x
-    center_lat = facilities_gdf.geometry.unary_union.centroid.y if not facilities_gdf.empty else grid_lines_gdf.geometry.unary_union.centroid.y
+    center_lon = facilities_gdf.geometry.union_all().centroid.x if not facilities_gdf.empty else grid_lines_gdf.geometry.union_all().centroid.x
+    center_lat = facilities_gdf.geometry.union_all().centroid.y if not facilities_gdf.empty else grid_lines_gdf.geometry.union_all().centroid.y
     utm_crs = get_utm_crs(center_lon, center_lat)
     
     print(f"Projecting to {utm_crs}")
@@ -712,18 +741,10 @@ def process_centroid_distances_batch(centroid_batch, network_graph, facilities_g
     return batch_results
 
 def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
-    """
-    Calculate network distances from all centroids to nearby facilities using parallel processing
-    
-    Parameters:
-    - centroids_gdf: GeoDataFrame of population centroids
-    - facilities_gdf: GeoDataFrame of energy facilities
-    - network_graph: NetworkX graph with grid infrastructure
-    
-    Returns:
-    - List of dictionaries with centroid indices and their facility distances
-    """
-    print(f"Calculating distances for {len(centroids_gdf)} centroids using {MAX_WORKERS} parallel workers...")
+    """Calculate network distances with adaptive batching for large datasets"""
+    num_centroids = len(centroids_gdf)
+    num_facilities = len(facilities_gdf)
+    print(f"Calculating distances for {num_centroids:,} centroids to {num_facilities:,} facilities using {MAX_WORKERS} parallel workers...")
     
     # Create coordinate mappings
     centroid_mapping = {}
@@ -736,20 +757,40 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
             facility_mapping[data.get('facility_idx')] = node
     
     # Get UTM CRS for distance calculations
-    center_point = centroids_gdf.geometry.unary_union.centroid
+    center_point = centroids_gdf.geometry.union_all().centroid
     utm_crs = get_utm_crs(center_point.x, center_point.y)
     
-    # Split centroids into batches for parallel processing
-    batch_size = max(1, len(centroids_gdf) // MAX_WORKERS)
-    centroid_batches = []
+    # Adaptive batch sizing based on dataset scale
+    # Consider both centroids and facilities for complexity
+    complexity_factor = num_centroids * min(num_facilities, 100) / 1000000  # Rough complexity estimate
     
-    for i in range(0, len(centroids_gdf), batch_size):
-        batch = centroids_gdf.iloc[i:i+batch_size]
+    if num_centroids > 1000000:  # Over 1M centroids (like CHN with 4M)
+        batch_size = 50  # Very small batches
+        print(f"Massive dataset detected ({num_centroids:,} centroids) - using minimal batch size")
+    elif num_centroids > 100000:  # 100k-1M centroids
+        batch_size = 100
+    elif num_centroids > 50000:  # 50k-100k (like AFG with 71k)
+        batch_size = 250
+    elif num_centroids > 10000:  # 10k-50k
+        batch_size = 500
+    else:  # Under 10k
+        batch_size = max(50, num_centroids // MAX_WORKERS)
+    
+    # Create batches
+    centroid_batches = []
+    for i in range(0, num_centroids, batch_size):
+        batch = centroids_gdf.iloc[i:min(i+batch_size, num_centroids)]
         centroid_batches.append(batch)
     
-    print(f"Processing {len(centroid_batches)} batches with average size {batch_size}")
+    print(f"Processing {len(centroid_batches)} batches of ~{batch_size} centroids each")
     
-    # Process batches in parallel using ThreadPoolExecutor (better for I/O bound operations)
+    # Progress reporting frequency
+    if num_centroids > 100000:
+        report_interval = max(10, len(centroid_batches) // 20)  # Report ~20 times
+    else:
+        report_interval = max(1, len(centroid_batches) // 10)  # Report ~10 times
+    
+    # Process batches in parallel
     all_results = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         # Create partial function with fixed arguments
@@ -771,7 +812,12 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
             try:
                 batch_results = future.result()
                 all_results.extend(batch_results)
-                print(f"  Completed batch {batch_idx + 1}/{len(centroid_batches)}")
+                
+                # Progress reporting
+                if (batch_idx + 1) % report_interval == 0:
+                    progress_pct = (batch_idx + 1) / len(centroid_batches) * 100
+                    print(f"  Progress: {batch_idx + 1}/{len(centroid_batches)} batches ({progress_pct:.1f}%)")
+                    
             except Exception as exc:
                 print(f"  Batch {batch_idx} generated an exception: {exc}")
     
@@ -868,41 +914,36 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     return layers
 
 def process_country_supply(country_iso3, output_dir="outputs_per_country", test_mode=False):
-    """
-    Main function to process supply analysis for a country
-    
-    Args:
-        country_iso3: ISO3 country code
-        output_dir: Output directory for results
-        test_mode: If True, generates full GPKG with all layers for testing.
-                  If False, generates lightweight Parquet files for global analysis.
-    
-    Test mode creates 4 layers: centroids, facilities, grid_lines, polylines (full data)
-    Production mode creates 4 parquet files with essential columns for global analysis:
-    - centroids: geometry, GID_0, supplying_facility_type, supply_status
-    - facilities: geometry, GID_0, Grouped_Type, total_mwh
-    - grid_lines: geometry, GID_0, line_type
-    - polylines: geometry, GID_0, facility_type
-    """
-    print(f"Processing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
+    """Main function to process supply analysis for a country"""
+    print(f"\nProcessing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
+    total_start = time.time()
     
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
     
     try:
-        # Load inputs
-        admin_boundaries = load_admin_boundaries(country_iso3)
-        country_bbox = get_country_bbox(admin_boundaries)
-        centroids_gdf = load_population_centroids(country_bbox, admin_boundaries)
-        facilities_gdf = load_energy_facilities(country_iso3, 2024)
-        grid_lines_gdf = load_grid_lines(country_bbox, admin_boundaries)
+        # Load inputs with timing
+        with timer("Load admin boundaries"):
+            admin_boundaries = load_admin_boundaries(country_iso3)
+            country_bbox = get_country_bbox(admin_boundaries)
+        
+        with timer("Load population centroids"):
+            centroids_gdf = load_population_centroids(country_bbox, admin_boundaries)
+        
+        with timer("Load facilities"):
+            facilities_gdf = load_energy_facilities(country_iso3, 2024)
+        
+        with timer("Load grid lines"):
+            grid_lines_gdf = load_grid_lines(country_bbox, admin_boundaries)
+        
         print(f"Loaded: {len(centroids_gdf)} centroids, {len(facilities_gdf)} facilities, {len(grid_lines_gdf)} grid lines")
         
         # Country tag
         centroids_gdf['GID_0'] = country_iso3
         
         # Demand projections
-        centroids_gdf = load_population_and_demand_projections(centroids_gdf, country_iso3)
+        with timer("Load population and demand projections"):
+            centroids_gdf = load_population_and_demand_projections(centroids_gdf, country_iso3)
         
         # Default outputs
         network_graph = None
@@ -913,10 +954,12 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         # Process network and allocate supply if facilities and grid exist
         if not facilities_gdf.empty and not grid_lines_gdf.empty:
             # Create network graph
-            network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf)
+            with timer("Create network graph"):
+                network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf)
             
             # Calculate distances between centroids and facilities
-            centroid_facility_distances = calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph)
+            with timer("Calculate facility distances"):
+                centroid_facility_distances = calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph)
             
             # Initialize facility remaining capacities (MWh/year) and track supplied amounts
             facility_remaining = {}
@@ -1076,47 +1119,49 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             centroids_gdf['supply_status'] = 'Not Filled'
         
         # Create all layers
-        layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, facility_supplied, facility_remaining)
+        with timer("Create output layers"):
+            layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, facility_supplied, facility_remaining)
         
         # Write outputs based on mode
-        if test_mode:
-            # Test mode: Full GPKG output for detailed analysis
-            output_file = output_path / f"p1_{country_iso3}.gpkg"
-            
-            for layer_name, layer_data in layers.items():
-                layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
-            
-            print(f"Test mode: Full GPKG saved to {output_file}")
-            output_result = str(output_file)
-        else:
-            # Production mode: Lightweight Parquet files for global analysis
-            parquet_dir = output_path / "parquet"
-            parquet_dir.mkdir(exist_ok=True)
-            
-            # Define essential columns for each layer
-            parquet_schemas = {
-                'centroids': ['geometry', 'GID_0', 'supplying_facility_type', 'supply_status'],
-                'facilities': ['geometry', 'GID_0', 'Grouped_Type', 'total_mwh'],
-                'grid_lines': ['geometry', 'GID_0', 'line_type'],
-                'polylines': ['geometry', 'GID_0', 'facility_type']
-            }
-            
-            output_files = []
-            for layer_name, layer_data in layers.items():
-                if layer_name in parquet_schemas and not layer_data.empty:
-                    # Select only essential columns
-                    essential_columns = parquet_schemas[layer_name]
-                    available_columns = [col for col in essential_columns if col in layer_data.columns]
-                    
-                    if available_columns:
-                        layer_essential = layer_data[available_columns].copy()
-                        parquet_file = parquet_dir / f"{layer_name}_{country_iso3}.parquet"
-                        layer_essential.to_parquet(parquet_file)
-                        output_files.append(str(parquet_file))
-                        print(f"  Saved {layer_name}: {len(layer_essential)} records → {parquet_file.name}")
-            
-            print(f"Production mode: {len(output_files)} Parquet files saved to {parquet_dir}")
-            output_result = str(parquet_dir)
+        with timer("Save outputs"):
+            if test_mode:
+                # Test mode: Full GPKG output for detailed analysis
+                output_file = output_path / f"p1_{country_iso3}.gpkg"
+                
+                for layer_name, layer_data in layers.items():
+                    layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
+                
+                print(f"Test mode: Full GPKG saved to {output_file}")
+                output_result = str(output_file)
+            else:
+                # Production mode: Lightweight Parquet files for global analysis
+                parquet_dir = output_path / "parquet"
+                parquet_dir.mkdir(exist_ok=True)
+                
+                # Define essential columns for each layer
+                parquet_schemas = {
+                    'centroids': ['geometry', 'GID_0', 'supplying_facility_type', 'supply_status'],
+                    'facilities': ['geometry', 'GID_0', 'Grouped_Type', 'total_mwh'],
+                    'grid_lines': ['geometry', 'GID_0', 'line_type'],
+                    'polylines': ['geometry', 'GID_0', 'facility_type']
+                }
+                
+                output_files = []
+                for layer_name, layer_data in layers.items():
+                    if layer_name in parquet_schemas and not layer_data.empty:
+                        # Select only essential columns
+                        essential_columns = parquet_schemas[layer_name]
+                        available_columns = [col for col in essential_columns if col in layer_data.columns]
+                        
+                        if available_columns:
+                            layer_essential = layer_data[available_columns].copy()
+                            parquet_file = parquet_dir / f"{layer_name}_{country_iso3}.parquet"
+                            layer_essential.to_parquet(parquet_file)
+                            output_files.append(str(parquet_file))
+                            print(f"  Saved {layer_name}: {len(layer_essential)} records → {parquet_file.name}")
+                
+                print(f"Production mode: {len(output_files)} Parquet files saved to {parquet_dir}")
+                output_result = str(parquet_dir)
         
         # Generate summary statistics for 2024
         print(f"\n{'='*60}")
