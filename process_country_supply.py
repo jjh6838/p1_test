@@ -1325,6 +1325,99 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         print(f"Error processing {country_iso3}: {e}")
         return None
 
+def allocate_supply_batched(centroids_gdf, facilities_gdf, centroid_facility_distances, 
+                           facility_remaining, facility_supplied, demand_col):
+    """Batch process supply allocation for better performance"""
+    # Pre-compute demand data as numpy arrays for faster access
+    centroid_demands = centroids_gdf[demand_col].fillna(0).to_numpy()
+    centroid_received = np.zeros(len(centroids_gdf))
+    
+    # Create facility-to-centroids mapping sorted by capacity (largest first)
+    facility_capacities = []
+    for idx, facility in facilities_gdf.iterrows():
+        total_capacity = facility_remaining.get(idx, 0)
+        if total_capacity > 0:
+            facility_capacities.append({
+                'facility_idx': idx,
+                'total_capacity': total_capacity,
+                'gem_id': str(facility.get('GEM unit/phase ID', '')) if pd.notna(facility.get('GEM unit/phase ID', '')) else '',
+                'facility_type': facility.get('Grouped_Type', ''),
+                'geometry': facility.geometry
+            })
+    
+    # Sort facilities by total capacity (largest first)
+    facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
+    print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
+    
+    # Pre-build centroid-facility distance matrix for faster lookup
+    print("Building distance lookup matrix...")
+    distance_matrix = {}  # (centroid_idx, facility_idx) -> distance_info
+    
+    for item in centroid_facility_distances:
+        centroid_idx = item['centroid_idx']
+        for distance_info in item['distances']:
+            facility_idx = distance_info.get('facility_idx')
+            distance_matrix[(centroid_idx, facility_idx)] = distance_info
+    
+    # Process facilities in batches for large datasets
+    if len(facility_capacities) > 100:
+        # Process in batches of 10 facilities at a time
+        batch_size = 10
+        num_batches = (len(facility_capacities) + batch_size - 1) // batch_size
+        
+        print(f"Processing facilities in {num_batches} batches of {batch_size}...")
+        
+        for batch_idx in range(num_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min(start_idx + batch_size, len(facility_capacities))
+            batch_facilities = facility_capacities[start_idx:end_idx]
+            
+            # Process batch of facilities
+            for facility_info in batch_facilities:
+                facility_idx = facility_info['facility_idx']
+                remaining_capacity = facility_remaining.get(facility_idx, 0)
+                
+                if remaining_capacity <= 0:
+                    continue
+                
+                # Get all centroids that can reach this facility (vectorized)
+                facility_centroid_distances = []
+                for centroid_idx in range(len(centroids_gdf)):
+                    key = (centroid_idx, facility_idx)
+                    if key in distance_matrix:
+                        remaining_demand = centroid_demands[centroid_idx] - centroid_received[centroid_idx]
+                        if remaining_demand > 0:
+                            distance_info = distance_matrix[key]
+                            facility_centroid_distances.append({
+                                'centroid_idx': centroid_idx,
+                                'distance_km': distance_info.get('distance_km'),
+                                'remaining_demand': remaining_demand,
+                                'path_nodes': distance_info.get('path_nodes', [])
+                            })
+                
+                # Sort and allocate
+                facility_centroid_distances.sort(key=lambda x: x['distance_km'])
+                
+                for centroid_info in facility_centroid_distances:
+                    if remaining_capacity <= 0:
+                        break
+                    
+                    centroid_idx = centroid_info['centroid_idx']
+                    remaining_demand = centroid_info['remaining_demand']
+                    
+                    # Allocate supply
+                    allocated = min(remaining_demand, remaining_capacity)
+                    centroid_received[centroid_idx] += allocated
+                    facility_remaining[facility_idx] -= allocated
+                    facility_supplied[facility_idx] += allocated
+                    remaining_capacity -= allocated
+            
+            # Progress report
+            if (batch_idx + 1) % 5 == 0:
+                print(f"  Processed {end_idx}/{len(facility_capacities)} facilities...")
+    
+    return centroid_received
+
 def main():
     parser = argparse.ArgumentParser(description='Process supply analysis for a country')
     parser.add_argument('country_iso3', help='ISO3 country code')
