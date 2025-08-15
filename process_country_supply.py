@@ -232,87 +232,6 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
     
     return centroids_filtered
 
-def load_conversion_rates(country_iso3):
-    """Load country-specific capacity factors for each energy type.
-    Excel columns contain annual generation hours (CF * 8760). We divide by 8760 to get capacity factors.
-    """
-    try:
-        # Load conversion rates data
-        conversion_df = pd.read_excel("outputs_processed_data/p1_a_ember_gem_2024.xlsx", 
-                                    sheet_name="Grouped_cur")
-        
-        # Filter for the specified country
-        country_conversion = conversion_df[conversion_df['Country Code'] == country_iso3]
-        
-        if country_conversion.empty:
-            print(f"Warning: No conversion rates found for {country_iso3}, using default capacity factors")
-            # Default capacity factors if country not found
-            return {
-                'Solar': 0.25,
-                'Wind': 0.35,
-                'Hydro': 0.45,
-                'Other Renewables': 0.30,
-                'Nuclear': 0.90,
-                'Fossil': 0.50
-            }
-        
-        # Extract conversion rates for each energy type
-        country_data = country_conversion.iloc[0]
-        conversion_rates = {}
-        
-        energy_types = ['Solar', 'Wind', 'Hydro', 'Other Renewables', 'Nuclear', 'Fossil']
-        print(f"Converting annual generation hours to capacity factors for {country_iso3}:")
-        
-        for energy_type in energy_types:
-            conv_col = f"{energy_type}_ConvRate"
-            if conv_col in country_data:
-                hours_per_year = country_data[conv_col]
-                if pd.notna(hours_per_year) and hours_per_year > 0:
-                    # Convert from annual generation hours to capacity factor
-                    capacity_factor = hours_per_year / 8760.0
-                    
-                    # Clamp capacity factor to reasonable range (0-1)
-                    # Some data might be erroneous (>8760 hours/year is impossible)
-                    if capacity_factor > 1.0:
-                        print(f"  Warning: {energy_type} has {hours_per_year:.1f} hours/year (impossible >8760). "
-                              f"Clamping capacity factor from {capacity_factor:.3f} to 1.000")
-                        capacity_factor = 1.0
-                    elif capacity_factor < 0.001:
-                        print(f"  Warning: {energy_type} has very low {hours_per_year:.3f} hours/year. "
-                              f"Capacity factor: {capacity_factor:.6f} (might be already a decimal CF?)")
-                    
-                    conversion_rates[energy_type] = capacity_factor
-                    print(f"  {energy_type}: {hours_per_year:.3f} hours/year → {capacity_factor:.3f} capacity factor ({capacity_factor*100:.1f}%)")
-                else:
-                    # Default rates if missing or invalid
-                    default_rates = {
-                        'Solar': 0.25,
-                        'Wind': 0.35,
-                        'Hydro': 0.45,
-                        'Other Renewables': 0.30,
-                        'Nuclear': 0.90,
-                        'Fossil': 0.50
-                    }
-                    conversion_rates[energy_type] = default_rates.get(energy_type, 0.30)
-                    print(f"  Warning: Using default capacity factor for {energy_type}: {conversion_rates[energy_type]:.3f}")
-            else:
-                print(f"  Warning: Column {conv_col} not found, using default")
-                conversion_rates[energy_type] = 0.30  # Default fallback
-        
-        return conversion_rates
-        
-    except Exception as e:
-        print(f"Error loading conversion rates for {country_iso3}: {e}")
-        # Return default capacity factors
-        return {
-            'Solar': 0.25,
-            'Wind': 0.35,
-            'Hydro': 0.45,
-            'Other Renewables': 0.30,
-            'Nuclear': 0.90,
-            'Fossil': 0.50
-        }
-
 def load_energy_facilities(country_iso3, year=2024):
     """Load energy facilities for country and year"""
     sheet_mapping = {2024: 'Grouped_cur_fac_lvl', 2030: 'Grouped_2030_fac_lvl', 2050: 'Grouped_2050_fac_lvl'}
@@ -896,7 +815,7 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
         return gpd.GeoDataFrame(all_attributes, geometry=all_geometries, crs=COMMON_CRS)
     return gpd.GeoDataFrame()
 
-def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, capacity_factors=None, facility_supplied=None, facility_remaining=None):
+def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, facility_supplied=None, facility_remaining=None):
     """Create all output layers for the GPKG file: centroids, facilities, grid_lines, and polylines"""
     layers = {}
     
@@ -923,17 +842,11 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     
     # Facilities layer - energy generation facilities with capacity, production, and allocation data
     if not facilities_gdf.empty:
-        facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 'Latitude', 'Longitude', 'Adjusted_Capacity_MW']].copy()
+        facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 'Latitude', 'Longitude', 'Adjusted_Capacity_MW', 'total_mwh']].copy()
         facilities_simplified['GID_0'] = country_iso3
         
-        # Use provided capacity factors or load them if not provided
-        if capacity_factors is None:
-            capacity_factors = load_conversion_rates(country_iso3)
-        
-        # Calculate annual energy production potential
-        facilities_simplified['total_mwh'] = facilities_simplified.apply(
-            lambda r: (r.get('Adjusted_Capacity_MW', 0) or 0) * 8760 * capacity_factors.get(r.get('Grouped_Type', ''), 0), axis=1
-        )
+        # total_mwh is now directly available from the facility data
+        # No need to calculate using capacity factors
         
         # Add supply allocation tracking columns
         if facility_supplied is not None and facility_remaining is not None:
@@ -994,15 +907,11 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         # Default outputs
         network_graph = None
         active_connections = []
-        capacity_factors = None
         facility_supplied = None
         facility_remaining = None
         
         # Process network and allocate supply if facilities and grid exist
         if not facilities_gdf.empty and not grid_lines_gdf.empty:
-            # Load conversion rates once for reuse
-            capacity_factors = load_conversion_rates(country_iso3)
-            
             # Create network graph
             network_graph = create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf)
             
@@ -1013,10 +922,8 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             facility_remaining = {}
             facility_supplied = {}
             for idx, facility in facilities_gdf.iterrows():
-                capacity_mw = facility.get('Adjusted_Capacity_MW', 0) or 0
-                energy_type = facility.get('Grouped_Type', '') or ''
-                cf = capacity_factors.get(energy_type, 0.30)
-                total_mwh = capacity_mw * 8760 * cf if capacity_mw > 0 else 0
+                # Use total_mwh directly from facility data
+                total_mwh = facility.get('total_mwh', 0) or 0
                 facility_remaining[idx] = total_mwh
                 facility_supplied[idx] = 0.0
             
@@ -1169,7 +1076,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             centroids_gdf['supply_status'] = 'Not Filled'
         
         # Create all layers
-        layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, capacity_factors, facility_supplied, facility_remaining)
+        layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, facility_supplied, facility_remaining)
         
         # Write outputs based on mode
         if test_mode:

@@ -378,7 +378,7 @@ granular_df = granular_df[granular_columns]
 grouped_columns = ['Country Name'] + [col for col in grouped_df.columns if col != 'Country Name']
 grouped_df = grouped_df[grouped_columns]
 
-### I want to generate another sheet, Grouped_cur_facilities, which contains facility-level data by country (Latitude, Longtitude, Watt adjusted proportionally)
+### I want to generate another file with three sheets which contain facility-level data by country (Latitude, Longtitude, Watt adjusted proportionally)
 # Create a new DataFrame for facility-level data
 grouped_facilities_df = gem_data[['ISO3', 'Country/area', 'Type', 'Capacity (MW)', 'Latitude', 'Longitude', 'GEM unit/phase ID']].copy()
 # Add ISO3 codes and standardize country names
@@ -418,11 +418,13 @@ for _, row in grouped_df.iterrows():
     country_code = row['Country Code']
     for group in grouped_categories.keys():
         target_mw = row.get(f'{group}_Larger_MW', 0)
+        target_mwh = row.get(f'{group}_Potential_MWh', 0)
         if target_mw > 0:
             target_totals.append({
                 'Country Code': country_code,
                 'Grouped_Type': group,
-                'Target_Total_MW': target_mw
+                'Target_Total_MW': target_mw,
+                'Target_Total_MWh': target_mwh
             })
 
 target_totals_df = pd.DataFrame(target_totals)
@@ -431,6 +433,7 @@ target_totals_df = pd.DataFrame(target_totals)
 totals_comparison = pd.merge(current_totals, target_totals_df, on=['Country Code', 'Grouped_Type'], how='outer')
 totals_comparison['Current_Total_MW'] = totals_comparison['Current_Total_MW'].fillna(0)
 totals_comparison['Target_Total_MW'] = totals_comparison['Target_Total_MW'].fillna(0)
+totals_comparison['Target_Total_MWh'] = totals_comparison['Target_Total_MWh'].fillna(0)
 
 # Calculate scaling factors
 totals_comparison['Scaling_Factor'] = totals_comparison.apply(
@@ -441,7 +444,7 @@ totals_comparison['Scaling_Factor'] = totals_comparison.apply(
 # Merge scaling factors back to facilities dataframe
 grouped_facilities_df = pd.merge(
     grouped_facilities_df,
-    totals_comparison[['Country Code', 'Grouped_Type', 'Scaling_Factor']],
+    totals_comparison[['Country Code', 'Grouped_Type', 'Scaling_Factor', 'Target_Total_MWh']],
     on=['Country Code', 'Grouped_Type'],
     how='left'
 )
@@ -449,9 +452,23 @@ grouped_facilities_df = pd.merge(
 # Apply scaling factors to adjust capacity
 grouped_facilities_df['Adjusted_Capacity_MW'] = grouped_facilities_df['Capacity (MW)'] * grouped_facilities_df['Scaling_Factor']
 
+# Calculate total_mwh for each facility by distributing the target MWh proportionally
+grouped_facilities_df['total_mwh'] = grouped_facilities_df.apply(
+    lambda row: (row['Adjusted_Capacity_MW'] / 
+                totals_comparison[
+                    (totals_comparison['Country Code'] == row['Country Code']) & 
+                    (totals_comparison['Grouped_Type'] == row['Grouped_Type'])
+                ]['Target_Total_MW'].iloc[0] * row['Target_Total_MWh']) 
+                if totals_comparison[
+                    (totals_comparison['Country Code'] == row['Country Code']) & 
+                    (totals_comparison['Grouped_Type'] == row['Grouped_Type'])
+                ]['Target_Total_MW'].iloc[0] > 0 else 0,
+    axis=1
+)
+
 # Select and reorder final columns
 grouped_facilities_df = grouped_facilities_df[['Country Name', 'Country Code', 'Type', 'Grouped_Type', 
-                                               'Capacity (MW)', 'Adjusted_Capacity_MW', 'Latitude', 
+                                               'Capacity (MW)', 'Adjusted_Capacity_MW', 'total_mwh', 'Latitude', 
                                                'Longitude', 'GEM unit/phase ID']]
 
 # Save the main results to an Excel file with two sheets
@@ -521,6 +538,7 @@ def merge_facilities_by_location(df):
         first_row = group.iloc[0].copy()
         first_row['Adjusted_Capacity_MW'] = group['Adjusted_Capacity_MW'].sum()
         first_row['Capacity (MW)'] = group['Capacity (MW)'].sum()  # Also sum original capacity
+        first_row['total_mwh'] = group['total_mwh'].sum()  # Also sum total_mwh
         first_row['Num_of_Merged_Units'] = len(group)
         return first_row
     
@@ -548,7 +566,7 @@ print(f"After merging - 2050: {len(grouped_facilities_df_2050_merged)} facilitie
 
 # Reorder columns to include the new Num_of_Merged_Units column
 final_columns = ['Country Name', 'Country Code', 'Type', 'Grouped_Type', 
-                'Capacity (MW)', 'Adjusted_Capacity_MW', 'Latitude', 
+                'Capacity (MW)', 'Adjusted_Capacity_MW', 'total_mwh', 'Latitude', 
                 'Longitude', 'GEM unit/phase ID', 'Num_of_Merged_Units']
 
 grouped_facilities_df_merged = grouped_facilities_df_merged[final_columns]
