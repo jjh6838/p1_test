@@ -262,26 +262,41 @@ def load_energy_facilities(country_iso3, year=2024):
         return gpd.GeoDataFrame()
 
 def load_grid_lines(country_bbox, admin_boundaries):
-    """Load and clip grid lines for country"""
+    """Load and clip grid lines with parallel processing for large datasets"""
     try:
         grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg')
         minx, miny, maxx, maxy = country_bbox
         
-        # Clip to bounding box then country boundaries
-        from shapely.geometry import Polygon
-        bbox_geom = Polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)])
-        bbox_poly = gpd.GeoDataFrame([1], geometry=[bbox_geom], crs=COMMON_CRS)
+        # Initial bbox filter
+        grid_lines_filtered = grid_lines.cx[minx:maxx, miny:maxy]
         
-        grid_clipped = gpd.clip(grid_lines, bbox_poly)
-        if not grid_clipped.empty:
-            grid_country = gpd.clip(grid_clipped, admin_boundaries)
-            print(f"Loaded {len(grid_country)} grid line segments")
-            return grid_country
+        if len(grid_lines_filtered) > 10000:
+            print(f"Large grid dataset ({len(grid_lines_filtered)} lines) - using parallel clipping")
+            
+            # Split into chunks for parallel processing
+            chunk_size = 1000
+            chunks = [grid_lines_filtered.iloc[i:i+chunk_size] 
+                     for i in range(0, len(grid_lines_filtered), chunk_size)]
+            
+            def clip_chunk(chunk):
+                return gpd.clip(chunk, admin_boundaries)
+            
+            # Process in parallel
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                clipped_chunks = list(executor.map(clip_chunk, chunks))
+            
+            # Combine results
+            grid_country = pd.concat(clipped_chunks, ignore_index=True)
+        else:
+            # Use standard clipping for smaller datasets
+            grid_country = gpd.clip(grid_lines_filtered, admin_boundaries)
+        
+        print(f"Loaded {len(grid_country)} grid line segments")
+        return grid_country
         
     except Exception as e:
         print(f"Error loading grid data: {e}")
-    
-    return gpd.GeoDataFrame()
+        return gpd.GeoDataFrame()
 
 def split_intersecting_edges(lines):
     """Split lines at intersections with adaptive processing for very large datasets"""
