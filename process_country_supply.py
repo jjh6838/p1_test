@@ -478,7 +478,7 @@ def stitch_network_components(network_graph, max_distance_km=10):
     return network_graph
 
 def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
-    """Create network graph from facilities, grid lines, and centroids"""
+    """Create network graph from facilities, grid lines, and centroids - OPTIMIZED"""
     # Get UTM CRS for accurate distance calculations
     center_lon = facilities_gdf.geometry.union_all().centroid.x if not facilities_gdf.empty else grid_lines_gdf.geometry.union_all().centroid.x
     center_lat = facilities_gdf.geometry.union_all().centroid.y if not facilities_gdf.empty else grid_lines_gdf.geometry.union_all().centroid.y
@@ -502,8 +502,11 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
         else:
             single_lines.append(row.geometry)
     
+    # OPTIMIZATION 1: Timer for splitting
+    print(f"Splitting {len(single_lines)} grid lines at intersections...")
+    split_start = time.time()
     split_lines = split_intersecting_edges(single_lines)
-    print(f"Grid lines: {len(single_lines)} -> {len(split_lines)} after splitting")
+    print(f"  Split complete in {time.time() - split_start:.2f}s: {len(single_lines)} -> {len(split_lines)} segments")
     
     # Create nodes from line endpoints
     grid_nodes = set()
@@ -512,48 +515,115 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
         grid_nodes.add(coords[0])
         grid_nodes.add(coords[-1])
     
+    print(f"Adding {len(grid_nodes)} grid nodes to graph...")
+    
     # Add nodes to graph
     for node in grid_nodes:
         G.add_node(node, type='grid_line')
     
-    facility_nodes = set((point.x, point.y) for point in facilities_utm.geometry)
+    # Add facility nodes
+    facility_nodes = set()
     for i, (idx, point) in enumerate(zip(facilities_gdf.index, facilities_utm.geometry)):
         node_coord = (point.x, point.y)
+        facility_nodes.add(node_coord)
         G.add_node(node_coord, type='facility', facility_idx=idx)
     
-    centroid_nodes = set((point.x, point.y) for point in centroids_utm.geometry)
+    # Add centroid nodes
+    centroid_nodes = set()
     for i, (idx, point) in enumerate(zip(centroids_gdf.index, centroids_utm.geometry)):
         node_coord = (point.x, point.y)
+        centroid_nodes.add(node_coord)
         G.add_node(node_coord, type='pop_centroid', centroid_idx=idx)
     
+    print(f"Added {len(facility_nodes)} facility nodes and {len(centroid_nodes)} centroid nodes")
+    
     # Add edges from grid lines
+    print(f"Adding {len(split_lines)} grid edges...")
     for line in split_lines:
         coords = list(line.coords)
         G.add_edge(coords[0], coords[-1], weight=line.length, edge_type='grid_infrastructure')
     
-    # Connect facilities and centroids to nearest grid nodes
-    grid_node_list = list(grid_nodes)
+    # OPTIMIZATION 2: Use spatial index for finding nearest grid nodes
+    print("Building spatial index for grid nodes...")
+    from scipy.spatial import cKDTree
     
-    for point_gdf, point_type in [(facilities_utm, 'facility'), (centroids_utm, 'pop_centroid')]:
-        for i, point in enumerate(point_gdf.geometry):
-            point_coord = (point.x, point.y)
+    # Convert grid nodes to array for KDTree
+    grid_node_list = list(grid_nodes)
+    grid_node_array = np.array(grid_node_list)
+    
+    # Build KDTree for fast nearest neighbor search
+    grid_tree = cKDTree(grid_node_array)
+    
+    # OPTIMIZATION 3: Vectorized connection of facilities to grid
+    print(f"Connecting {len(facilities_utm)} facilities to nearest grid nodes...")
+    connect_start = time.time()
+    
+    max_distance = 50000  # 50km threshold
+    
+    # Process facilities
+    if len(facility_nodes) > 0:
+        facility_coords = np.array(list(facility_nodes))
+        
+        # Find nearest grid node for each facility using KDTree
+        distances, indices = grid_tree.query(facility_coords, k=1)
+        
+        # Add edges for facilities within threshold
+        for i, (coord, dist, idx) in enumerate(zip(facility_nodes, distances, indices)):
+            if dist <= max_distance:
+                nearest_grid = grid_node_list[idx]
+                G.add_edge(coord, nearest_grid, weight=dist, edge_type='grid_to_facility')
+    
+    print(f"  Facilities connected in {time.time() - connect_start:.2f}s")
+    
+    # OPTIMIZATION 4: Process centroids in batches for large datasets
+    print(f"Connecting {len(centroids_utm)} centroids to nearest grid nodes...")
+    connect_start = time.time()
+    
+    if len(centroid_nodes) > 10000:  # Large number of centroids
+        # Process in batches to avoid memory issues
+        batch_size = 5000
+        centroid_list = list(centroid_nodes)
+        
+        for i in range(0, len(centroid_list), batch_size):
+            batch_end = min(i + batch_size, len(centroid_list))
+            batch_coords = np.array(centroid_list[i:batch_end])
             
-            if grid_node_list:
-                nearest_grid = min(grid_node_list, key=lambda n: Point(n).distance(point))
-                distance = Point(nearest_grid).distance(point)
-                
-                # Connect with distance threshold
-                max_distance = 50000  # 50km for both facilities and centroids
-                if distance <= max_distance:
-                    edge_type = 'centroid_to_grid' if point_type == 'pop_centroid' else 'grid_to_facility'
-                    G.add_edge(point_coord, nearest_grid, weight=distance, edge_type=edge_type)
-                    
+            # Find nearest grid nodes for batch
+            distances, indices = grid_tree.query(batch_coords, k=1)
+            
+            # Add edges for centroids within threshold
+            for j, (coord, dist, idx) in enumerate(zip(centroid_list[i:batch_end], distances, indices)):
+                if dist <= max_distance:
+                    nearest_grid = grid_node_list[idx]
+                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid')
+            
+            if (i + batch_size) % 10000 == 0:
+                print(f"    Processed {min(i + batch_size, len(centroid_list)):,}/{len(centroid_list):,} centroids...")
+    else:
+        # Process all at once for smaller datasets
+        if len(centroid_nodes) > 0:
+            centroid_coords = np.array(list(centroid_nodes))
+            
+            # Find nearest grid node for each centroid
+            distances, indices = grid_tree.query(centroid_coords, k=1)
+            
+            # Add edges for centroids within threshold
+            for coord, dist, idx in zip(centroid_nodes, distances, indices):
+                if dist <= max_distance:
+                    nearest_grid = grid_node_list[idx]
+                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid')
+    
+    print(f"  Centroids connected in {time.time() - connect_start:.2f}s")
+    
     # Store UTM CRS for coordinate conversion
     G.graph['utm_crs'] = utm_crs
     print(f"Network created: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     
     # Stitch disconnected components within 10km (Jeju approach)
+    print("Stitching network components...")
+    stitch_start = time.time()
     G = stitch_network_components(G, max_distance_km=10)
+    print(f"  Stitching complete in {time.time() - stitch_start:.2f}s")
     
     return G
 
