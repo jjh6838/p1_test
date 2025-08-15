@@ -85,9 +85,17 @@ def load_population_centroids(country_bbox, admin_boundaries):
             print("No population in this area")
             return gpd.GeoDataFrame(geometry=[], crs=COMMON_CRS)
         
-        # Vectorized coordinate transformation - much faster
-        rows, cols = nonzero_indices
-        xs, ys = rasterio.transform.xy(windowed_transform, rows, cols)
+        # FIX: Convert arrays to lists to avoid NumPy deprecation warning
+        rows = nonzero_indices[0].tolist()
+        cols = nonzero_indices[1].tolist()
+        
+        # Transform coordinates one by one to avoid array conversion issues
+        xs = []
+        ys = []
+        for row, col in zip(rows, cols):
+            x, y = rasterio.transform.xy(windowed_transform, row, col)
+            xs.append(x)
+            ys.append(y)
         
         # Create GeoDataFrame directly
         centroids_gdf = gpd.GeoDataFrame(
