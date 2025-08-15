@@ -1,7 +1,7 @@
 #!/bin/bash --login
 #SBATCH --job-name=p06_t1
 #SBATCH --partition="Long"
-#SBATCH --time=96:00:00
+#SBATCH --time=168:00:00
 #SBATCH --mem=340G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1

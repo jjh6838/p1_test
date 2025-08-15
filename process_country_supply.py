@@ -874,14 +874,11 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     complexity_factor = num_centroids * min(num_facilities, 100) / 1000000  # Rough complexity estimate
     
     if num_centroids > 1000000:  # Over 1M centroids (like CHN with 4M)
-        batch_size = 50  # Very small batches
-        print(f"Massive dataset detected ({num_centroids:,} centroids) - using minimal batch size")
+        batch_size = 25  # Smaller batches for more parallelism (was 50)
     elif num_centroids > 100000:  # 100k-1M centroids
-        batch_size = 100
+        batch_size = 50   # Was 100
     elif num_centroids > 50000:  # 50k-100k (like AFG with 71k)
-        batch_size = 250
-    elif num_centroids > 10000:  # 10k-50k
-        batch_size = 500
+        batch_size = 100  # Was 250
     else:  # Under 10k
         batch_size = max(50, num_centroids // MAX_WORKERS)
     
