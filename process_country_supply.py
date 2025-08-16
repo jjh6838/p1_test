@@ -1081,136 +1081,25 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 facility_supplied[idx] = 0.0
             
             # Prepare centroid columns for supply allocation
-            if 'supplying_facility_distance' not in centroids_gdf.columns:
-                centroids_gdf['supplying_facility_distance'] = np.nan
-            if 'supplying_facility_type' not in centroids_gdf.columns:
-                centroids_gdf['supplying_facility_type'] = ''
-            if 'supplying_facility_gem_id' not in centroids_gdf.columns:
-                centroids_gdf['supplying_facility_gem_id'] = ''
-            centroids_gdf['supply_received_mwh'] = 0.0
-            centroids_gdf['supply_status'] = 'Not Filled'
-            
-            demand_col = 'Total_Demand_2024_centroid'
-            
-            # Initialize centroid tracking columns (supporting multiple facilities)
             centroids_gdf['supplying_facility_distance'] = ''
             centroids_gdf['supplying_facility_type'] = ''
             centroids_gdf['supplying_facility_gem_id'] = ''
             centroids_gdf['supply_received_mwh'] = 0.0
             centroids_gdf['supply_status'] = 'Not Filled'
             
-            # Create facility-to-centroids mapping sorted by capacity (largest first)
-            facility_capacities = []
-            for idx, facility in facilities_gdf.iterrows():
-                total_capacity = facility_remaining.get(idx, 0)
-                if total_capacity > 0:
-                    facility_capacities.append({
-                        'facility_idx': idx,
-                        'total_capacity': total_capacity,
-                        'gem_id': str(facility.get('GEM unit/phase ID', '')) if pd.notna(facility.get('GEM unit/phase ID', '')) else '',
-                        'facility_type': facility.get('Grouped_Type', ''),
-                        'geometry': facility.geometry
-                    })
+            demand_col = 'Total_Demand_2024_centroid'
             
-            # Sort facilities by total capacity (largest first)
-            facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
-            print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
+            # VECTORIZED SUPPLY ALLOCATION
+            with timer("Allocate supply (Vectorized)"):
+                centroids_gdf, active_connections = allocate_supply_vectorized(
+                    centroids_gdf, facilities_gdf, centroid_facility_distances,
+                    facility_remaining, facility_supplied, demand_col
+                )
             
-            # Process each facility and allocate to nearest centroids
-            for facility_info in facility_capacities:
-                facility_idx = facility_info['facility_idx']
-                remaining_capacity = facility_remaining.get(facility_idx, 0)
-                
-                if remaining_capacity <= 0:
-                    continue
-                
-                # Find centroids that can reach this facility
-                facility_centroid_distances = []
-                for item in centroid_facility_distances:
-                    centroid_idx = item['centroid_idx']
-                    
-                    # Find this facility in the centroid's distance list
-                    facility_distance_info = None
-                    for distance_info in item['distances']:
-                        if distance_info.get('facility_idx') == facility_idx:
-                            facility_distance_info = distance_info
-                            break
-                    
-                    if facility_distance_info:
-                        centroid_demand = float(centroids_gdf.loc[centroid_idx, demand_col] or 0)
-                        centroid_received = float(centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] or 0)
-                        remaining_demand = centroid_demand - centroid_received
-                        
-                        if remaining_demand > 0:  # Only consider centroids with unmet demand
-                            # Get the centroid's nearest facility distance (to any facility)
-                            nearest_facility_distance = item['distances'][0]['distance_km'] if item['distances'] else float('inf')
-                            
-                            facility_centroid_distances.append({
-                                'centroid_idx': centroid_idx,
-                                'distance_to_this_facility': facility_distance_info.get('distance_km'),
-                                'nearest_facility_distance': nearest_facility_distance,
-                                'remaining_demand': remaining_demand,
-                                'path_nodes': facility_distance_info.get('path_nodes', []),
-                                'centroid_geom': centroids_gdf.loc[centroid_idx, 'geometry']
-                            })
-                
-                # Sort centroids by their distance to this specific facility
-                facility_centroid_distances.sort(key=lambda x: x['distance_to_this_facility'])
-                
-                # Allocate capacity to centroids prioritized by nearest facility distance
-                for centroid_info in facility_centroid_distances:
-                    if remaining_capacity <= 0:
-                        break
-                    
-                    centroid_idx = centroid_info['centroid_idx']
-                    remaining_demand = centroid_info['remaining_demand']
-                    distance_km = centroid_info['distance_to_this_facility']
-                    
-                    # Allocate supply
-                    allocated = min(remaining_demand, remaining_capacity)
-                    centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] += allocated
-                    facility_remaining[facility_idx] -= allocated
-                    facility_supplied[facility_idx] += allocated
-                    remaining_capacity -= allocated
-                    
-                    # Update centroid facility tracking (comma-separated for multiple facilities)
-                    current_distances = centroids_gdf.loc[centroid_idx, 'supplying_facility_distance']
-                    current_types = centroids_gdf.loc[centroid_idx, 'supplying_facility_type']
-                    current_gem_ids = centroids_gdf.loc[centroid_idx, 'supplying_facility_gem_id']
-                    
-                    # Append new facility info
-                    new_distance = f"{distance_km:.2f}"
-                    new_type = facility_info['facility_type']
-                    new_gem_id = facility_info['gem_id']
-                    
-                    if current_distances == '':
-                        centroids_gdf.loc[centroid_idx, 'supplying_facility_distance'] = new_distance
-                        centroids_gdf.loc[centroid_idx, 'supplying_facility_type'] = new_type
-                        centroids_gdf.loc[centroid_idx, 'supplying_facility_gem_id'] = new_gem_id
-                    else:
-                        centroids_gdf.loc[centroid_idx, 'supplying_facility_distance'] = f"{current_distances}, {new_distance}"
-                        centroids_gdf.loc[centroid_idx, 'supplying_facility_type'] = f"{current_types}, {new_type}"
-                        centroids_gdf.loc[centroid_idx, 'supplying_facility_gem_id'] = f"{current_gem_ids}, {new_gem_id}"
-                    
-                    # Track active connection for polylines
-                    active_connections.append({
-                        'centroid_idx': centroid_idx,
-                        'facility_gem_id': facility_info['gem_id'],
-                        'centroid_lat': centroid_info['centroid_geom'].y,
-                        'centroid_lon': centroid_info['centroid_geom'].x,
-                        'facility_lat': facility_info['geometry'].y,
-                        'facility_lon': facility_info['geometry'].x,
-                        'network_path': centroid_info['path_nodes'],
-                        'supply_mwh': allocated,
-                        'distance_km': distance_km,
-                        'facility_type': facility_info['facility_type'],
-                        'path_nodes': centroid_info['path_nodes']
-                    })
-            
-            # Update supply status for all centroids
-            for centroid_idx, centroid in centroids_gdf.iterrows():
-                demand = float(centroid.get(demand_col, 0) or 0)
-                received = float(centroid.get('supply_received_mwh', 0) or 0)
+            # Update supply status for all centroids (keeping original loop for safety)
+            for centroid_idx in centroids_gdf.index:  # Use .index instead of iterrows
+                demand = float(centroids_gdf.loc[centroid_idx, demand_col] if pd.notna(centroids_gdf.loc[centroid_idx, demand_col]) else 0)
+                received = float(centroids_gdf.loc[centroid_idx, 'supply_received_mwh'] if pd.notna(centroids_gdf.loc[centroid_idx, 'supply_received_mwh']) else 0)
                 
                 if demand <= 0:
                     centroids_gdf.loc[centroid_idx, 'supply_status'] = 'No Demand'
@@ -1322,14 +1211,29 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         print(f"Error processing {country_iso3}: {e}")
         return None
 
-def allocate_supply_batched(centroids_gdf, facilities_gdf, centroid_facility_distances, 
-                           facility_remaining, facility_supplied, demand_col):
-    """Batch process supply allocation for better performance"""
-    # Pre-compute demand data as numpy arrays for faster access
-    centroid_demands = centroids_gdf[demand_col].fillna(0).to_numpy()
-    centroid_received = np.zeros(len(centroids_gdf))
+def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_distances, 
+                               facility_remaining, facility_supplied, demand_col):
+    """Vectorized supply allocation that preserves exact original behavior"""
+    import numpy as np
     
-    # Create facility-to-centroids mapping sorted by capacity (largest first)
+    # Reset index to ensure we have sequential indices for array operations
+    centroids_gdf_reset = centroids_gdf.reset_index(drop=True)
+    
+    # Create index mapping from original to reset indices
+    original_to_reset = {orig_idx: reset_idx for reset_idx, orig_idx in enumerate(centroids_gdf.index)}
+    
+    # Pre-compute demand and initialize received arrays
+    num_centroids = len(centroids_gdf_reset)
+    centroid_demands = centroids_gdf_reset[demand_col].fillna(0).values.astype(np.float64)
+    centroid_received = np.zeros(num_centroids, dtype=np.float64)
+    
+    # Initialize tracking lists for facility info (for comma-separated strings)
+    supplying_distances = [[] for _ in range(num_centroids)]
+    supplying_types = [[] for _ in range(num_centroids)]
+    supplying_gem_ids = [[] for _ in range(num_centroids)]
+    active_connections = []
+    
+    # Create facility list sorted by capacity (preserving original logic)
     facility_capacities = []
     for idx, facility in facilities_gdf.iterrows():
         total_capacity = facility_remaining.get(idx, 0)
@@ -1342,78 +1246,97 @@ def allocate_supply_batched(centroids_gdf, facilities_gdf, centroid_facility_dis
                 'geometry': facility.geometry
             })
     
-    # Sort facilities by total capacity (largest first)
+    # Sort by capacity (largest first) - matches original behavior
     facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
     print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
     
-    # Pre-build centroid-facility distance matrix for faster lookup
-    print("Building distance lookup matrix...")
-    distance_matrix = {}  # (centroid_idx, facility_idx) -> distance_info
-    
-    for item in centroid_facility_distances:
-        centroid_idx = item['centroid_idx']
-        for distance_info in item['distances']:
-            facility_idx = distance_info.get('facility_idx')
-            distance_matrix[(centroid_idx, facility_idx)] = distance_info
-    
-    # Process facilities in batches for large datasets
-    if len(facility_capacities) > 100:
-        # Process in batches of 10 facilities at a time
-        batch_size = 10
-        num_batches = (len(facility_capacities) + batch_size - 1) // batch_size
+    # Process each facility (preserving original allocation logic)
+    for facility_info in facility_capacities:
+        facility_idx = facility_info['facility_idx']
+        remaining_capacity = facility_remaining.get(facility_idx, 0)
         
-        print(f"Processing facilities in {num_batches} batches of {batch_size}...")
+        if remaining_capacity <= 0:
+            continue
         
-        for batch_idx in range(num_batches):
-            start_idx = batch_idx * batch_size
-            end_idx = min(start_idx + batch_size, len(facility_capacities))
-            batch_facilities = facility_capacities[start_idx:end_idx]
+        # Find centroids that can reach this facility
+        facility_centroid_distances = []
+        for item in centroid_facility_distances:
+            original_centroid_idx = item['centroid_idx']
             
-            # Process batch of facilities
-            for facility_info in batch_facilities:
-                facility_idx = facility_info['facility_idx']
-                remaining_capacity = facility_remaining.get(facility_idx, 0)
+            # Map to reset index for array operations
+            if original_centroid_idx not in original_to_reset:
+                continue  # Skip if centroid was filtered out
                 
-                if remaining_capacity <= 0:
-                    continue
-                
-                # Get all centroids that can reach this facility (vectorized)
-                facility_centroid_distances = []
-                for centroid_idx in range(len(centroids_gdf)):
-                    key = (centroid_idx, facility_idx)
-                    if key in distance_matrix:
-                        remaining_demand = centroid_demands[centroid_idx] - centroid_received[centroid_idx]
-                        if remaining_demand > 0:
-                            distance_info = distance_matrix[key]
-                            facility_centroid_distances.append({
-                                'centroid_idx': centroid_idx,
-                                'distance_km': distance_info.get('distance_km'),
-                                'remaining_demand': remaining_demand,
-                                'path_nodes': distance_info.get('path_nodes', [])
-                            })
-                
-                # Sort and allocate
-                facility_centroid_distances.sort(key=lambda x: x['distance_km'])
-                
-                for centroid_info in facility_centroid_distances:
-                    if remaining_capacity <= 0:
-                        break
-                    
-                    centroid_idx = centroid_info['centroid_idx']
-                    remaining_demand = centroid_info['remaining_demand']
-                    
-                    # Allocate supply
-                    allocated = min(remaining_demand, remaining_capacity)
-                    centroid_received[centroid_idx] += allocated
-                    facility_remaining[facility_idx] -= allocated
-                    facility_supplied[facility_idx] += allocated
-                    remaining_capacity -= allocated
+            reset_centroid_idx = original_to_reset[original_centroid_idx]
             
-            # Progress report
-            if (batch_idx + 1) % 5 == 0:
-                print(f"  Processed {end_idx}/{len(facility_capacities)} facilities...")
+            # Find this facility in the centroid's distance list
+            for distance_info in item['distances']:
+                if distance_info.get('facility_idx') == facility_idx:
+                    remaining_demand = centroid_demands[reset_centroid_idx] - centroid_received[reset_centroid_idx]
+                    
+                    if remaining_demand > 0:
+                        # Get nearest facility distance (for sorting)
+                        nearest_facility_distance = item['distances'][0]['distance_km'] if item['distances'] else float('inf')
+                        
+                        facility_centroid_distances.append({
+                            'centroid_idx': reset_centroid_idx,  # Use reset index
+                            'original_idx': original_centroid_idx,  # Keep original for reference
+                            'distance_to_this_facility': distance_info.get('distance_km'),
+                            'nearest_facility_distance': nearest_facility_distance,
+                            'remaining_demand': remaining_demand,
+                            'path_nodes': distance_info.get('path_nodes', [])
+                        })
+                    break
+        
+        # Sort by distance to this facility (preserving original sort logic)
+        facility_centroid_distances.sort(key=lambda x: x['distance_to_this_facility'])
+        
+        # Allocate to centroids
+        for centroid_info in facility_centroid_distances:
+            if remaining_capacity <= 0:
+                break
+            
+            reset_centroid_idx = centroid_info['centroid_idx']
+            remaining_demand = centroid_info['remaining_demand']
+            distance_km = centroid_info['distance_to_this_facility']
+            
+            # Allocate supply
+            allocated = min(remaining_demand, remaining_capacity)
+            centroid_received[reset_centroid_idx] += allocated
+            facility_remaining[facility_idx] -= allocated
+            facility_supplied[facility_idx] += allocated
+            remaining_capacity -= allocated
+            
+            # Track facility info for this centroid
+            supplying_distances[reset_centroid_idx].append(f"{distance_km:.2f}")
+            supplying_types[reset_centroid_idx].append(facility_info['facility_type'])
+            supplying_gem_ids[reset_centroid_idx].append(facility_info['gem_id'])
+            
+            # Track active connection (use original index for connection tracking)
+            centroid_geom = centroids_gdf_reset.iloc[reset_centroid_idx].geometry
+            active_connections.append({
+                'centroid_idx': centroid_info['original_idx'],  # Use original index for output
+                'facility_gem_id': facility_info['gem_id'],
+                'centroid_lat': centroid_geom.y,
+                'centroid_lon': centroid_geom.x,
+                'facility_lat': facility_info['geometry'].y,
+                'facility_lon': facility_info['geometry'].x,
+                'network_path': centroid_info['path_nodes'],
+                'supply_mwh': allocated,
+                'distance_km': distance_km,
+                'facility_type': facility_info['facility_type'],
+                'path_nodes': centroid_info['path_nodes']
+            })
     
-    return centroid_received
+    # Update original centroids_gdf with vectorized operations
+    # Map values back to original indices
+    for orig_idx, reset_idx in original_to_reset.items():
+        centroids_gdf.loc[orig_idx, 'supply_received_mwh'] = centroid_received[reset_idx]
+        centroids_gdf.loc[orig_idx, 'supplying_facility_distance'] = ', '.join(supplying_distances[reset_idx]) if supplying_distances[reset_idx] else ''
+        centroids_gdf.loc[orig_idx, 'supplying_facility_type'] = ', '.join(supplying_types[reset_idx]) if supplying_types[reset_idx] else ''
+        centroids_gdf.loc[orig_idx, 'supplying_facility_gem_id'] = ', '.join(supplying_gem_ids[reset_idx]) if supplying_gem_ids[reset_idx] else ''
+    
+    return centroids_gdf, active_connections
 
 def main():
     parser = argparse.ArgumentParser(description='Process supply analysis for a country')
