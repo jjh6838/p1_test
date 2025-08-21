@@ -10,7 +10,7 @@ plt.rcParams['font.family'] = 'Arial'  # Or 'Helvetica'
 
 
 # Load the data from the Excel file
-data = pd.read_excel('outputs_processed_data/p1_a_ember_2024_30.xlsx')
+data = pd.read_excel('outputs_processed_data/p1_b_ember_2024_30_50.xlsx')
 
 # Generate random percentages for 2024, 2030, and 2050
 np.random.seed(42)  # For reproducibility
@@ -552,7 +552,7 @@ ax_legend.legend(handles=legend_handles, loc='center', fontsize=legend_fs, frame
 fig3.suptitle('Figure 3. Climate Risk Exposure of Electricity Generation by Income Group and Region (2024–2050)', 
               fontsize=10, fontweight='bold', y=0.95)
 fig3.savefig('outputs_processed_fig/fig3.pdf', bbox_inches='tight', dpi=300)
-
+fig3.savefig('outputs_processed_fig/fig3.jpg', bbox_inches='tight', dpi=300)
 
 # === FIGURE 4: Custom 11 subplots (2024–2050) - Economic Value (USD) ===
 fig4 = plt.figure(figsize=(7.2, 5.5), dpi=300)
@@ -888,4 +888,4 @@ ax_legend.legend(handles=legend_handles, loc='center', fontsize=legend_fs, frame
 fig4.suptitle('Figure 4. Climate Risk Exposure of Electricity Generation Value by Income Group and Region (2024–2050)', 
               fontsize=10, fontweight='bold', y=0.95)
 fig4.savefig('outputs_processed_fig/fig4.pdf', bbox_inches='tight', dpi=300)
-
+fig4.savefig('outputs_processed_fig/fig4.jpg', bbox_inches='tight', dpi=300)

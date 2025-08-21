@@ -291,3 +291,117 @@ Layers successfully combined:
 2025-08-14 18:00:54,737 - INFO - ================================================================================
 2025-08-14 18:00:54,738 - INFO - Global combination completed successfully at 2025-08-14 18:00:54.738149
 2025-08-14 18:00:54,743 - INFO - Global results combination completed successfully!
+2025-08-15 22:41:55,825 - INFO - ============================================================
+2025-08-15 22:41:55,826 - INFO - STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)
+2025-08-15 22:41:55,826 - INFO - ============================================================
+2025-08-15 22:41:55,827 - INFO - Starting global results combination at 2025-08-15 22:41:55.827701
+2025-08-15 22:41:55,828 - INFO - Processing Parquet files, Output format: gpkg
+2025-08-15 22:41:55,828 - INFO - 
+--- Processing centroids layer ---
+2025-08-15 22:41:55,830 - INFO - Combining centroids layer from 4 Parquet files
+2025-08-15 22:41:56,078 - INFO - centroids from BRN loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,079 - INFO - Loaded centroids from BRN: 1576 records
+2025-08-15 22:41:56,126 - INFO - centroids from JAM loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,127 - INFO - Loaded centroids from JAM: 9812 records
+2025-08-15 22:41:56,175 - INFO - centroids from LUX loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,175 - INFO - Loaded centroids from LUX: 3752 records
+2025-08-15 22:41:56,215 - INFO - centroids from SGP loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,215 - INFO - Loaded centroids from SGP: 512 records
+2025-08-15 22:41:56,217 - INFO - Combining centroids data from 4 countries...
+2025-08-15 22:41:56,226 - INFO - Combined centroids: 15652 total records (with geometry)
+2025-08-15 22:41:56,227 - INFO - Successfully combined centroids: 15652 records
+2025-08-15 22:41:56,227 - INFO - 
+--- Processing facilities layer ---
+2025-08-15 22:41:56,229 - INFO - Combining facilities layer from 4 Parquet files
+2025-08-15 22:41:56,265 - INFO - facilities from BRN loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,265 - INFO - Loaded facilities from BRN: 5 records
+2025-08-15 22:41:56,307 - INFO - facilities from JAM loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,307 - INFO - Loaded facilities from JAM: 11 records
+2025-08-15 22:41:56,348 - INFO - facilities from LUX loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,349 - INFO - Loaded facilities from LUX: 24 records
+2025-08-15 22:41:56,390 - INFO - facilities from SGP loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,391 - INFO - Loaded facilities from SGP: 37 records
+2025-08-15 22:41:56,392 - INFO - Combining facilities data from 4 countries...
+2025-08-15 22:41:56,395 - INFO - Combined facilities: 77 total records (with geometry)
+2025-08-15 22:41:56,396 - INFO - Successfully combined facilities: 77 records
+2025-08-15 22:41:56,396 - INFO - 
+--- Processing grid_lines layer ---
+2025-08-15 22:41:56,397 - INFO - Combining grid_lines layer from 4 Parquet files
+2025-08-15 22:41:56,443 - INFO - grid_lines from BRN loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,443 - INFO - Loaded grid_lines from BRN: 1941 records
+2025-08-15 22:41:56,495 - INFO - grid_lines from JAM loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,495 - INFO - Loaded grid_lines from JAM: 11475 records
+2025-08-15 22:41:56,546 - INFO - grid_lines from LUX loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,546 - INFO - Loaded grid_lines from LUX: 4746 records
+2025-08-15 22:41:56,594 - INFO - grid_lines from SGP loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,594 - INFO - Loaded grid_lines from SGP: 758 records
+2025-08-15 22:41:56,595 - INFO - Combining grid_lines data from 4 countries...
+2025-08-15 22:41:56,600 - INFO - Combined grid_lines: 18920 total records (with geometry)
+2025-08-15 22:41:56,601 - INFO - Successfully combined grid_lines: 18920 records
+2025-08-15 22:41:56,601 - INFO - 
+--- Processing polylines layer ---
+2025-08-15 22:41:56,602 - INFO - Combining polylines layer from 4 Parquet files
+2025-08-15 22:41:56,652 - INFO - polylines from BRN loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,652 - INFO - Loaded polylines from BRN: 1580 records
+2025-08-15 22:41:56,757 - INFO - polylines from JAM loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,757 - INFO - Loaded polylines from JAM: 9179 records
+2025-08-15 22:41:56,826 - INFO - polylines from LUX loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,826 - INFO - Loaded polylines from LUX: 3451 records
+2025-08-15 22:41:56,872 - INFO - polylines from SGP loaded as GeoDataFrame with geometry
+2025-08-15 22:41:56,873 - INFO - Loaded polylines from SGP: 548 records
+2025-08-15 22:41:56,875 - INFO - Combining polylines data from 4 countries...
+2025-08-15 22:41:56,877 - INFO - Combined polylines: 14758 total records (with geometry)
+2025-08-15 22:41:56,877 - INFO - Successfully combined polylines: 14758 records
+2025-08-15 22:41:56,877 - INFO - Saving global analysis as GPKG: global_supply_analysis.gpkg
+2025-08-15 22:41:56,879 - INFO - Processing centroids: 15652 records
+2025-08-15 22:41:57,372 - INFO - Created 15,652 records
+2025-08-15 22:41:57,433 - INFO - Saved centroids to GPKG (with geometry)
+2025-08-15 22:41:57,433 - INFO - Processing facilities: 77 records
+2025-08-15 22:41:57,462 - INFO - Created 77 records
+2025-08-15 22:41:57,524 - INFO - Saved facilities to GPKG (with geometry)
+2025-08-15 22:41:57,525 - INFO - Processing grid_lines: 18920 records
+2025-08-15 22:41:57,805 - INFO - Created 18,920 records
+2025-08-15 22:41:57,937 - INFO - Saved grid_lines to GPKG (with geometry)
+2025-08-15 22:41:57,938 - INFO - Processing polylines: 14758 records
+2025-08-15 22:41:58,502 - INFO - Created 14,758 records
+2025-08-15 22:41:58,645 - INFO - Saved polylines to GPKG (with geometry)
+2025-08-15 22:41:58,646 - INFO - Global GPKG saved with 4 geometry layers
+2025-08-15 22:41:58,646 - INFO - 
+================================================================================
+2025-08-15 22:41:58,647 - INFO - GLOBAL SUPPLY ANALYSIS SUMMARY
+2025-08-15 22:41:58,647 - INFO - ================================================================================
+2025-08-15 22:41:58,648 - INFO - Countries processed: 4
+2025-08-15 22:41:58,651 - INFO - 
+Global centroid supply status:
+2025-08-15 22:41:58,652 - INFO -   Total centroids: 15,652
+2025-08-15 22:41:58,652 - INFO -   Filled: 14,682 centroids (93.8%)
+2025-08-15 22:41:58,653 - INFO -   Partially Filled: 12 centroids (0.1%)
+2025-08-15 22:41:58,653 - INFO -   Not Filled: 958 centroids (6.1%)
+2025-08-15 22:41:58,654 - INFO -   No Demand: 0 centroids (0.0%)
+2025-08-15 22:41:58,672 - INFO - 
+Supplying facility types:
+2025-08-15 22:41:58,672 - INFO -   Fossil: 9,428 connections
+2025-08-15 22:41:58,673 - INFO -   Hydro: 3,117 connections
+2025-08-15 22:41:58,673 - INFO -   Wind: 1,369 connections
+2025-08-15 22:41:58,674 - INFO -   Solar: 821 connections
+2025-08-15 22:41:58,674 - INFO -   Other Renewables: 23 connections
+2025-08-15 22:41:58,675 - INFO - 
+Global facilities:
+2025-08-15 22:41:58,675 - INFO -   Countries with facilities: 4
+2025-08-15 22:41:58,675 - INFO -   Total facilities: 77
+2025-08-15 22:41:58,676 - INFO -   Facility types:
+2025-08-15 22:41:58,677 - INFO -     Solar: 45 facilities
+2025-08-15 22:41:58,677 - INFO -     Fossil: 19 facilities
+2025-08-15 22:41:58,677 - INFO -     Wind: 10 facilities
+2025-08-15 22:41:58,678 - INFO -     Other Renewables: 2 facilities
+2025-08-15 22:41:58,678 - INFO -     Hydro: 1 facilities
+2025-08-15 22:41:58,679 - INFO -   Total global capacity: 90,161,155 MWh/year
+2025-08-15 22:41:58,679 - INFO - 
+Layers successfully combined:
+2025-08-15 22:41:58,680 - INFO -   centroids: 15,652 records
+2025-08-15 22:41:58,680 - INFO -   facilities: 77 records
+2025-08-15 22:41:58,680 - INFO -   grid_lines: 18,920 records
+2025-08-15 22:41:58,680 - INFO -   polylines: 14,758 records
+2025-08-15 22:41:58,681 - INFO - ================================================================================
+2025-08-15 22:41:58,681 - INFO - Global combination completed successfully at 2025-08-15 22:41:58.681190
+2025-08-15 22:41:58,705 - INFO - Global results combination completed successfully!

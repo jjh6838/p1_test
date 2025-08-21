@@ -10,7 +10,7 @@ plt.rcParams['font.family'] = 'Arial'  # Or 'Helvetica'
 
 
 # Load the data from the Excel file
-data = pd.read_excel('outputs_processed_data/p1_a_ember_2024_30.xlsx')
+data = pd.read_excel('outputs_processed_data/p1_b_ember_2024_30_50.xlsx')
 
 # Generate random percentages for 2024, 2030, and 2050
 np.random.seed(42)  # For reproducibility
@@ -417,7 +417,7 @@ for (row, col), etype in subplot_positions.items():
 # fig1.legend(fontsize=legend_fs, loc='upper left', bbox_to_anchor=(0.15, 0.85))
 fig1.suptitle('Figure 1. Climate Risk Exposure of Electricity Generation (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
 fig1.savefig('outputs_processed_fig/fig1.pdf', bbox_inches='tight', dpi=300)
-
+fig1.savefig('outputs_processed_fig/fig1.jpg', bbox_inches='tight', dpi=300)
 
 
 
@@ -612,3 +612,4 @@ for (row, col), etype in subplot_positions.items():
         
 fig2.suptitle('Figure 2. Climate Risk Exposure of Electricity Generation Value (2024–2050), by Energy Type', fontsize=9, fontweight='bold', y=1.01, x=0.1, ha='left')
 fig2.savefig('outputs_processed_fig/fig2.pdf', bbox_inches='tight', dpi=300)
+fig2.savefig('outputs_processed_fig/fig2.jpg', bbox_inches='tight', dpi=300)
