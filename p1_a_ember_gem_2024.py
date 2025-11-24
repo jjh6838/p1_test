@@ -1,21 +1,43 @@
 # 6/30/2025 at work
 
+# ==================================================================================================
+# SCRIPT PURPOSE: Global Power Plant Data Integration and Analysis
+# ==================================================================================================
+#
+# WHAT THIS CODE DOES:
+# This script harmonizes two major global energy datasets:
+# 1. Ember: Provides country-level aggregate data on electricity generation (TWh) and capacity (GW).
+# 2. Global Energy Monitor (GEM): Provides granular, facility-level data including location (lat/lon).
+#
+# WHY THIS IS NEEDED:
+# - Ember data is authoritative for country-level statistics but lacks spatial resolution (where plants are).
+# - GEM data provides precise locations but may not match official country-level aggregates perfectly.
+# - By combining them, we create a dataset that has both:
+#   a) Accurate aggregate capacity/generation numbers (taking the maximum of Ember vs GEM to ensure coverage).
+#   b) Spatial distribution of power plants for mapping and regional analysis.
+#
+# KEY OUTPUTS:
+# 1. Country-level summaries of capacity and potential generation by fuel type.
+# 2. Facility-level datasets where individual power plant capacities are adjusted (scaled) to match
+#    the harmonized country totals. This allows for spatial analysis that sums up to the correct totals.
+# 3. Future projections (2030, 2050) considering facility retirements.
+# ==================================================================================================
+
 import pandas as pd
 import warnings
-try:
-    from pycountry import countries
-except ImportError:
-    countries = None
+from pycountry import countries
 
 # Suppress openpyxl warning
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 # Define granular and grouped energy categories
+# Granular categories represent specific fuel types used in the analysis
 granular_categories = [
     "Bioenergy", "Coal", "Hydro", "Nuclear", "Solar", "Wind", 
     "Other Renewables", "Gas", "Other Fossil"
 ]
 
+# Grouped categories aggregate granular types into broader classes
 grouped_categories = {
     "Fossil": ["Coal", "Gas", "Other Fossil"],
     "Other Renewables": ["Bioenergy", "Other Renewables"],
@@ -26,6 +48,7 @@ grouped_categories = {
 }
 
 # GEM to Ember category mapping
+# Maps GEM's specific fuel types to Ember's categories for consistency
 gem_to_ember_mapping = {
     "bioenergy": "Bioenergy",
     "coal": "Coal",
@@ -38,6 +61,7 @@ gem_to_ember_mapping = {
 }
 
 # Manual mapping for non-standardized country names
+# Handles discrepancies between dataset country names and standard ISO codes
 manual_mapping = {
     "Bolivia": "BOL",
     "Bonaire, Sint Eustatius, and Saba": "BES",
@@ -67,6 +91,7 @@ manual_mapping = {
 def map_country_to_iso3(country_name):
     """
     Map a country name to its ISO3 code using manual mapping first, then pycountry.
+    Includes fuzzy matching for better results with non-standard names.
     """
     # Check manual mapping first
     if country_name in manual_mapping:
@@ -75,9 +100,15 @@ def map_country_to_iso3(country_name):
     # If not found in manual mapping, try pycountry
     if countries:
         try:
+            # First, try a direct lookup
             return countries.lookup(country_name).alpha_3
         except LookupError:
-            return "unknown"
+            try:
+                # If direct lookup fails, try a fuzzy search
+                return countries.search_fuzzy(country_name)[0].alpha_3
+            except LookupError:
+                # If both fail, return "unknown"
+                return "unknown"
     else:
         return "unknown"
 
@@ -102,14 +133,18 @@ def map_iso3_to_country_name(iso3_code):
         return iso3_code  # Return ISO3 code if no name found
 
 # Load Ember data
-energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format2025-05-02.csv" #updated on May 2, 2025
+# Reads the Ember dataset containing yearly energy statistics
+energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format2025-11-23.csv" 
+# Updated on November 23, 2025 (Column name has been changed from 'Country code (old name)' to 'ISO 3 code (new name)' in the downloaded file, so I renamed it back from ISO 3 code' to 'Country code' for consistency)
+# https://ember-energy.org/data/yearly-electricity-data/
 energy_data = pd.read_csv(energy_data_csv_path)
 
 # Separate filtering for Capacity and Electricity generation
-years = [2023, 2022, 2021, 2020, 2019] # 2024 data is not fully available yet...
+# We use data from 2019-2024 as 2024 data is incomplete
+years = [2024, 2023, 2022, 2021, 2020, 2019] # 2025 data is not fully available yet
 
 
-# Filter for Capacity data
+# Filter for Capacity data (GW)
 capacity_data = energy_data[
     (energy_data["Year"].isin(years)) &
     (energy_data["Category"] == "Capacity") &
@@ -118,7 +153,7 @@ capacity_data = energy_data[
     (energy_data["Variable"].isin(granular_categories))
 ]
 
-# Filter for Electricity generation data
+# Filter for Electricity generation data (TWh)
 generation_data = energy_data[
     (energy_data["Year"].isin(years)) &
     (energy_data["Category"] == "Electricity generation") &
@@ -127,15 +162,54 @@ generation_data = energy_data[
     (energy_data["Variable"].isin(granular_categories))
 ]
 
-# Prioritize the most recent year for each country and variable in both datasets
-capacity_data = capacity_data.sort_values(by="Year", ascending=False).drop_duplicates(subset=["Country code", "Variable"], keep="first")
-generation_data = generation_data.sort_values(by="Year", ascending=False).drop_duplicates(subset=["Country code", "Variable"], keep="first")
+# Sort by year descending to prioritize most recent data
+capacity_data = capacity_data.sort_values(by="Year", ascending=False)
+generation_data = generation_data.sort_values(by="Year", ascending=False)
+
+# For each country-variable pair, find the most recent year where BOTH capacity and generation exist
+aligned_capacity = []
+aligned_generation = []
+
+for country_code in set(capacity_data['Country code'].unique()) | set(generation_data['Country code'].unique()):
+    for variable in granular_categories:
+        # Get all available years for this country-variable combination
+        cap_rows = capacity_data[(capacity_data['Country code'] == country_code) & 
+                                 (capacity_data['Variable'] == variable)]
+        gen_rows = generation_data[(generation_data['Country code'] == country_code) & 
+                                   (generation_data['Variable'] == variable)]
+        
+        # Find the most recent year where both exist
+        matched = False
+        for year in years:  # years is already sorted from newest to oldest
+            cap_year_data = cap_rows[cap_rows['Year'] == year]
+            gen_year_data = gen_rows[gen_rows['Year'] == year]
+            
+            if not cap_year_data.empty and not gen_year_data.empty:
+                aligned_capacity.append(cap_year_data.iloc[0])
+                aligned_generation.append(gen_year_data.iloc[0])
+                matched = True
+                break
+        
+        # If no matching year found, use the most recent available for each
+        if not matched:
+            if not cap_rows.empty:
+                aligned_capacity.append(cap_rows.iloc[0])
+            if not gen_rows.empty:
+                aligned_generation.append(gen_rows.iloc[0])
+
+# Convert back to DataFrames
+capacity_data = pd.DataFrame(aligned_capacity)
+generation_data = pd.DataFrame(aligned_generation)
 
 # Load GEM data
-energy_facilities_path = r"re_data\Global-Integrated-Power-April-2025.xlsx" # updated on May 2, 2025
+# Reads the Global Energy Monitor dataset containing facility-level data
+energy_facilities_path = r"re_data\Global-Integrated-Power-September-2025-II.xlsx" # updated on November 23, 2025
+# read the source info and download for update: https://globalenergymonitor.org/about/who-uses-gem-data/
+
 gem_data = pd.read_excel(energy_facilities_path, sheet_name="Power facilities")
 
 # Filter GEM data for operating facilities
+gem_data = gem_data[gem_data['Status'] == 'operating']
 
 # Add ISO3 codes to GEM data
 gem_data['ISO3'] = gem_data['Country/area'].apply(map_country_to_iso3)
@@ -173,6 +247,9 @@ grouped_df = pd.DataFrame()
 
 # Calculate global conversion rates for fallback
 # Calculate global mean conversion rates by averaging local rates across countries
+# This provides a default capacity factor if local data is missing.
+# WHY: We need to convert Capacity (MW) to Generation (MWh). If a country has capacity but no reported generation
+# for a fuel type, we use the global average performance of that technology to estimate generation.
 global_conversion_rates = {}
 
 # Loop through each granular energy category to calculate its global conversion rate
@@ -208,8 +285,10 @@ for group, subcategories in grouped_categories.items():
     global_grouped_conversion_rates[group] = weighted_sum / total_global_capacity if total_global_capacity > 0 else 0
 
 # Process data for each matching country
+# Main loop to harmonize Ember and GEM data for each country
 for country_code in matching_country_codes:
-    gem_data = gem_data[gem_data['Status'] == 'operating']  # for the current year (i.e., 2024)
+    # Filter GEM data for the current country and operating status
+    gem_country_data = gem_data[(gem_data['ISO3'] == country_code) & (gem_data['Status'] == 'operating')]
 
     # Filter Ember generation data for the current country
     filtered_generation_data = generation_data[generation_data['Country code'] == country_code]
@@ -254,6 +333,7 @@ for country_code in matching_country_codes:
     granular_data = {'Country Code': country_code, 'Country Name': map_iso3_to_country_name(country_code)}
 
     # Process each GEM type and its corresponding Ember type
+    # Compares capacity from both sources and takes the larger value
     for gem_type, ember_type in gem_to_ember_mapping.items():
         gem_cap = gem_capacity.get(gem_type, 0)
         if isinstance(ember_type, list):  # Handle "oil/gas" split into "Gas" and "Other Fossil"
@@ -302,6 +382,7 @@ for country_code in matching_country_codes:
                 granular_data["Other Fossil_Potential_MWh"] = ember_generation.get("Other Fossil", 0)  # Use Ember's MWh directly
         else:
             ember_cap = ember_capacity.get(ember_type, 0)
+            # Determine the larger capacity between GEM and Ember
             larger_cap = ember_cap if gem_cap == 0 or pd.isna(gem_cap) else gem_cap if ember_cap == 0 or pd.isna(ember_cap) else max(ember_cap, gem_cap)
 
             granular_data[f'{ember_type}_GEM_MW'] = gem_cap
@@ -319,6 +400,7 @@ for country_code in matching_country_codes:
     granular_df = pd.concat([granular_df, pd.DataFrame([granular_data])], ignore_index=True)
 
     # Calculate grouped conversion rates, capacity, and potential generation
+    # Aggregates granular data into broader categories (e.g., Solar, Wind, Fossil)
     grouped_data = {'Country Code': country_code, 'Country Name': map_iso3_to_country_name(country_code)}
     for group, subcategories in grouped_categories.items():
         total_capacity = sum(granular_data.get(f'{sub}_Larger_MW', 0) for sub in subcategories)
@@ -380,6 +462,7 @@ grouped_df = grouped_df[grouped_columns]
 
 ### I want to generate another file with three sheets which contain facility-level data by country (Latitude, Longtitude, Watt adjusted proportionally)
 # Create a new DataFrame for facility-level data
+# This section prepares facility-level data for mapping and further analysis
 grouped_facilities_df = gem_data[['ISO3', 'Country/area', 'Type', 'Capacity (MW)', 'Latitude', 'Longitude', 'GEM unit/phase ID']].copy()
 # Add ISO3 codes and standardize country names
 grouped_facilities_df['Country Code'] = grouped_facilities_df['Country/area'].apply(map_country_to_iso3)
@@ -436,6 +519,10 @@ totals_comparison['Target_Total_MW'] = totals_comparison['Target_Total_MW'].fill
 totals_comparison['Target_Total_MWh'] = totals_comparison['Target_Total_MWh'].fillna(0)
 
 # Calculate scaling factors
+# Adjusts facility capacities to match the "Larger MW" calculated at the country level
+# WHY: The facility-level data (GEM) might sum up to less (or more) than the official country total (Ember/Max).
+# We scale the individual facilities so that their sum equals the authoritative total, preserving the spatial distribution
+# while correcting the magnitude.
 totals_comparison['Scaling_Factor'] = totals_comparison.apply(
     lambda row: row['Target_Total_MW'] / row['Current_Total_MW'] if row['Current_Total_MW'] > 0 else 1,
     axis=1
@@ -485,6 +572,7 @@ facilities_output_path = r"outputs_processed_data\p1_a_ember_gem_2024_fac_lvl.xl
 
 # For 2030 and 2050, filter out retired facilities
 # First, identify facilities that should be excluded for each projection year
+# This accounts for plant retirements in future scenarios
 
 # Load the original GEM data again to access retirement year information
 gem_data_full = pd.read_excel(energy_facilities_path, sheet_name="Power facilities")
@@ -533,6 +621,7 @@ def merge_facilities_by_location(df):
     """
     Merge facilities that have the same Grouped_Type, Latitude, and Longitude.
     Sum the Adjusted_Capacity_MW and use the first GEM unit/phase ID.
+    This reduces the number of points for mapping/plotting.
     """
     def merge_group(group):
         first_row = group.iloc[0].copy()

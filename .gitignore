@@ -2,6 +2,7 @@
 bigdata_gadm/
 bigdata_gridfinder/
 bigdata_jrc_pop/
+bigdata_jrc_pop2030/
 
 # Snakemake temporary files
 .snakemake/

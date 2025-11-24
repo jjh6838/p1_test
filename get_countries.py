@@ -1,15 +1,43 @@
 #!/usr/bin/env python3
 """
-Get list of countries from energy demand data for Snakemake workflow
-Uses ISO3_code column from p1_b_ember_2024_30_50.xlsx
-Automatically filters out countries without GADM boundaries
+# ==================================================================================================
+# SCRIPT PURPOSE: Country List Generation and Parallel Script Creation for HPC
+# ==================================================================================================
+#
+# WHAT THIS CODE DOES:
+# This script serves two primary functions for a large-scale geospatial data processing workflow:
+#
+# 1. Get Country List: It generates a definitive list of countries to be processed. It does this by:
+#    a) Reading a list of all countries from the main energy projection data.
+#    b) Cross-referencing this list with available administrative boundary data (GADM).
+#    c) Producing a final `countries_list.txt` containing only countries that exist in BOTH datasets.
+#
+# 2. Create Parallel Scripts: It automatically generates shell scripts designed to run the main
+#    `process_country_supply.py` analysis in parallel on a High-Performance Computing (HPC)
+#    cluster that uses the SLURM workload manager.
+#
+# WHY THIS IS NEEDED:
+# - Consistency: Ensures that the workflow only attempts to process countries for which all
+#   necessary input data is available.
+# - Efficiency: Processing over 150 countries sequentially would take weeks. By generating
+#   parallel scripts, the workload can be distributed across dozens or hundreds of CPU cores,
+#   reducing the total runtime to hours.
+# - Resource Optimization: The script uses a "tiered" approach, grouping countries by their
+#   expected computational load (e.g., large, complex countries like China get a dedicated
+#   script with maximum resources, while many small countries are batched together). This
+#   ensures efficient use of cluster resources.
+# ==================================================================================================
 """
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 
 def get_country_list():
-    """Get list of countries that have both demand data AND GADM boundaries"""
+    """
+    Generates a list of countries by finding the intersection between countries present
+    in the energy demand dataset and those with available administrative boundaries in GADM.
+    The final list is saved to 'countries_list.txt' for use in the Snakemake workflow.
+    """
     demand_file = "outputs_processed_data/p1_b_ember_2024_30_50.xlsx"
     gadm_file = "bigdata_gadm/gadm_410-levels.gpkg"
     
@@ -81,12 +109,13 @@ def get_country_list():
         return []
 
 def create_parallel_scripts(num_scripts=40, countries=None):
-    """Create parallel shell scripts for country processing with tiered approach
-    
-    Optimized for clusters with 40+ nodes available:
-    - 40 parallel scripts = 40 nodes maximum utilization
-    - Tiered resource allocation for optimal efficiency
-    - Smart batching to minimize queue times
+    """
+    Creates a set of shell scripts to process countries in parallel on a SLURM-based HPC cluster.
+
+    This function implements a tiered batching strategy to optimize resource usage. Countries are
+    categorized by size and complexity, and scripts are generated with appropriate resource
+    requests (memory, CPUs, time). This prevents small jobs from wasting large resource allocations
+    and ensures large jobs get the resources they need.
     """
     from pathlib import Path
     
@@ -100,9 +129,10 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     print(f"Creating {num_scripts} parallel scripts for {len(countries)} countries with tiered approach")
     print(f"📊 Cluster optimization: {num_scripts} scripts = {num_scripts} nodes maximum utilization")
     
-    # Define tiers based on country size/complexity
-    TIER_1 = {"USA", "CHN", "IND", "RUS", "BRA", "CAN", "AUS"}  # Largest countries
-    TIER_2 = {"ARG", "KAZ", "DZA", "COD", "SAU", "MEX", "IDN", "SDN", "LBY", "IRN", "MNG"}  # Large countries
+    # Define tiers based on country size/complexity. This is determined empirically based on
+    # the computational intensity (number of centroids, grid lines) of each country.
+    TIER_1 = {"USA", "CHN", "IND", "RUS", "BRA", "CAN", "AUS"}  # Largest countries, require maximum resources.
+    TIER_2 = {"ARG", "KAZ", "DZA", "COD", "SAU", "MEX", "IDN", "SDN", "LBY", "IRN", "MNG"}  # Large countries.
     TIER_3 = {
         "KOR", "PER", "TCD", "NER", "AGO", "MLI", "ZAF", "COL", "ETH", "BOL", "MRT", "EGY", "TZA", "NGA",
         "VEN", "PAK", "TUR", "CHL", "ZMB", "MMR", "AFG", "SOM", "CAF", "UKR", "MDG", "BWA", "KEN", "FRA",
@@ -110,12 +140,12 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         "NOR", "MYS", "CIV", "POL", "OMN", "ITA", "PHL", "ECU", "BFA", "NZL", "GAB", "GIN", "GBR"
     }
     
-    # Tier-based resource allocation - optimized for uniform node specs
-    # Each script maximizes single node resources with smart country batching
-    # Node specs: 340GB RAM, 72 CPUs, 12h max time limit
+    # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
+    # The goal is to pack jobs efficiently onto nodes. For example, a single node can run one Tier 1 job,
+    # two Tier 2 jobs, four Tier 3 jobs, or eight "other" jobs, maximizing the use of its 72 CPUs and 340GB RAM.
     TIER_CONFIG = {
         "t1": {"max_countries_per_script": 1, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 1 big country per node (max resources)
-        "t2": {"max_countries_per_script": 2, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 2 large countries per node  
+        "t2": {"max_countries_per_script": 2, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 2 large countries per node
         "t3": {"max_countries_per_script": 4, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 4 medium countries per node
         "other": {"max_countries_per_script": 8, "mem": "340G", "cpus": 72, "time": "12:00:00"}  # 8 small countries per node
     }
@@ -149,7 +179,10 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     scripts_dir = Path("parallel_scripts")
     scripts_dir.mkdir(exist_ok=True)
     
-    # Create batches with tiered approach
+    # Create batches with tiered approach.
+    # This logic groups countries into batches that will become individual shell scripts.
+    # It starts with the biggest countries (Tier 1) and works its way down, ensuring
+    # that the most resource-intensive jobs are scheduled first.
     all_batches = []
     script_counter = 1
     
@@ -205,6 +238,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         tier = batch_info["tier"]
         config = batch_info["config"]
         
+        # The script content includes SLURM directives (#SBATCH) which request the necessary
+        # resources (time, memory, CPUs) from the cluster scheduler.
         script_content = f"""#!/bin/bash --login
 #SBATCH --job-name=p{i:02d}_{tier}
 #SBATCH --partition=Short
@@ -243,10 +278,11 @@ $PY -c 'import sys; print(sys.executable)'
 """
         
         # Add country processing commands
+        # Each script will call `process_country_supply.py` for each country in its batch.
         for country in batch:
             script_content += f"""
 echo "[INFO] Processing {country} ({get_tier(country).upper()})..."
-$PY process_country_supply.py {country} --output-dir outputs_per_country --threads {config['cpus']}
+$PY process_country_supply.py {country} --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] {country} completed"
 else
@@ -266,6 +302,7 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
         print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
     
     # Create master submission script
+    # This script is a simple utility to submit all the generated parallel jobs to the SLURM scheduler at once.
     master_script = f"""#!/bin/bash
 # Submit all parallel jobs with tiered resource allocation
 
@@ -324,6 +361,7 @@ echo "Monitor with: squeue -u $USER"
 
 if __name__ == "__main__":
     import sys
+    # Allows running from the command line with '--create-parallel' to generate the scripts.
     if len(sys.argv) > 1 and sys.argv[1] == "--create-parallel":
         # Create parallel scripts
         countries = get_country_list()

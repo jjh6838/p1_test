@@ -1,7 +1,41 @@
 #!/usr/bin/env python3
 """
-Clean supply analysis per country with network-based grid lines
-Produces 4 layers: centroids, facilities, grid_lines, polylines
+# ==================================================================================================
+# SCRIPT PURPOSE: Detailed Country-Level Electricity Supply and Demand Network Analysis
+# ==================================================================================================
+#
+# WHAT THIS CODE DOES:
+# This script performs a granular, network-based analysis of electricity supply and demand for a
+# single country. It models how electricity flows from generation facilities (supply) to population
+# centers (demand) through the electrical grid.
+#
+# WHY THIS IS NEEDED:
+# While other scripts project national totals, this script provides spatial detail. It helps answer:
+# - Which population centers are served by which power plants?
+# - What are the network distances for electricity transmission?
+# - Are there parts of the grid that are critical for connecting supply and demand?
+# - Which areas might be underserved based on network topology?
+#
+# KEY STEPS:
+# 1. Load Geospatial Data: Imports administrative boundaries, population density rasters,
+#    power plant locations, and electrical grid lines for the specified country.
+# 2. Project Demand: Allocates national-level electricity demand projections (for 2024, 2030, 2050)
+#    down to fine-grained population centroids.
+# 3. Build Network Graph: Constructs a comprehensive `networkx` graph representing the entire
+#    electrical network, including grid lines, facilities, and centroids as nodes. It also
+#    "stitches" together disconnected parts of the grid.
+# 4. Calculate Distances: Computes the shortest path network distance from every population
+#    centroid to all nearby power plants. This is a computationally intensive step that uses
+#    parallel processing.
+# 5. Allocate Supply: Implements a supply-demand matching algorithm. It iterates through power
+#    plants (largest first) and allocates their electricity to the nearest population centers
+#    until the plant's capacity is exhausted or the centers' demands are met.
+#
+# OUTPUTS:
+# - Test Mode: A single GeoPackage (.gpkg) file containing detailed layers for centroids,
+#   facilities, grid lines, and the specific polylines of active supply routes.
+# - Production Mode: Lightweight Parquet files for each layer, optimized for large-scale analysis.
+# ==================================================================================================
 """
 
 import warnings
@@ -14,6 +48,8 @@ from pathlib import Path
 import argparse
 import sys
 import os
+import math
+from affine import Affine
 from shapely.geometry import Point, LineString, MultiLineString
 from shapely.ops import unary_union
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -28,13 +64,14 @@ from contextlib import contextmanager
 # Constants
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 YEARS = [2024, 2030, 2050]
-SUPPLY_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
+DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
+POP_AGGREGATION_FACTOR = 10  # Aggregate from native 30" grid to 300" (~10x10 pixels)
 
 # Get optimal number of workers based on available CPUs
 MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
 print(f"Parallel processing configured for {MAX_WORKERS} workers")
 
-# Cache for storing calculated paths
+# Cache for storing calculated paths to avoid re-computing shortest paths for the same node pairs
 path_cache = {}
 
 @contextmanager
@@ -48,7 +85,7 @@ def timer(name):
         print(f"  [{name}]: {elapsed:.2f}s")
 
 def get_utm_crs(lon, lat):
-    """Get appropriate UTM CRS for given coordinates"""
+    """Get appropriate UTM CRS for given coordinates. UTM is essential for accurate distance calculations in meters."""
     utm_zone = int((lon + 180) / 6) + 1
     return f"EPSG:{32600 + utm_zone}" if lat >= 0 else f"EPSG:{32700 + utm_zone}"
 
@@ -57,8 +94,28 @@ def get_country_bbox(admin_boundaries, buffer=0.1):
     bounds = admin_boundaries.total_bounds
     return [bounds[0] - buffer, bounds[1] - buffer, bounds[2] + buffer, bounds[3] + buffer]
 
+def aggregate_raster(data, transform, factor):
+    """Aggregate a raster array by the provided factor using block sums."""
+    if factor <= 1:
+        return data, transform
+
+    rows, cols = data.shape
+    new_rows = math.ceil(rows / factor)
+    new_cols = math.ceil(cols / factor)
+
+    pad_rows = new_rows * factor - rows
+    pad_cols = new_cols * factor - cols
+    if pad_rows or pad_cols:
+        data = np.pad(data, ((0, pad_rows), (0, pad_cols)), mode='constant', constant_values=0)
+
+    reshaped = data.reshape(new_rows, factor, new_cols, factor)
+    aggregated = reshaped.sum(axis=(1, 3))
+    new_transform = transform * Affine.scale(factor, factor)
+
+    return aggregated, new_transform
+
 def load_admin_boundaries(country_iso3):
-    """Load administrative boundaries for country"""
+    """Load administrative boundaries for a specific country from the GADM dataset."""
     admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410-levels.gpkg', layer="ADM_0")
     country_data = admin_boundaries[admin_boundaries['GID_0'] == country_iso3]
     
@@ -68,18 +125,26 @@ def load_admin_boundaries(country_iso3):
     return country_data
 
 def load_population_centroids(country_bbox, admin_boundaries):
-    """Load and process population centroids - optimized to skip zero pixels"""
+    """Load and process population centroids from the GHS-POP raster data.
+    This is optimized to only process pixels with non-zero population, which significantly speeds up processing for sparsely populated areas.
+    """
     minx, miny, maxx, maxy = country_bbox
-    
+    # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
+    # Select: 2025 eporch, 30 arcsec, WGS84(4326)
+
     with rasterio.open('bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif') as src:
         window = rasterio.windows.from_bounds(minx, miny, maxx, maxy, src.transform)
         pop_data = src.read(1, window=window)
         windowed_transform = rasterio.windows.transform(window, src.transform)
-        
+
+        # Aggregate 30" raster to 300" (~10x10) blocks for performance smoother centroids
+        pop_data, windowed_transform = aggregate_raster(pop_data, windowed_transform, POP_AGGREGATION_FACTOR)
+        print(f"Aggregated population raster to {POP_AGGREGATION_FACTOR * 30}\" resolution")
+
         # OPTIMIZATION: Only process non-zero pixels
         nonzero_mask = pop_data > 0
         nonzero_indices = np.where(nonzero_mask)
-        
+
         total_pixels = pop_data.size
         nonzero_pixels = len(nonzero_indices[0])
         print(f"Population raster: {nonzero_pixels:,} populated pixels out of {total_pixels:,} total ({nonzero_pixels/total_pixels*100:.1f}%)")
@@ -88,17 +153,12 @@ def load_population_centroids(country_bbox, admin_boundaries):
             print("No population in this area")
             return gpd.GeoDataFrame(geometry=[], crs=COMMON_CRS)
         
-        # FIX: Convert arrays to lists to avoid NumPy deprecation warning
-        rows = nonzero_indices[0].tolist()
-        cols = nonzero_indices[1].tolist()
+        # Convert row/col indices to coordinates
+        rows = nonzero_indices[0]
+        cols = nonzero_indices[1]
         
-        # Transform coordinates one by one to avoid array conversion issues
-        xs = []
-        ys = []
-        for row, col in zip(rows, cols):
-            x, y = rasterio.transform.xy(windowed_transform, row, col)
-            xs.append(x)
-            ys.append(y)
+        # Transform pixel coordinates to geographic coordinates
+        xs, ys = rasterio.transform.xy(windowed_transform, rows, cols)
         
         # Create GeoDataFrame directly
         centroids_gdf = gpd.GeoDataFrame(
@@ -117,12 +177,22 @@ def load_population_centroids(country_bbox, admin_boundaries):
         return centroids_gdf
 
 def load_population_and_demand_projections(centroids_gdf, country_iso3):
-    """Load country-level population projections and calculate demand for multiple years"""
+    """
+    Loads country-level population and demand projections for 2024, 2030, and 2050.
+    It then allocates these national totals down to the individual population centroids based on their baseline population share.
+    This assumes the spatial distribution of population remains constant, while the total numbers change.
+    """
     print("Loading country-level population projections...")
     
-    # Calculate baseline 2023 population from spatial data
-    total_country_population_2023 = centroids_gdf["Population_centroid"].sum()
-    print(f"Baseline population from spatial data (2023): {total_country_population_2023:,.0f}")
+    # Calculate baseline 2025 population from spatial data
+    total_country_population_2025 = centroids_gdf["Population_centroid"].sum()
+    print(f"Baseline population from spatial data (JRC 2025): {total_country_population_2025:,.0f}")
+
+    # Initialize population projections (will be overwritten if data is found)
+    pop_2024 = 0
+    pop_2030 = 0
+    pop_2050 = 0
+    used_baseline = False
     
     try:
         pop_projections_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
@@ -143,61 +213,56 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
             pop_2024 = country_pop_data.get('PopTotal_2024', 0) * 1000
             pop_2030 = country_pop_data.get('PopTotal_2030', 0) * 1000
             pop_2050 = country_pop_data.get('PopTotal_2050', 0) * 1000
+            used_baseline = False 
             
             print(f"Country population projections:")
             print(f"  2024: {pop_2024:,.0f}")
             print(f"  2030: {pop_2030:,.0f}")
             print(f"  2050: {pop_2050:,.0f}")
-        else:
-            # Use 2023 baseline for all years if no projections available
-            pop_2024 = total_country_population_2023
-            pop_2030 = total_country_population_2023
-            pop_2050 = total_country_population_2023
-            print(f"Using 2023 baseline population for all years: {total_country_population_2023:,.0f}")
             
     except Exception as e:
         print(f"Warning: Could not load population projections for {country_iso3}: {e}")
-        # Use 2023 baseline for all years
-        pop_2024 = total_country_population_2023
-        pop_2030 = total_country_population_2023
-        pop_2050 = total_country_population_2023
+        used_baseline = True 
 
-    # Load national supply data for this specific country
-    print("Loading supply projections...")
+    if used_baseline:
+        print("Warning: Need to review p1_b_ember_2024_30_50.xlsx to add missing population data")
+
+    # Load national demand data for this specific country
+    print("Loading demand projections...")
     try:
-        supply_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
+        demand_df = pd.read_excel("outputs_processed_data/p1_b_ember_2024_30_50.xlsx")
 
         # Filter for this country using ISO3_code column
-        if 'ISO3_code' in supply_df.columns:
-            country_supply = supply_df[supply_df['ISO3_code'] == country_iso3]
-            if country_supply.empty:
-                print(f"Warning: No supply data found for {country_iso3} in supply file")
-                supply_df = pd.DataFrame()
+        if 'ISO3_code' in demand_df.columns:
+            country_demand = demand_df[demand_df['ISO3_code'] == country_iso3]
+            if country_demand.empty:
+                print(f"Warning: No demand data found for {country_iso3} in demand file")
+                demand_df = pd.DataFrame()
             else:
-                supply_df = country_supply
-                print(f"Loaded supply data for {country_iso3}: {len(supply_df)} records")
+                demand_df = country_demand
+                print(f"Loaded demand data for {country_iso3}: {len(demand_df)} records")
         else:
-            print(f"Warning: ISO3_code column not found in supply data")
-            supply_df = pd.DataFrame()
+            print(f"Warning: ISO3_code column not found in demand data")
+            demand_df = pd.DataFrame()
             
     except Exception as e:
-        print(f"Warning: Could not load supply data for {country_iso3}: {e}")
-        supply_df = pd.DataFrame()
+        print(f"Warning: Could not load demand data for {country_iso3}: {e}")
+        demand_df = pd.DataFrame()
 
-    # Define supply types and years
-    supply_types = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
+    # Define demand types and years
+    demand_types = DEMAND_TYPES
     years = [2024, 2030, 2050]
     country_populations = {2024: pop_2024, 2030: pop_2030, 2050: pop_2050}
 
-    # First, calculate population share for each centroid based on 2023 spatial distribution
-    population_share = centroids_gdf["Population_centroid"] / total_country_population_2023
+    # First, calculate population share for each centroid based on JRC spatial population share
+    population_share = centroids_gdf["Population_centroid"] / total_country_population_2025
 
     # Calculate spatially distributed population for each year
     print("\nAllocating population projections to centroids...")
     for year in years:
         total_country_population_year = country_populations[year]
         
-        # Allocate projected population to each centroid using 2023 spatial pattern
+        # Allocate projected population to each centroid using JRC spatial population share
         pop_col = f"Population_{year}_centroid"
         centroids_gdf[pop_col] = population_share * total_country_population_year
         
@@ -210,30 +275,30 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
         # Get country-level population for this year
         total_country_population_year = country_populations[year]
         
-        # Calculate total national supply for this year (projected generation)
-        total_national_supply = 0
-        if not supply_df.empty:
-            for supply_type in supply_types:
-                col = f"{supply_type}_{year}_MWh"
-                if col in supply_df.columns:
-                    supply_value = supply_df[col].iloc[0] if not pd.isna(supply_df[col].iloc[0]) else 0
-                    total_national_supply += supply_value
+        # Calculate total national demand for this year (projected generation)
+        total_national_demand = 0
+        if not demand_df.empty:
+            for demand_type in demand_types:
+                col = f"{demand_type}_{year}_MWh"
+                if col in demand_df.columns:
+                    demand_value = demand_df[col].iloc[0] if not pd.isna(demand_df[col].iloc[0]) else 0
+                    total_national_demand += demand_value
         
-        # If no supply data, use a default per capita value
-        if total_national_supply == 0:
+        # If no demand data, use a default per capita value
+        if total_national_demand == 0:
             # Default: 0 MWh per person per year (Can put global average 3.2 MWh per person per year if needed but all data have been calculated)
-            total_national_supply = total_country_population_year * 0
-            print(f"Using default supply for {country_iso3} in {year}: {total_national_supply:,.0f} MWh")
+            total_national_demand = total_country_population_year * 0
+            print(f"Using default demand for {country_iso3} in {year}: {total_national_demand:,.0f} MWh")
         else:
-            print(f"Total national supply for {year}: {total_national_supply:,.0f} MWh")
+            print(f"Total national demand for {year}: {total_national_demand:,.0f} MWh")
         
-        # Calculate demand using supply-demand equivalence assumption
-        # Demand_centroid = Population_Share_centroid × National_Supply_year
+        # Calculate centroid demand on a prorata basis
+        # Demand_centroid = Population_Share_centroid × National_Demand_year
         demand_col = f"Total_Demand_{year}_centroid"
-        centroids_gdf[demand_col] = population_share * total_national_supply
+        centroids_gdf[demand_col] = population_share * total_national_demand
         
-        print(f"  Allocated {total_national_supply:,.0f} MWh across {len(centroids_gdf)} centroids")
-        print(f"  Per capita demand: {total_national_supply/total_country_population_year:.2f} MWh/person/year")
+        print(f"  Allocated {total_national_demand:,.0f} MWh across {len(centroids_gdf)} centroids")
+        print(f"  Per capita demand: {total_national_demand/total_country_population_year:.2f} MWh/person/year")
 
     # Filter out centroids with zero population
     centroids_filtered = centroids_gdf[centroids_gdf["Population_centroid"] > 0].copy()
@@ -243,7 +308,7 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
     return centroids_filtered
 
 def load_energy_facilities(country_iso3, year=2024):
-    """Load energy facilities for country and year"""
+    """Load energy facilities for a specific country and year from the processed facility-level data."""
     sheet_mapping = {2024: 'Grouped_cur_fac_lvl', 2030: 'Grouped_2030_fac_lvl', 2050: 'Grouped_2050_fac_lvl'}
     sheet_name = sheet_mapping.get(year, 'Grouped_cur_fac_lvl')
     
@@ -265,9 +330,9 @@ def load_energy_facilities(country_iso3, year=2024):
         return gpd.GeoDataFrame()
 
 def load_grid_lines(country_bbox, admin_boundaries):
-    """Load and clip grid lines with parallel processing for large datasets"""
+    """Load and clip grid lines from GridFinder data. Uses parallel processing for very large countries to speed up clipping."""
     try:
-        grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg')
+        grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg') # updated on November 23, 2025
         minx, miny, maxx, maxy = country_bbox
         
         # Initial bbox filter
@@ -302,7 +367,11 @@ def load_grid_lines(country_bbox, admin_boundaries):
         return gpd.GeoDataFrame()
 
 def split_intersecting_edges(lines):
-    """Split lines at intersections with adaptive processing for very large datasets"""
+    """
+    Splits all lines at their intersection points. This is crucial for creating a valid network graph where junctions become nodes.
+    It uses an adaptive approach: a memory-intensive but fast method for small datasets, and a chunked, slower but more memory-efficient
+    method for very large grid networks (e.g., China).
+    """
     num_lines = len(lines)
     
     if num_lines > 10000:  # Very large grid networks (like CHN)
@@ -478,7 +547,15 @@ def stitch_network_components(network_graph, max_distance_km=10):
     return network_graph
 
 def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
-    """Create network graph from facilities, grid lines, and centroids - OPTIMIZED"""
+    """
+    Creates the master network graph.
+    This function combines grid lines, power plants (facilities), and population centers (centroids) into a single graph.
+    - Grid line intersections and endpoints become 'grid_line' nodes.
+    - Facilities and centroids are added as their own node types.
+    - Facilities and centroids are connected to their nearest node on the grid.
+    - The graph is then "stitched" to connect any isolated sub-networks.
+    This function is heavily optimized using spatial indexing (cKDTree) for fast nearest-neighbor searches.
+    """
     # Get UTM CRS for accurate distance calculations
     center_lon = facilities_gdf.geometry.union_all().centroid.x if not facilities_gdf.empty else grid_lines_gdf.geometry.union_all().centroid.x
     center_lat = facilities_gdf.geometry.union_all().centroid.y if not facilities_gdf.empty else grid_lines_gdf.geometry.union_all().centroid.y
@@ -695,7 +772,10 @@ def find_available_facilities_within_radius(centroid_geom, facilities_gdf, utm_c
     return within_radius
 
 def create_polyline_layer(active_connections, network_graph, country_iso3):
-    """Create polyline layer showing actual network paths for active supply connections only"""
+    """
+    Creates a polyline layer showing the actual network paths for active supply connections.
+    This visualizes exactly how electricity is flowing from a specific plant to a specific population center.
+    """
     all_geometries = []
     all_attributes = []
     
@@ -745,15 +825,8 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
 
 def calculate_network_distance_manual(network_graph, start_node, end_node):
     """
-    Calculate shortest path distance between two nodes in the network graph
-    
-    Parameters:
-    - network_graph: NetworkX graph with weighted edges
-    - start_node: Starting node coordinates (tuple)
-    - end_node: Ending node coordinates (tuple)
-    
-    Returns:
-    - Dictionary with distance info and path details, or None if no path exists
+    Calculates the shortest path distance between two nodes in the network graph using Dijkstra's algorithm.
+    Results are cached to avoid redundant calculations, which provides a significant performance boost.
     """
     # Create cache key (sort nodes to ensure bidirectional caching)
     cache_key = tuple(sorted([start_node, end_node]))
@@ -805,7 +878,8 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
 
 def process_centroid_distances_batch(centroid_batch, network_graph, facilities_gdf, centroid_mapping, facility_mapping, utm_crs):
     """
-    Process a batch of centroids for distance calculations in parallel
+    Processes a batch of centroids for distance calculations. Designed to be run in parallel.
+    For each centroid, it finds nearby facilities and calculates the shortest network path to them.
     """
     batch_results = []
     
@@ -850,7 +924,11 @@ def process_centroid_distances_batch(centroid_batch, network_graph, facilities_g
     return batch_results
 
 def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
-    """Calculate network distances with adaptive batching for large datasets"""
+    """
+    Calculates network distances for all centroids to nearby facilities using parallel processing.
+    It adaptively changes the batch size based on the number of centroids to balance memory usage and parallelism.
+    This is the most computationally expensive part of the script.
+    """
     num_centroids = len(centroids_gdf)
     num_facilities = len(facilities_gdf)
     print(f"Calculating distances for {num_centroids:,} centroids to {num_facilities:,} facilities using {MAX_WORKERS} parallel workers...")
@@ -931,7 +1009,7 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     return all_results
 
 def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
-    """Create grid lines layer with grid_infrastructure, centroid_to_grid, grid_to_facility, component_stitch."""
+    """Creates the final grid lines layer, including original infrastructure and newly created connection lines (e.g., facility-to-grid, stitches)."""
     all_geometries = []
     all_attributes = []
     
@@ -968,7 +1046,7 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     return gpd.GeoDataFrame()
 
 def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, facility_supplied=None, facility_remaining=None):
-    """Create all output layers for the GPKG file: centroids, facilities, grid_lines, and polylines"""
+    """Assembles all the final GeoDataFrame layers for output."""
     layers = {}
     
     # Centroids layer - population centers with demand and supply allocation results
@@ -1020,7 +1098,7 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     return layers
 
 def process_country_supply(country_iso3, output_dir="outputs_per_country", test_mode=False):
-    """Main function to process supply analysis for a country"""
+    """Main function to process supply analysis for a single country, orchestrating all steps."""
     # Clear path cache for each country
     global path_cache
     path_cache = {}
@@ -1213,7 +1291,16 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
 
 def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_distances, 
                                facility_remaining, facility_supplied, demand_col):
-    """Vectorized supply allocation that preserves exact original behavior"""
+    """
+    Core supply allocation logic. This function matches supply (facilities) to demand (centroids).
+    The logic is as follows:
+    1. Iterate through facilities, starting with the one with the largest capacity.
+    2. For the current facility, find all population centroids that need power and are connected to it.
+    3. Sort these centroids by the network distance to the facility (closest first).
+    4. Allocate the facility's power to these centroids one by one until the facility's capacity is used up.
+    5. Repeat for the next largest facility.
+    This version is optimized for performance using array operations where possible.
+    """
     import numpy as np
     
     # Reset index to ensure we have sequential indices for array operations
@@ -1339,6 +1426,7 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
     return centroids_gdf, active_connections
 
 def main():
+    """Parses command-line arguments and runs the main processing function."""
     parser = argparse.ArgumentParser(description='Process supply analysis for a country')
     parser.add_argument('country_iso3', help='ISO3 country code')
     parser.add_argument('--output-dir', default='outputs_per_country', help='Output directory')
