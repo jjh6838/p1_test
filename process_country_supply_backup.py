@@ -22,8 +22,8 @@
 # 2. Project Demand: Allocates national-level electricity demand projections (for 2024, 2030, 2050)
 #    down to fine-grained population centroids.
 # 3. Build Network Graph: Constructs a comprehensive `networkx` graph representing the entire
-#    electrical network, including grid lines, facilities, and centroids as nodes. Grid gaps are
-#    stitched earlier during data loading to minimize work here.
+#    electrical network, including grid lines, facilities, and centroids as nodes. It also
+#    "stitches" together disconnected parts of the grid.
 # 4. Calculate Distances: Computes the shortest path network distance from every population
 #    centroid to all nearby power plants. This is a computationally intensive step that uses
 #    parallel processing.
@@ -50,45 +50,22 @@ import sys
 import os
 import math
 from affine import Affine
-from shapely.geometry import Point, LineString, MultiLineString, MultiPoint, GeometryCollection
-from shapely.ops import unary_union, split, linemerge
-from shapely.strtree import STRtree
+from shapely.geometry import Point, LineString, MultiLineString
+from shapely.ops import unary_union
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 import multiprocessing as mp
 import time
 from contextlib import contextmanager
 
-try:
-    import pyogrio
-    HAS_PYOGRIO = True
-except ImportError:
-    HAS_PYOGRIO = False
-
-try:
-    import momepy
-    from momepy import preprocessing as momepy_preprocessing
-    HAS_MOMEPY = True
-    HAS_MOMEPY_SPLIT_LINES = hasattr(momepy_preprocessing, "split_lines")
-except ImportError:
-    HAS_MOMEPY = False
-    HAS_MOMEPY_SPLIT_LINES = False
-    momepy_preprocessing = None
-
 # Suppress warnings
 # warnings.filterwarnings("ignore")
 
 # Constants
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
-ANALYSIS_YEAR = 2050  # Year for supply-demand analysis: 2024, 2030, or 2050
+YEARS = [2024, 2030, 2050]
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
-POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
-GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
-NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
-MAX_CONNECTION_DISTANCE_M = 10000  # 10km: (in meters) threshold for connecting facilities/centroids to grid
-FACILITY_SEARCH_RADIUS_KM = 50  # 50 km: Max radius (in km) to search for facilities from each centroid
-SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
-
+POP_AGGREGATION_FACTOR = 10  # Aggregate from native 30" grid to 300" (~10x10 pixels)
 
 # Get optimal number of workers based on available CPUs
 MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
@@ -272,62 +249,56 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
         print(f"Warning: Could not load demand data for {country_iso3}: {e}")
         demand_df = pd.DataFrame()
 
-    # Define demand types - only calculate for ANALYSIS_YEAR
+    # Define demand types and years
     demand_types = DEMAND_TYPES
-    year = ANALYSIS_YEAR
+    years = [2024, 2030, 2050]
     country_populations = {2024: pop_2024, 2030: pop_2030, 2050: pop_2050}
 
     # First, calculate population share for each centroid based on JRC spatial population share
     population_share = centroids_gdf["Population_centroid"] / total_country_population_2025
 
-    # Calculate spatially distributed population for ANALYSIS_YEAR
-    print(f"\nAllocating population projections to centroids for {year}...")
-    total_country_population_year = country_populations[year]
-    
-    # Allocate projected population to each centroid using JRC spatial population share
-    pop_col = f"Population_{year}_centroid"
-    centroids_gdf[pop_col] = population_share * total_country_population_year
-    
-    print(f"  {year} population allocated: {centroids_gdf[pop_col].sum():,.0f} total")
+    # Calculate spatially distributed population for each year
+    print("\nAllocating population projections to centroids...")
+    for year in years:
+        total_country_population_year = country_populations[year]
+        
+        # Allocate projected population to each centroid using JRC spatial population share
+        pop_col = f"Population_{year}_centroid"
+        centroids_gdf[pop_col] = population_share * total_country_population_year
+        
+        print(f"  {year} population allocated: {centroids_gdf[pop_col].sum():,.0f} total")
 
-    # Calculate total demand for each centroid for ANALYSIS_YEAR
-    print(f"\nProcessing energy demand for year {year}...")
-    
-    # Calculate total national demand for this year (projected generation)
-    total_national_demand = 0
-    demand_breakdown = {}  # Debug: track contribution by type
-    if not demand_df.empty:
-        for demand_type in demand_types:
-            col = f"{demand_type}_{year}_MWh"
-            if col in demand_df.columns:
-                demand_value = demand_df[col].iloc[0] if not pd.isna(demand_df[col].iloc[0]) else 0
-                demand_breakdown[demand_type] = demand_value
-                total_national_demand += demand_value
-            else:
-                print(f"    Warning: Column '{col}' not found in demand data")
-    
-    # Debug: print breakdown
-    if demand_breakdown:
-        print(f"  Demand breakdown for {year}:")
-        for dtype, val in demand_breakdown.items():
-            if val > 0:
-                print(f"    {dtype}: {val:,.0f} MWh")
-    
-    # If no demand data, use a default per capita value
-    if total_national_demand == 0:
-        # Default: 0 MWh per person per year (Can put global average 3.2 MWh per person per year if needed but all data have been calculated)
-        total_national_demand = total_country_population_year * 0
-        print(f"Using default demand for {country_iso3} in {year}: {total_national_demand:,.0f} MWh")
-    else:
-        print(f"Total national demand for {year}: {total_national_demand:,.0f} MWh")
-    
-    # Calculate centroid demand on a prorata basis
-    # Demand_centroid = Population_Share_centroid × National_Demand_year
-    demand_col = f"Total_Demand_{year}_centroid"
-    centroids_gdf[demand_col] = population_share * total_national_demand
-    
-    print(f"  Allocated {total_national_demand:,.0f} MWh across {len(centroids_gdf)} centroids")
-    print(f"  Per capita demand: {total_national_demand/total_country_population_year:.2f} MWh/person/year")
+    # Calculate total demand for each centroid for each year
+    for year in years:
+        print(f"\nProcessing energy demand for year {year}...")
+        
+        # Get country-level population for this year
+        total_country_population_year = country_populations[year]
+        
+        # Calculate total national demand for this year (projected generation)
+        total_national_demand = 0
+        if not demand_df.empty:
+            for demand_type in demand_types:
+                col = f"{demand_type}_{year}_MWh"
+                if col in demand_df.columns:
+                    demand_value = demand_df[col].iloc[0] if not pd.isna(demand_df[col].iloc[0]) else 0
+                    total_national_demand += demand_value
+        
+        # If no demand data, use a default per capita value
+        if total_national_demand == 0:
+            # Default: 0 MWh per person per year (Can put global average 3.2 MWh per person per year if needed but all data have been calculated)
+            total_national_demand = total_country_population_year * 0
+            print(f"Using default demand for {country_iso3} in {year}: {total_national_demand:,.0f} MWh")
+        else:
+            print(f"Total national demand for {year}: {total_national_demand:,.0f} MWh")
+        
+        # Calculate centroid demand on a prorata basis
+        # Demand_centroid = Population_Share_centroid × National_Demand_year
+        demand_col = f"Total_Demand_{year}_centroid"
+        centroids_gdf[demand_col] = population_share * total_national_demand
+        
+        print(f"  Allocated {total_national_demand:,.0f} MWh across {len(centroids_gdf)} centroids")
+        print(f"  Per capita demand: {total_national_demand/total_country_population_year:.2f} MWh/person/year")
 
     # Filter out centroids with zero population
     centroids_filtered = centroids_gdf[centroids_gdf["Population_centroid"] > 0].copy()
@@ -358,313 +329,86 @@ def load_energy_facilities(country_iso3, year=2024):
         print(f"Error loading facilities: {e}")
         return gpd.GeoDataFrame()
 
-def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_STITCH_DISTANCE_KM):
-    """
-    Connect disconnected grid segments before network creation using MST approach.
-    Builds a temporary graph, finds disconnected components, and stitches them within
-    the distance threshold. Returns the original grid plus new stitch LineStrings.
-    """
-    if grid_lines_gdf.empty or max_distance_km <= 0:
-        return grid_lines_gdf
-
-    admin_union = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
-    centroid = admin_union.centroid
-    utm_crs = get_utm_crs(centroid.x, centroid.y)
-
-    grid_utm = grid_lines_gdf.to_crs(utm_crs)
-    grid_graph = nx.Graph()
-
-    # Build temporary graph from grid lines
-    for geom in grid_utm.geometry:
-        if geom is None or geom.is_empty:
-            continue
-        lines = list(geom.geoms) if isinstance(geom, MultiLineString) else [geom]
-        for line in lines:
-            coords = list(line.coords)
-            if len(coords) < 2:
-                continue
-            start = (coords[0][0], coords[0][1])
-            end = (coords[-1][0], coords[-1][1])
-            grid_graph.add_node(start, type='grid_line')
-            grid_graph.add_node(end, type='grid_line')
-            grid_graph.add_edge(start, end, weight=line.length, edge_type='grid_infrastructure')
-
-    # Find and filter components
-    components = list(nx.connected_components(grid_graph))
-    significant_components = [comp for comp in components if len(comp) > 1]
-    
-    if len(significant_components) <= 1:
-        return grid_lines_gdf
-    
-    # MST-based stitching: connect components starting from largest
-    max_distance_m = max_distance_km * 1000
-    component_sizes = sorted(enumerate(significant_components), key=lambda x: len(x[1]), reverse=True)
-    connected_idxs = [component_sizes[0][0]]
-    unconnected_idxs = [idx for idx, _ in component_sizes[1:]]
-    
-    stitch_edges = []
-    while unconnected_idxs:
-        best_connection = None
-        best_distance = float('inf')
-        best_idx = None
-        
-        for uidx in unconnected_idxs:
-            for cidx in connected_idxs:
-                for n1 in significant_components[uidx]:
-                    for n2 in significant_components[cidx]:
-                        if isinstance(n1, tuple) and isinstance(n2, tuple) and len(n1) == 2 and len(n2) == 2:
-                            dist = ((n1[0] - n2[0]) ** 2 + (n1[1] - n2[1]) ** 2) ** 0.5
-                            if dist < best_distance:
-                                best_distance = dist
-                                best_connection = (n1, n2)
-                                best_idx = uidx
-        
-        if best_connection and best_distance <= max_distance_m:
-            stitch_edges.append(LineString([best_connection[0], best_connection[1]]))
-            connected_idxs.append(best_idx)
-            unconnected_idxs.remove(best_idx)
-        else:
-            break
-
-    if not stitch_edges:
-        return grid_lines_gdf
-
-    stitches_gdf = gpd.GeoDataFrame(
-        {'segment_source': ['component_stitch'] * len(stitch_edges)},
-        geometry=stitch_edges,
-        crs=utm_crs
-    ).to_crs(grid_lines_gdf.crs or COMMON_CRS)
-
-    print(f"Stitched {len(stitch_edges)} grid connections at {max_distance_km}km threshold")
-    return pd.concat([grid_lines_gdf, stitches_gdf], ignore_index=True)
-
 def load_grid_lines(country_bbox, admin_boundaries):
     """Load and clip grid lines from GridFinder data. Uses parallel processing for very large countries to speed up clipping."""
-    minx, miny, maxx, maxy = country_bbox
-    admin_union = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
-    grid_country = None
-
     try:
-        if HAS_PYOGRIO:
-            try:
-                print("Reading grid lines via pyogrio with spatial mask...")
-                grid_country = pyogrio.read_dataframe(
-                    'bigdata_gridfinder/grid.gpkg',
-                    mask=admin_union,
-                    use_arrow=True
-                )
-            except Exception as pyogrio_error:
-                print(f"pyogrio read failed ({pyogrio_error}); falling back to GeoPandas")
-                grid_country = None
-
-        if grid_country is None:
-            try:
-                grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg', bbox=(minx, miny, maxx, maxy))
-            except TypeError:
-                grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg')
-                grid_lines = grid_lines.cx[minx:maxx, miny:maxy]
-
-            if len(grid_lines) > 10000:
-                print(f"Large grid dataset ({len(grid_lines)} lines) - using parallel clipping")
-                chunk_size = 2000
-                chunks = [grid_lines.iloc[i:i+chunk_size] for i in range(0, len(grid_lines), chunk_size)]
-
-                def clip_chunk(chunk):
-                    return gpd.clip(chunk, admin_boundaries)
-
-                with ThreadPoolExecutor(max_workers=min(16, MAX_WORKERS)) as executor:
-                    clipped_chunks = list(executor.map(clip_chunk, chunks))
-
-                grid_country = pd.concat(clipped_chunks, ignore_index=True)
-            else:
-                grid_country = gpd.clip(grid_lines, admin_boundaries)
-
-        if grid_country.empty:
-            print("Warning: No grid data found after clipping")
-            return grid_country
-
-        if grid_country.crs is None:
-            grid_country = grid_country.set_crs(COMMON_CRS)
-
-        grid_country = grid_country.to_crs(COMMON_CRS).reset_index(drop=True)
+        grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg') # updated on November 23, 2025
+        minx, miny, maxx, maxy = country_bbox
+        
+        # Initial bbox filter
+        grid_lines_filtered = grid_lines.cx[minx:maxx, miny:maxy]
+        
+        if len(grid_lines_filtered) > 10000:
+            print(f"Large grid dataset ({len(grid_lines_filtered)} lines) - using parallel clipping")
+            
+            # Split into chunks for parallel processing
+            chunk_size = 1000
+            chunks = [grid_lines_filtered.iloc[i:i+chunk_size] 
+                     for i in range(0, len(grid_lines_filtered), chunk_size)]
+            
+            def clip_chunk(chunk):
+                return gpd.clip(chunk, admin_boundaries)
+            
+            # Process in parallel
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                clipped_chunks = list(executor.map(clip_chunk, chunks))
+            
+            # Combine results
+            grid_country = pd.concat(clipped_chunks, ignore_index=True)
+        else:
+            # Use standard clipping for smaller datasets
+            grid_country = gpd.clip(grid_lines_filtered, admin_boundaries)
+        
         print(f"Loaded {len(grid_country)} grid line segments")
-
-        grid_country = stitch_grid_segments(grid_country, admin_boundaries, GRID_STITCH_DISTANCE_KM)
         return grid_country
-
+        
     except Exception as e:
         print(f"Error loading grid data: {e}")
         return gpd.GeoDataFrame()
 
-
-def _collect_intersection_points(geometry):
-    """Extract representative point geometries from a shapely intersection result."""
-    if geometry is None or geometry.is_empty:
-        return []
-
-    geom_type = geometry.geom_type
-    if geom_type == "Point":
-        return [geometry]
-    if geom_type == "MultiPoint":
-        return list(geometry.geoms)
-    if geom_type in ("LineString", "LinearRing"):
-        coords = list(geometry.coords)
-        if not coords:
-            return []
-        return [Point(coords[0]), Point(coords[-1])]
-    if geom_type == "MultiLineString":
-        points = []
-        for sub in geometry.geoms:
-            points.extend(_collect_intersection_points(sub))
-        return points
-    if geom_type == "GeometryCollection":
-        points = []
-        for sub in geometry.geoms:
-            points.extend(_collect_intersection_points(sub))
-        return points
-    return []
-
-
-def _build_splitter(points, line, tolerance=1e-6):
-    """Create a MultiPoint splitter for a line, filtering duplicates and endpoints."""
-    if not points:
-        return None
-
-    unique = {}
-    line_length = line.length
-    if line_length == 0:
-        return None
-
-    for pt in points:
-        if not isinstance(pt, Point):
-            continue
-        proj = line.project(pt)
-        if proj < tolerance or proj > line_length - tolerance:
-            continue  # Skip endpoints to avoid zero-length segments
-        key = (round(pt.x, 6), round(pt.y, 6))
-        if key not in unique:
-            unique[key] = pt
-
-    if not unique:
-        return None
-
-    pts = list(unique.values())
-    return pts[0] if len(pts) == 1 else MultiPoint(pts)
-
-
-def _split_lines_with_strtree(lines, min_lines=500):
-    """Use STRtree to lazily split lines only where intersections exist."""
-    num_lines = len(lines)
-    if num_lines < min_lines:
-        return None
-
-    try:
-        tree = STRtree(lines)
-        query_bulk = getattr(tree, "query_bulk", None)
-        if query_bulk is None:
-            return None
-        idx_pairs = query_bulk(lines, predicate="intersects")
-    except Exception as exc:
-        raise RuntimeError(exc)
-
-    if idx_pairs.size == 0:
-        return None
-
-    intersections = {}
-    for idx1, idx2 in zip(idx_pairs[0], idx_pairs[1]):
-        i = int(idx1)
-        j = int(idx2)
-        if i >= j:
-            continue  # Avoid duplicates and self-pairs
-        inter = lines[i].intersection(lines[j])
-        if inter.is_empty:
-            continue
-        points = _collect_intersection_points(inter)
-        if not points:
-            continue
-        intersections.setdefault(i, []).extend(points)
-        intersections.setdefault(j, []).extend(points)
-
-    if not intersections:
-        return None
-
-    split_segments = []
-    skipped = 0
-    for idx, line in enumerate(lines):
-        splitter = _build_splitter(intersections.get(idx, []), line)
-        if splitter is None:
-            split_segments.append(line)
-            continue
-        try:
-            result = split(line, splitter)
-        except Exception:
-            split_segments.append(line)
-            skipped += 1
-            continue
-
-        geoms = list(result.geoms) if hasattr(result, "geoms") else [result]
-        for geom in geoms:
-            if isinstance(geom, LineString):
-                split_segments.append(geom)
-            elif isinstance(geom, MultiLineString):
-                split_segments.extend(list(geom.geoms))
-
-    print(f"  STRtree split produced {len(split_segments)} segments (fallback skips: {skipped})")
-    return split_segments
-
 def split_intersecting_edges(lines):
     """
-    Splits all lines at their intersection points. Prefers a fast vectorized approach (momepy) when available,
-    with graceful fallback to the legacy chunked strategy for extremely large datasets.
+    Splits all lines at their intersection points. This is crucial for creating a valid network graph where junctions become nodes.
+    It uses an adaptive approach: a memory-intensive but fast method for small datasets, and a chunked, slower but more memory-efficient
+    method for very large grid networks (e.g., China).
     """
-    lines = list(lines) if not isinstance(lines, list) else lines
     num_lines = len(lines)
-    if num_lines == 0:
-        return []
-
-    if HAS_MOMEPY_SPLIT_LINES:
-        try:
-            gdf = gpd.GeoDataFrame({'geometry': lines})
-            split_gdf = momepy_preprocessing.split_lines(gdf)
-            print(f"  Fast split (momepy) produced {len(split_gdf)} segments")
-            return list(split_gdf.geometry)
-        except Exception as e:
-            print(f"  Warning: momepy split failed ({e}); falling back to STRtree/legacy splitter")
-    elif HAS_MOMEPY:
-        print("  momepy installed but split_lines API not available; using STRtree/legacy splitter")
-
-    if num_lines >= 500:
-        try:
-            strtree_segments = _split_lines_with_strtree(lines, min_lines=500)
-            if strtree_segments is not None:
-                return strtree_segments
-        except RuntimeError as e:
-            print(f"  Warning: STRtree split failed ({e}); using legacy splitter")
-
+    
     if num_lines > 10000:  # Very large grid networks (like CHN)
         print(f"Processing {num_lines:,} grid lines using chunked approach...")
-        chunk_size = 500
+        
+        # Process in chunks to avoid memory issues
+        chunk_size = 500  # Smaller chunks for very large datasets
         all_segments = []
+        
         for i in range(0, num_lines, chunk_size):
             chunk_end = min(i + chunk_size, num_lines)
             chunk_lines = lines[i:chunk_end]
+            
+            # Process chunk
             chunk_merged = unary_union(chunk_lines)
+            
             if isinstance(chunk_merged, (LineString, MultiLineString)):
                 segments = [chunk_merged] if isinstance(chunk_merged, LineString) else list(chunk_merged.geoms)
                 for segment in segments:
                     coords = list(segment.coords)
                     for j in range(len(coords) - 1):
                         all_segments.append(LineString([coords[j], coords[j + 1]]))
+            
+            # Progress report
             if (i + chunk_size) % 5000 == 0:
-                print(f"    Processed {min(i + chunk_size, num_lines):,}/{num_lines:,} grid lines...")
+                print(f"    Processed {i + chunk_size:,}/{num_lines:,} grid lines...")
+        
         print(f"Split into {len(all_segments):,} segments")
         return all_segments
-
-    if num_lines > 1000:
+        
+    elif num_lines > 1000:  # Original parallel processing
         print(f"Processing {num_lines:,} grid lines using {MAX_WORKERS} parallel workers...")
+        
+        # Your existing parallel processing code here...
         batch_size = max(1, num_lines // MAX_WORKERS)
         batches = [lines[i:i+batch_size] for i in range(0, num_lines, batch_size)]
-
+        
         def process_batch(batch_lines):
             batch_merged = unary_union(batch_lines)
             if isinstance(batch_merged, (LineString, MultiLineString)):
@@ -676,7 +420,8 @@ def split_intersecting_edges(lines):
                         batch_segments.append(LineString([coords[i], coords[i + 1]]))
                 return batch_segments
             return []
-
+        
+        # Process batches in parallel
         all_segments = []
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = [executor.submit(process_batch, batch) for batch in batches]
@@ -684,18 +429,122 @@ def split_intersecting_edges(lines):
                 batch_segments = future.result()
                 all_segments.extend(batch_segments)
                 print(f"  Processed grid batch {i+1}/{len(batches)}")
+        
         return all_segments
+    else:
+        # Use original method for smaller datasets
+        merged = unary_union(lines)
+        
+        if isinstance(merged, (LineString, MultiLineString)):
+            segments = [merged] if isinstance(merged, LineString) else list(merged.geoms)
+            final_segments = []
+            
+            for segment in segments:
+                coords = list(segment.coords)
+                for i in range(len(coords) - 1):
+                    final_segments.append(LineString([coords[i], coords[i + 1]]))
+            
+            return final_segments
+        return []
 
-    merged = unary_union(lines)
-    if isinstance(merged, (LineString, MultiLineString)):
-        segments = [merged] if isinstance(merged, LineString) else list(merged.geoms)
-        final_segments = []
-        for segment in segments:
-            coords = list(segment.coords)
-            for i in range(len(coords) - 1):
-                final_segments.append(LineString([coords[i], coords[i + 1]]))
-        return final_segments
-    return []
+def stitch_network_components(network_graph, max_distance_km=10):
+    """
+    Connect disconnected network components using minimum spanning tree approach.
+    Each component connects to only one other component (its nearest neighbor).
+    Uses Jeju approach: 10km threshold, closest pair between components.
+    
+    Parameters:
+    - network_graph: NetworkX graph
+    - max_distance_km: Maximum distance in kilometers to connect components (default: 10km)
+    
+    Returns:
+    - Modified NetworkX graph with connected components
+    """
+    if network_graph is None or len(network_graph.nodes) == 0:
+        return network_graph
+    
+    # Find connected components
+    components = list(nx.connected_components(network_graph))
+    initial_components = len(components)
+    
+    # Filter out isolated components (single nodes) - they don't need to be connected
+    significant_components = [comp for comp in components if len(comp) > 1]
+    isolated_components = len(components) - len(significant_components)
+    
+    if len(significant_components) <= 1:
+        if isolated_components > 0:
+            print(f"Network has {len(significant_components)} significant component(s) and {isolated_components} isolated node(s)")
+        else:
+            print(f"Network already connected: {len(significant_components)} significant component(s)")
+        return network_graph
+    
+    print(f"Found {len(significant_components)} significant components and {isolated_components} isolated nodes. Stitching significant components within {max_distance_km}km...")
+    
+    max_distance_m = max_distance_km * 1000  # Convert to meters
+    connections_added = 0
+    
+    # Sort components by size (largest first) and create indexed list
+    component_sizes = [(i, len(comp)) for i, comp in enumerate(significant_components)]
+    component_sizes.sort(key=lambda x: x[1], reverse=True)  # Sort by size, largest first
+    
+    print(f"Component sizes: {[size for _, size in component_sizes]} nodes")
+    
+    # Use minimum spanning tree approach: start with largest component, connect others one by one
+    # This creates a connected network with minimal connections
+    unconnected_components = [idx for idx, _ in component_sizes[1:]]  # All except the largest
+    connected_components = [component_sizes[0][0]]  # Start with largest component
+    
+    print(f"Starting with largest component (index {connected_components[0]}, {component_sizes[0][1]} nodes)")
+    
+    if unconnected_components:
+        
+        # Connect remaining components one by one to the nearest already-connected component
+        while unconnected_components:
+            best_connection = None
+            best_distance = float('inf')
+            best_component_idx = None
+            
+            # Find the shortest connection between any unconnected component and any connected component
+            for unconnected_idx in unconnected_components:
+                unconnected_component = significant_components[unconnected_idx]
+                
+                for connected_idx in connected_components:
+                    connected_component = significant_components[connected_idx]
+                    
+                    # Find closest pair between these two components
+                    for node1 in unconnected_component:
+                        for node2 in connected_component:
+                            if isinstance(node1, tuple) and isinstance(node2, tuple) and len(node1) == 2 and len(node2) == 2:
+                                distance = ((node1[0] - node2[0]) ** 2 + (node1[1] - node2[1]) ** 2) ** 0.5
+                                
+                                if distance < best_distance:
+                                    best_distance = distance
+                                    best_connection = (node1, node2)
+                                    best_component_idx = unconnected_idx
+            
+            # Add the best connection if within distance threshold
+            if best_connection and best_distance <= max_distance_m:
+                node1, node2 = best_connection
+                network_graph.add_edge(node1, node2, weight=best_distance, edge_type='component_stitch')
+                connections_added += 1
+                
+                # Move the connected component from unconnected to connected list
+                connected_components.append(best_component_idx)
+                unconnected_components.remove(best_component_idx)
+                
+                component_size = len(significant_components[best_component_idx])
+                print(f"  Connected component {best_component_idx+1} ({component_size} nodes) to network: {best_distance/1000:.2f}km")
+            else:
+                # No more components can be connected within distance threshold
+                print(f"  Remaining {len(unconnected_components)} components are beyond {max_distance_km}km threshold")
+                break
+    
+    # Check final connectivity
+    final_components = len(list(nx.connected_components(network_graph)))
+    final_significant = len([comp for comp in nx.connected_components(network_graph) if len(comp) > 1])
+    print(f"Stitching complete: {len(significant_components)} → {final_significant} significant components, {connections_added} connections added")
+    
+    return network_graph
 
 def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     """
@@ -704,7 +553,7 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     - Grid line intersections and endpoints become 'grid_line' nodes.
     - Facilities and centroids are added as their own node types.
     - Facilities and centroids are connected to their nearest node on the grid.
-    - Grid stitching now occurs upstream, so this function assumes inputs are already well-connected.
+    - The graph is then "stitched" to connect any isolated sub-networks.
     This function is heavily optimized using spatial indexing (cKDTree) for fast nearest-neighbor searches.
     """
     # Get UTM CRS for accurate distance calculations
@@ -736,70 +585,40 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     split_lines = split_intersecting_edges(single_lines)
     print(f"  Split complete in {time.time() - split_start:.2f}s: {len(single_lines)} -> {len(split_lines)} segments")
     
-    snap_tolerance = NODE_SNAP_TOLERANCE_M
-
-    def snap_coord(coord):
-        if snap_tolerance <= 0:
-            return coord
-        return (
-            round(coord[0] / snap_tolerance) * snap_tolerance,
-            round(coord[1] / snap_tolerance) * snap_tolerance,
-        )
-
-    # Create nodes/edges from line endpoints
+    # Create nodes from line endpoints
     grid_nodes = set()
-    grid_edges = []
     for line in split_lines:
-        if line is None or line.is_empty:
-            continue
         coords = list(line.coords)
-        if len(coords) < 2:
-            continue
-        start = snap_coord(coords[0])
-        end = snap_coord(coords[-1])
-        if start == end:
-            continue
-        grid_nodes.add(start)
-        grid_nodes.add(end)
-        grid_edges.append((start, end, line))
-
-    print(f"Adding {len(grid_nodes)} snapped grid nodes to graph...")
-
+        grid_nodes.add(coords[0])
+        grid_nodes.add(coords[-1])
+    
+    print(f"Adding {len(grid_nodes)} grid nodes to graph...")
+    
     # Add nodes to graph
     for node in grid_nodes:
         G.add_node(node, type='grid_line')
     
     # Add facility nodes
-    facility_nodes = []
-    facility_node_set = set()
-    for idx, point in zip(facilities_gdf.index, facilities_utm.geometry):
+    facility_nodes = set()
+    for i, (idx, point) in enumerate(zip(facilities_gdf.index, facilities_utm.geometry)):
         node_coord = (point.x, point.y)
-        if node_coord in facility_node_set:
-            continue
-        facility_node_set.add(node_coord)
-        facility_nodes.append(node_coord)
+        facility_nodes.add(node_coord)
         G.add_node(node_coord, type='facility', facility_idx=idx)
     
     # Add centroid nodes
-    centroid_nodes = []
-    centroid_node_set = set()
-    for idx, point in zip(centroids_gdf.index, centroids_utm.geometry):
+    centroid_nodes = set()
+    for i, (idx, point) in enumerate(zip(centroids_gdf.index, centroids_utm.geometry)):
         node_coord = (point.x, point.y)
-        if node_coord in centroid_node_set:
-            continue
-        centroid_node_set.add(node_coord)
-        centroid_nodes.append(node_coord)
+        centroid_nodes.add(node_coord)
         G.add_node(node_coord, type='pop_centroid', centroid_idx=idx)
     
     print(f"Added {len(facility_nodes)} facility nodes and {len(centroid_nodes)} centroid nodes")
     
     # Add edges from grid lines
-    print(f"Adding {len(grid_edges)} grid edges...")
-    for start, end, line_geom in grid_edges:
-        if line_geom is None or line_geom.is_empty:
-            continue
-        edge_length = line_geom.length
-        G.add_edge(start, end, weight=edge_length, edge_type='grid_infrastructure', geometry=line_geom)
+    print(f"Adding {len(split_lines)} grid edges...")
+    for line in split_lines:
+        coords = list(line.coords)
+        G.add_edge(coords[0], coords[-1], weight=line.length, edge_type='grid_infrastructure')
     
     # OPTIMIZATION 2: Use spatial index for finding nearest grid nodes
     print("Building spatial index for grid nodes...")
@@ -816,23 +635,20 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     print(f"Connecting {len(facilities_utm)} facilities to nearest grid nodes...")
     connect_start = time.time()
     
-
-    # threshold for connecting facilities/centroids to grid
-    max_distance = MAX_CONNECTION_DISTANCE_M
+    max_distance = 50000  # 50km threshold
     
     # Process facilities
-    if facility_nodes:
-        facility_coords = np.array(facility_nodes)
+    if len(facility_nodes) > 0:
+        facility_coords = np.array(list(facility_nodes))
         
         # Find nearest grid node for each facility using KDTree
         distances, indices = grid_tree.query(facility_coords, k=1)
         
         # Add edges for facilities within threshold
-        for coord, dist, idx in zip(facility_nodes, distances, indices):
+        for i, (coord, dist, idx) in enumerate(zip(facility_nodes, distances, indices)):
             if dist <= max_distance:
                 nearest_grid = grid_node_list[idx]
-                connector = LineString([coord, nearest_grid])
-                G.add_edge(coord, nearest_grid, weight=dist, edge_type='grid_to_facility', geometry=connector)
+                G.add_edge(coord, nearest_grid, weight=dist, edge_type='grid_to_facility')
     
     print(f"  Facilities connected in {time.time() - connect_start:.2f}s")
     
@@ -843,7 +659,7 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     if len(centroid_nodes) > 10000:  # Large number of centroids
         # Process in batches to avoid memory issues
         batch_size = 5000
-        centroid_list = centroid_nodes[:]
+        centroid_list = list(centroid_nodes)
         
         for i in range(0, len(centroid_list), batch_size):
             batch_end = min(i + batch_size, len(centroid_list))
@@ -856,15 +672,14 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
             for j, (coord, dist, idx) in enumerate(zip(centroid_list[i:batch_end], distances, indices)):
                 if dist <= max_distance:
                     nearest_grid = grid_node_list[idx]
-                    connector = LineString([coord, nearest_grid])
-                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid', geometry=connector)
+                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid')
             
             if (i + batch_size) % 10000 == 0:
                 print(f"    Processed {min(i + batch_size, len(centroid_list)):,}/{len(centroid_list):,} centroids...")
     else:
         # Process all at once for smaller datasets
-        if centroid_nodes:
-            centroid_coords = np.array(centroid_nodes)
+        if len(centroid_nodes) > 0:
+            centroid_coords = np.array(list(centroid_nodes))
             
             # Find nearest grid node for each centroid
             distances, indices = grid_tree.query(centroid_coords, k=1)
@@ -873,19 +688,74 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
             for coord, dist, idx in zip(centroid_nodes, distances, indices):
                 if dist <= max_distance:
                     nearest_grid = grid_node_list[idx]
-                    connector = LineString([coord, nearest_grid])
-                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid', geometry=connector)
+                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid')
     
     print(f"  Centroids connected in {time.time() - connect_start:.2f}s")
     
     # Store UTM CRS for coordinate conversion
     G.graph['utm_crs'] = utm_crs
-    print(f"Network created: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges (stitching handled upstream)")
-
+    print(f"Network created: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    
+    # Stitch disconnected components within 10km (Jeju approach)
+    print("Stitching network components...")
+    stitch_start = time.time()
+    G = stitch_network_components(G, max_distance_km=10)
+    print(f"  Stitching complete in {time.time() - stitch_start:.2f}s")
+    
     return G
 
-def find_available_facilities_within_radius(centroid_geom, facilities_gdf, utm_crs, radius_km=FACILITY_SEARCH_RADIUS_KM):
-    """Find facilities within a radius of a centroid using Euclidean distance for performance."""
+def find_nearest_network_node(point_geom, network_graph):
+    """
+    Find the nearest network node to a given point geometry.
+    
+    Parameters:
+    - point_geom: Shapely Point geometry
+    - network_graph: NetworkX graph with node coordinates as tuples
+    
+    Returns:
+    - Node ID of nearest network node, or None if no nodes found
+    """
+    if network_graph is None or len(network_graph.nodes) == 0:
+        return None
+    
+    min_distance = float('inf')
+    nearest_node = None
+    
+    # Get UTM coordinates for accurate distance calculation
+    center_point = point_geom
+    utm_crs = get_utm_crs(center_point.x, center_point.y)
+    
+    # Convert point to UTM
+    point_utm = gpd.GeoSeries([point_geom], crs='EPSG:4326').to_crs(utm_crs).iloc[0]
+    point_x, point_y = point_utm.x, point_utm.y
+    
+    for node in network_graph.nodes():
+        # Node coordinates are stored as tuples (x, y) in UTM
+        if isinstance(node, tuple) and len(node) == 2:
+            node_x, node_y = node
+            
+            # Calculate Euclidean distance in UTM coordinates
+            distance = ((point_x - node_x) ** 2 + (point_y - node_y) ** 2) ** 0.5
+            
+            if distance < min_distance:
+                min_distance = distance
+                nearest_node = node
+    
+    return nearest_node
+
+def find_available_facilities_within_radius(centroid_geom, facilities_gdf, utm_crs, radius_km=100):
+    """
+    Find facilities within a radius of a centroid using Euclidean distance for performance.
+    
+    Parameters:
+    - centroid_geom: Shapely Point geometry in WGS84
+    - facilities_gdf: GeoDataFrame of facilities in WGS84
+    - utm_crs: UTM CRS for distance calculation
+    - radius_km: Maximum radius in kilometers
+    
+    Returns:
+    - GeoDataFrame of facilities within radius
+    """
     if facilities_gdf.empty:
         return facilities_gdf.copy()
     
@@ -918,44 +788,25 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
         centroid_idx = connection.get('centroid_idx')
         facility_gem_id = connection.get('facility_gem_id')
         path_nodes = connection.get('path_nodes', [])
-        path_segments = connection.get('path_segments', [])
         
         try:
-            path_geom = None
-            segment_geoms = []
-            for segment in path_segments:
-                segment_geom = segment.get('geometry')
-                if segment_geom is None:
-                    from_node = segment.get('from_node')
-                    to_node = segment.get('to_node')
-                    if from_node is not None and to_node is not None:
-                        segment_geom = LineString([from_node, to_node])
-                if segment_geom is not None and not segment_geom.is_empty:
-                    segment_geoms.append(segment_geom)
-
-            if segment_geoms:
-                try:
-                    path_geom = linemerge(segment_geoms)
-                except Exception:
-                    path_geom = segment_geoms[0]
-
-            if path_geom is None and path_nodes and len(path_nodes) >= 2:
-                path_geom = LineString(path_nodes)
-
-            if path_geom is None or path_geom.is_empty:
-                continue
-
-            path_wgs84 = gpd.GeoSeries([path_geom], crs=utm_crs).to_crs(COMMON_CRS).iloc[0]
-            all_geometries.append(path_wgs84)
-            all_attributes.append({
-                'centroid_idx': centroid_idx,
-                'facility_gem_id': facility_gem_id,
-                'facility_type': connection.get('facility_type'),
-                'distance_km': connection.get('distance_km'),
-                'supply_mwh': connection.get('supply_mwh'),
-                'connection_id': f"C{centroid_idx}_F{facility_gem_id}",
-                'active_supply': 'Yes'
-            })
+            if path_nodes and len(path_nodes) >= 2:
+                path_points = []
+                for node in path_nodes:
+                    point_utm = gpd.GeoSeries([Point(node)], crs=utm_crs)
+                    point_wgs84 = point_utm.to_crs(COMMON_CRS)
+                    path_points.append((point_wgs84.iloc[0].x, point_wgs84.iloc[0].y))
+                polyline_geom = LineString(path_points)
+                all_geometries.append(polyline_geom)
+                all_attributes.append({
+                    'centroid_idx': centroid_idx,
+                    'facility_gem_id': facility_gem_id,
+                    'facility_type': connection.get('facility_type'),
+                    'distance_km': connection.get('distance_km'),
+                    'supply_mwh': connection.get('supply_mwh'),
+                    'connection_id': f"C{centroid_idx}_F{facility_gem_id}",
+                    'active_supply': 'Yes'
+                })
         except Exception as e:
             print(f"Warning: Failed to create polyline for centroid {centroid_idx} to facility {facility_gem_id}: {e}")
     
@@ -1000,15 +851,13 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
             edge_data = network_graph[current_node][next_node]
             segment_weight = edge_data.get('weight', 0)
             edge_type = edge_data.get('edge_type', 'unknown')
-            segment_geom = edge_data.get('geometry')
             
             total_distance += segment_weight
             path_segments.append({
                 'from_node': current_node,
                 'to_node': next_node,
                 'weight': segment_weight,
-                'edge_type': edge_type,
-                'geometry': segment_geom
+                'edge_type': edge_type
             })
         
         result = {
@@ -1040,7 +889,7 @@ def process_centroid_distances_batch(centroid_batch, network_graph, facilities_g
         
         if network_centroid is not None:
             available_facilities = find_available_facilities_within_radius(
-                centroid.geometry, facilities_gdf, utm_crs
+                centroid.geometry, facilities_gdf, utm_crs, radius_km=100
             )
             for facility_idx, facility in available_facilities.iterrows():
                 network_facility = facility_mapping.get(facility_idx)
@@ -1180,19 +1029,17 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     # Add connection edges from graph
     if network_graph is not None:
         utm_crs = network_graph.graph.get('utm_crs', 'EPSG:3857')
-        for _n1, _n2, ed in network_graph.edges(data=True):
+        for n1, n2, ed in network_graph.edges(data=True):
             et = ed.get('edge_type', 'unknown')
             if et in ['centroid_to_grid', 'grid_to_facility', 'component_stitch']:
-                geom_utm = ed.get('geometry')
-                if geom_utm is None or geom_utm.is_empty:
-                    continue
                 try:
-                    geom = gpd.GeoSeries([geom_utm], crs=utm_crs).to_crs(COMMON_CRS).iloc[0]
+                    s = gpd.GeoSeries([Point(n1), Point(n2)], crs=utm_crs).to_crs(COMMON_CRS)
+                    geom = LineString([(s.iloc[0].x, s.iloc[0].y), (s.iloc[1].x, s.iloc[1].y)])
+                    dist_km = (ed.get('weight', 0) or 0) / 1000.0
+                    all_geometries.append(geom)
+                    all_attributes.append({'line_type': et, 'line_id': f'{et}_{len(all_attributes)}', 'distance_km': dist_km})
                 except Exception:
                     continue
-                dist_km = (ed.get('weight', geom_utm.length) or 0) / 1000.0
-                all_geometries.append(geom)
-                all_attributes.append({'line_type': et, 'line_id': f'{et}_{len(all_attributes)}', 'distance_km': dist_km})
     
     if all_geometries:
         return gpd.GeoDataFrame(all_attributes, geometry=all_geometries, crs=COMMON_CRS)
@@ -1203,10 +1050,9 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     layers = {}
     
     # Centroids layer - population centers with demand and supply allocation results
-    # Use ANALYSIS_YEAR for population and demand columns
     centroid_columns = ['geometry', 'GID_0', 'Population_centroid',
-                        f'Population_{ANALYSIS_YEAR}_centroid',
-                        f'Total_Demand_{ANALYSIS_YEAR}_centroid',
+                        'Population_2024_centroid', 'Population_2030_centroid', 'Population_2050_centroid',
+                        'Total_Demand_2024_centroid', 'Total_Demand_2030_centroid', 'Total_Demand_2050_centroid',
                         'supplying_facility_distance', 'supplying_facility_type', 'supplying_facility_gem_id', 
                         'supply_received_mwh', 'supply_status']
     available_columns = [c for c in centroid_columns if c in centroids_gdf.columns]
@@ -1273,7 +1119,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             centroids_gdf = load_population_centroids(country_bbox, admin_boundaries)
         
         with timer("Load facilities"):
-            facilities_gdf = load_energy_facilities(country_iso3, ANALYSIS_YEAR)
+            facilities_gdf = load_energy_facilities(country_iso3, 2024)
         
         with timer("Load grid lines"):
             grid_lines_gdf = load_grid_lines(country_bbox, admin_boundaries)
@@ -1304,31 +1150,13 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 centroid_facility_distances = calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph)
             
             # Initialize facility remaining capacities (MWh/year) and track supplied amounts
-            # SUPPLY_FACTOR determines what % of total demand is available as supply
-            # This available supply is distributed proportionally across facilities by their capacity share
-            demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
-            total_demand = centroids_gdf[demand_col].sum()
-            total_available_supply = total_demand * SUPPLY_FACTOR  # e.g., 60% of demand
-            
-            # Calculate total facility capacity to get proportional shares
-            total_facility_capacity = sum((facility.get('total_mwh', 0) or 0) for _, facility in facilities_gdf.iterrows())
-            
             facility_remaining = {}
             facility_supplied = {}
             for idx, facility in facilities_gdf.iterrows():
-                facility_capacity = facility.get('total_mwh', 0) or 0
-                # Each facility gets a proportional share of the available supply
-                if total_facility_capacity > 0:
-                    facility_share = facility_capacity / total_facility_capacity
-                    allocated_supply = total_available_supply * facility_share
-                else:
-                    allocated_supply = 0
-                facility_remaining[idx] = allocated_supply
+                # Use total_mwh directly from facility data
+                total_mwh = facility.get('total_mwh', 0) or 0
+                facility_remaining[idx] = total_mwh
                 facility_supplied[idx] = 0.0
-            
-            if SUPPLY_FACTOR < 1.0:
-                print(f"Sensitivity analysis: Available supply = {SUPPLY_FACTOR*100:.0f}% of demand = {total_available_supply:,.0f} MWh")
-                print(f"  Distributed proportionally across {len(facilities_gdf)} facilities")
             
             # Prepare centroid columns for supply allocation
             centroids_gdf['supplying_facility_distance'] = ''
@@ -1337,7 +1165,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             centroids_gdf['supply_received_mwh'] = 0.0
             centroids_gdf['supply_status'] = 'Not Filled'
             
-            demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
+            demand_col = 'Total_Demand_2024_centroid'
             
             # VECTORIZED SUPPLY ALLOCATION
             with timer("Allocate supply (Vectorized)"):
@@ -1412,43 +1240,35 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 print(f"Production mode: {len(output_files)} Parquet files saved to {parquet_dir}")
                 output_result = str(parquet_dir)
         
-        # Generate summary statistics for ANALYSIS_YEAR
+        # Generate summary statistics for 2024
         print(f"\n{'='*60}")
-        print(f"SUPPLY ANALYSIS SUMMARY FOR {country_iso3} ({ANALYSIS_YEAR})")
-        if SUPPLY_FACTOR < 1.0:
-            print(f"*** SENSITIVITY ANALYSIS: {SUPPLY_FACTOR*100:.0f}% supply available ***")
+        print(f"SUPPLY ANALYSIS SUMMARY FOR {country_iso3} (2024)")
         print(f"{'='*60}")
         
         # Calculate demand statistics
-        demand_col_year = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
-        total_demand_mwh = centroids_gdf[demand_col_year].sum()
-        total_available_supply_mwh = total_demand_mwh * SUPPLY_FACTOR
-        
-        print(f"Total demand (100%): {total_demand_mwh:,.0f} MWh")
-        print(f"Available supply ({SUPPLY_FACTOR*100:.0f}% of demand): {total_available_supply_mwh:,.0f} MWh")
+        demand_col_2024 = 'Total_Demand_2024_centroid'
+        total_needed_mwh = centroids_gdf[demand_col_2024].sum()
+        print(f"Total needed energy (demand): {total_needed_mwh:,.0f} MWh")
         
         # Calculate supply statistics from facilities
         if facility_supplied is not None and facility_remaining is not None:
             total_supplied_mwh = sum(facility_supplied.values())
             total_remaining_mwh = sum(facility_remaining.values())
+            total_facility_capacity = total_supplied_mwh + total_remaining_mwh
             
-            # % of available supply that was actually distributed
-            supplied_pct_of_available = (total_supplied_mwh / total_available_supply_mwh * 100) if total_available_supply_mwh > 0 else 0
+            supplied_pct = (total_supplied_mwh / total_facility_capacity * 100) if total_facility_capacity > 0 else 0
+            remaining_pct = (total_remaining_mwh / total_facility_capacity * 100) if total_facility_capacity > 0 else 0
             
-            # Demand coverage = actually supplied / total demand
-            demand_coverage_pct = (total_supplied_mwh / total_demand_mwh * 100) if total_demand_mwh > 0 else 0
+            print(f"Total supplied energy: {total_supplied_mwh:,.0f} MWh ({supplied_pct:.1f}% of facility capacity)")
+            print(f"Total remaining capacity: {total_remaining_mwh:,.0f} MWh ({remaining_pct:.1f}% of facility capacity)")
             
-            print(f"Actually supplied: {total_supplied_mwh:,.0f} MWh ({supplied_pct_of_available:.1f}% of available supply)")
-            print(f"Unsupplied (from available): {total_remaining_mwh:,.0f} MWh")
-            print(f"Demand coverage: {demand_coverage_pct:.1f}%")
-            
-            # Additional needed to meet 100% demand
-            total_additionally_needed_mwh = max(0, total_demand_mwh - total_supplied_mwh)
-            print(f"Additional needed for 100% demand: {total_additionally_needed_mwh:,.0f} MWh")
+            # Calculate additional energy needed
+            total_additionally_needed_mwh = max(0, total_needed_mwh - total_supplied_mwh)
+            print(f"Total additionally needed: {total_additionally_needed_mwh:,.0f} MWh")
         else:
             print("Total supplied energy: 0 MWh (no facilities processed)")
             print("Total remaining capacity: 0 MWh (no facilities processed)")
-            print(f"Total additionally needed: {total_demand_mwh:,.0f} MWh")
+            print(f"Total additionally needed: {total_needed_mwh:,.0f} MWh")
         
         # Calculate centroid status statistics
         status_counts = centroids_gdf['supply_status'].value_counts()
@@ -1489,7 +1309,7 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
     # Create index mapping from original to reset indices
     original_to_reset = {orig_idx: reset_idx for reset_idx, orig_idx in enumerate(centroids_gdf.index)}
     
-    # Pre-compute demand (full 100% demand) and initialize received arrays
+    # Pre-compute demand and initialize received arrays
     num_centroids = len(centroids_gdf_reset)
     centroid_demands = centroids_gdf_reset[demand_col].fillna(0).values.astype(np.float64)
     centroid_received = np.zeros(num_centroids, dtype=np.float64)
@@ -1551,8 +1371,7 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
                             'distance_to_this_facility': distance_info.get('distance_km'),
                             'nearest_facility_distance': nearest_facility_distance,
                             'remaining_demand': remaining_demand,
-                            'path_nodes': distance_info.get('path_nodes', []),
-                            'path_segments': distance_info.get('path_segments', [])
+                            'path_nodes': distance_info.get('path_nodes', [])
                         })
                     break
         
@@ -1593,8 +1412,7 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
                 'supply_mwh': allocated,
                 'distance_km': distance_km,
                 'facility_type': facility_info['facility_type'],
-                'path_nodes': centroid_info['path_nodes'],
-                'path_segments': centroid_info.get('path_segments', [])
+                'path_nodes': centroid_info['path_nodes']
             })
     
     # Update original centroids_gdf with vectorized operations
