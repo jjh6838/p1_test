@@ -85,8 +85,8 @@ DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil
 POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
-MAX_CONNECTION_DISTANCE_M = 10000  # 10km: (in meters) threshold for connecting facilities/centroids to grid
-FACILITY_SEARCH_RADIUS_KM = 50  # 50 km: Max radius (in km) to search for facilities from each centroid
+MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
+FACILITY_SEARCH_RADIUS_KM = 100  # 100 km: Max radius (in km) to search for facilities from each centroid
 SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
 
@@ -884,22 +884,26 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
 
     return G
 
-def find_available_facilities_within_radius(centroid_geom, facilities_gdf, utm_crs, radius_km=FACILITY_SEARCH_RADIUS_KM):
-    """Find facilities within a radius of a centroid using Euclidean distance for performance."""
+def find_available_facilities_within_radius_kdtree(centroid_utm_coords, facility_tree, facilities_gdf, radius_km=FACILITY_SEARCH_RADIUS_KM):
+    """
+    Find facilities within a radius of a centroid using precomputed KDTree.
+    This is much faster than reprojecting facilities for each centroid.
+    
+    Args:
+        centroid_utm_coords: tuple (x, y) in UTM meters
+        facility_tree: precomputed cKDTree of facility UTM coordinates
+        facilities_gdf: original facilities GeoDataFrame (for returning subset)
+        radius_km: search radius in kilometers
+    
+    Returns:
+        List of facility indices within radius
+    """
     if facilities_gdf.empty:
-        return facilities_gdf.copy()
+        return []
     
-    # Convert to UTM for accurate distance calculation
-    centroid_utm = gpd.GeoSeries([centroid_geom], crs='EPSG:4326').to_crs(utm_crs).iloc[0]
-    facilities_utm = facilities_gdf.to_crs(utm_crs)
-    
-    # Calculate Euclidean distances
-    distances = facilities_utm.geometry.distance(centroid_utm) / 1000  # Convert to km
-    
-    # Filter facilities within radius
-    within_radius = facilities_gdf[distances <= radius_km].copy()
-    
-    return within_radius
+    # Query KDTree for facilities within radius (radius in meters)
+    idxs = facility_tree.query_ball_point(centroid_utm_coords, r=radius_km * 1000.0)
+    return idxs
 
 def create_polyline_layer(active_connections, network_graph, country_iso3):
     """
@@ -1027,48 +1031,67 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
         path_cache[cache_key] = None
         return None
 
-def process_centroid_distances_batch(centroid_batch, network_graph, facilities_gdf, centroid_mapping, facility_mapping, utm_crs):
+def process_centroid_distances_batch_simple(batch_data, graph_edges, graph_nodes, centroid_mapping, facility_mapping):
     """
-    Processes a batch of centroids for distance calculations. Designed to be run in parallel.
-    For each centroid, it finds nearby facilities and calculates the shortest network path to them.
+    Processes a batch of centroids for distance calculations using simple data structures.
+    Designed for ProcessPoolExecutor - all arguments must be picklable.
+    
+    Args:
+        batch_data: List of (centroid_idx, nearby_facility_indices, centroid_geom_wkt) tuples
+        graph_edges: List of (node1, node2, weight) tuples
+        graph_nodes: Dict of node -> node_data
+        centroid_mapping: Dict of centroid_idx -> network_node
+        facility_mapping: Dict of facility_idx -> network_node
     """
+    import networkx as nx
+    from shapely import wkt
+    
+    # Rebuild graph in this process
+    G = nx.Graph()
+    for node, node_data in graph_nodes.items():
+        G.add_node(node, **node_data)
+    for n1, n2, weight in graph_edges:
+        G.add_edge(n1, n2, weight=weight)
+    
     batch_results = []
     
-    for centroid_idx, centroid in centroid_batch.iterrows():
+    for centroid_idx, nearby_facilities, centroid_wkt, facility_data_list in batch_data:
         network_centroid = centroid_mapping.get(centroid_idx)
         distances = []
         
         if network_centroid is not None:
-            available_facilities = find_available_facilities_within_radius(
-                centroid.geometry, facilities_gdf, utm_crs
-            )
-            for facility_idx, facility in available_facilities.iterrows():
+            centroid_geom = wkt.loads(centroid_wkt)
+            
+            for fac_info in facility_data_list:
+                facility_idx = fac_info['idx']
                 network_facility = facility_mapping.get(facility_idx)
+                
                 if network_facility is not None:
-                    distance_result = calculate_network_distance_manual(
-                        network_graph, network_centroid, network_facility
-                    )
-                    if distance_result is not None:
-                        euclidean_distance = centroid.geometry.distance(facility.geometry) * 111.32
+                    try:
+                        path_length = nx.shortest_path_length(G, network_centroid, network_facility, weight='weight')
+                        distance_km = path_length / 1000.0
                         
-                        # Get GEM ID with better null handling
-                        gem_id_raw = facility.get('GEM unit/phase ID', '')
-                        gem_id = str(gem_id_raw) if pd.notna(gem_id_raw) and gem_id_raw != '' else ''
+                        # Calculate euclidean distance
+                        euclidean_distance = ((centroid_geom.x - fac_info['lon'])**2 + 
+                                            (centroid_geom.y - fac_info['lat'])**2)**0.5 * 111.32
                         
                         distances.append({
                             'facility_idx': facility_idx,
-                            'distance_km': distance_result['distance_km'],
-                            'path_nodes': distance_result['path_nodes'],
-                            'path_segments': distance_result['path_segments'],
-                            'total_segments': distance_result['total_segments'],
-                            'facility_type': facility.get('Grouped_Type', ''),
-                            'facility_capacity': facility.get('Adjusted_Capacity_MW', 0),
-                            'facility_lat': facility.geometry.y,
-                            'facility_lon': facility.geometry.x,
-                            'gem_id': gem_id,
+                            'distance_km': distance_km,
+                            'path_nodes': [],  # Skip path nodes for performance
+                            'path_segments': [],
+                            'total_segments': 0,
+                            'facility_type': fac_info['type'],
+                            'facility_capacity': fac_info['capacity'],
+                            'facility_lat': fac_info['lat'],
+                            'facility_lon': fac_info['lon'],
+                            'gem_id': fac_info['gem_id'],
                             'euclidean_distance_km': euclidean_distance,
-                            'network_path': distance_result['path_nodes']
+                            'network_path': []
                         })
+                    except (nx.NetworkXNoPath, nx.NodeNotFound):
+                        pass
+        
         distances.sort(key=lambda x: x['distance_km'])
         batch_results.append({'centroid_idx': centroid_idx, 'distances': distances})
     
@@ -1077,14 +1100,20 @@ def process_centroid_distances_batch(centroid_batch, network_graph, facilities_g
 def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     """
     Calculates network distances for all centroids to nearby facilities using parallel processing.
-    It adaptively changes the batch size based on the number of centroids to balance memory usage and parallelism.
-    This is the most computationally expensive part of the script.
+    
+    OPTIMIZED:
+    - Precomputes UTM coordinates for all centroids and facilities once
+    - Builds KDTree for O(log n) facility radius queries instead of O(n) per centroid
+    - Uses ProcessPoolExecutor for true multi-core parallelism on CPU-bound Dijkstra
+    - Serializes graph to simple data structures for pickling
     """
+    from scipy.spatial import cKDTree
+    
     num_centroids = len(centroids_gdf)
     num_facilities = len(facilities_gdf)
-    print(f"Calculating distances for {num_centroids:,} centroids to {num_facilities:,} facilities using {MAX_WORKERS} parallel workers...")
+    print(f"Calculating distances for {num_centroids:,} centroids to {num_facilities:,} facilities...")
     
-    # Create coordinate mappings
+    # Create coordinate mappings from graph
     centroid_mapping = {}
     facility_mapping = {}
     
@@ -1098,63 +1127,128 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     center_point = centroids_gdf.geometry.union_all().centroid
     utm_crs = get_utm_crs(center_point.x, center_point.y)
     
-    # Adaptive batch sizing based on dataset scale
-    # Consider both centroids and facilities for complexity
-    complexity_factor = num_centroids * min(num_facilities, 100) / 1000000  # Rough complexity estimate
+    # OPTIMIZATION 1: Precompute UTM coordinates ONCE for all centroids and facilities
+    print(f"  Precomputing UTM coordinates and building KDTree...")
+    precompute_start = time.time()
     
-    if num_centroids > 1000000:  # Over 1M centroids (like CHN with 4M)
-        batch_size = 25  # Smaller batches for more parallelism (was 50)
-    elif num_centroids > 100000:  # 100k-1M centroids
-        batch_size = 50   # Was 100
-    elif num_centroids > 50000:  # 50k-100k (like AFG with 71k)
-        batch_size = 100  # Was 250
-    else:  # Under 10k
-        batch_size = max(50, num_centroids // MAX_WORKERS)
+    centroids_utm = centroids_gdf.to_crs(utm_crs)
+    facilities_utm = facilities_gdf.to_crs(utm_crs)
     
-    # Create batches
-    centroid_batches = []
-    for i in range(0, num_centroids, batch_size):
-        batch = centroids_gdf.iloc[i:min(i+batch_size, num_centroids)]
-        centroid_batches.append(batch)
+    # Build centroid UTM coordinate lookup
+    centroid_utm_coords = {}
+    for idx in centroids_gdf.index:
+        geom = centroids_utm.loc[idx].geometry
+        centroid_utm_coords[idx] = (geom.x, geom.y)
     
-    print(f"Processing {len(centroid_batches)} batches of ~{batch_size} centroids each")
+    # Build facility KDTree for fast radius queries
+    facility_indices = list(facilities_gdf.index)
+    facility_coords = np.vstack([
+        facilities_utm.geometry.x.values,
+        facilities_utm.geometry.y.values
+    ]).T
+    facility_tree = cKDTree(facility_coords)
+    
+    # Precompute facility data for serialization
+    facility_data = {}
+    for idx in facilities_gdf.index:
+        fac = facilities_gdf.loc[idx]
+        gem_id_raw = fac.get('GEM unit/phase ID', '')
+        facility_data[idx] = {
+            'idx': idx,
+            'type': fac.get('Grouped_Type', ''),
+            'capacity': fac.get('Adjusted_Capacity_MW', 0),
+            'lat': fac.geometry.y,
+            'lon': fac.geometry.x,
+            'gem_id': str(gem_id_raw) if pd.notna(gem_id_raw) and gem_id_raw != '' else ''
+        }
+    
+    print(f"  Precomputed in {time.time() - precompute_start:.2f}s")
+    
+    # OPTIMIZATION 2: Precompute nearby facilities for each centroid using KDTree
+    print(f"  Finding nearby facilities for each centroid...")
+    nearby_start = time.time()
+    
+    centroid_nearby = {}  # centroid_idx -> list of facility data dicts
+    for idx in centroids_gdf.index:
+        utm_coords = centroid_utm_coords.get(idx)
+        if utm_coords:
+            nearby_positions = facility_tree.query_ball_point(utm_coords, r=FACILITY_SEARCH_RADIUS_KM * 1000.0)
+            centroid_nearby[idx] = [facility_data[facility_indices[pos]] for pos in nearby_positions]
+        else:
+            centroid_nearby[idx] = []
+    
+    print(f"  Found nearby facilities in {time.time() - nearby_start:.2f}s")
+    
+    # OPTIMIZATION 3: Serialize graph to picklable format for ProcessPoolExecutor
+    print(f"  Serializing graph for parallel processing...")
+    serialize_start = time.time()
+    
+    # Extract only the essential graph structure (nodes and weighted edges)
+    graph_nodes = {node: dict(data) for node, data in network_graph.nodes(data=True)}
+    graph_edges = [(n1, n2, data.get('weight', 1.0)) for n1, n2, data in network_graph.edges(data=True)]
+    
+    print(f"  Serialized graph ({len(graph_nodes):,} nodes, {len(graph_edges):,} edges) in {time.time() - serialize_start:.2f}s")
+    
+    # Adaptive batch sizing
+    if num_centroids > 1000000:
+        batch_size = 100
+    elif num_centroids > 100000:
+        batch_size = 200
+    elif num_centroids > 50000:
+        batch_size = 300
+    else:
+        batch_size = max(100, num_centroids // min(16, MAX_WORKERS))
+    
+    # Create batch data (picklable)
+    batch_data_list = []
+    current_batch = []
+    for idx in centroids_gdf.index:
+        centroid_wkt = centroids_gdf.loc[idx].geometry.wkt
+        nearby_facs = centroid_nearby[idx]
+        current_batch.append((idx, [f['idx'] for f in nearby_facs], centroid_wkt, nearby_facs))
+        
+        if len(current_batch) >= batch_size:
+            batch_data_list.append(current_batch)
+            current_batch = []
+    
+    if current_batch:
+        batch_data_list.append(current_batch)
+    
+    print(f"  Processing {len(batch_data_list)} batches of ~{batch_size} centroids with ProcessPoolExecutor...")
     
     # Progress reporting frequency
-    if num_centroids > 100000:
-        report_interval = max(10, len(centroid_batches) // 20)  # Report ~20 times
-    else:
-        report_interval = max(1, len(centroid_batches) // 10)  # Report ~10 times
+    report_interval = max(1, len(batch_data_list) // 10)
     
-    # Process batches in parallel
+    # Use ProcessPoolExecutor for true multi-core parallelism
+    num_workers = min(16, MAX_WORKERS)  # Cap at 16 for process overhead
     all_results = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        # Create partial function with fixed arguments
-        process_func = partial(
-            process_centroid_distances_batch,
-            network_graph=network_graph,
-            facilities_gdf=facilities_gdf,
-            centroid_mapping=centroid_mapping,
-            facility_mapping=facility_mapping,
-            utm_crs=utm_crs
-        )
-        
+    
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
         # Submit all batches
-        future_to_batch = {executor.submit(process_func, batch): i for i, batch in enumerate(centroid_batches)}
+        futures = []
+        for batch_data in batch_data_list:
+            future = executor.submit(
+                process_centroid_distances_batch_simple,
+                batch_data,
+                graph_edges,
+                graph_nodes,
+                centroid_mapping,
+                facility_mapping
+            )
+            futures.append(future)
         
-        # Collect results
-        for future in future_to_batch:
-            batch_idx = future_to_batch[future]
+        # Collect results with progress reporting
+        for i, future in enumerate(futures):
             try:
                 batch_results = future.result()
                 all_results.extend(batch_results)
                 
-                # Progress reporting
-                if (batch_idx + 1) % report_interval == 0:
-                    progress_pct = (batch_idx + 1) / len(centroid_batches) * 100
-                    print(f"  Progress: {batch_idx + 1}/{len(centroid_batches)} batches ({progress_pct:.1f}%)")
+                if (i + 1) % report_interval == 0:
+                    progress_pct = (i + 1) / len(futures) * 100
+                    print(f"  Progress: {i + 1}/{len(futures)} batches ({progress_pct:.1f}%)")
                     
             except Exception as exc:
-                print(f"  Batch {batch_idx} generated an exception: {exc}")
+                print(f"  Batch {i} generated an exception: {exc}")
     
     print(f"Distance calculation completed for {len(all_results)} centroids")
     return all_results
