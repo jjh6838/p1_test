@@ -31,13 +31,17 @@ def setup_logging(log_file=None):
     )
     return logging.getLogger(__name__)
 
-def find_parquet_files(input_dir, layer_name):
+def find_parquet_files(input_dir, layer_name, scenario_subfolder=None):
     """Find all parquet files for a specific layer across all countries"""
     input_path = Path(input_dir)
     parquet_files = []
     
-    # Look for parquet files in the main parquet directory
-    parquet_dir = input_path / "parquet"
+    # Look for parquet files in the specified scenario subfolder or main parquet directory
+    if scenario_subfolder:
+        parquet_dir = input_path / "parquet" / scenario_subfolder
+    else:
+        parquet_dir = input_path / "parquet"
+    
     if parquet_dir.exists():
         pattern = f"{layer_name}_*.parquet"
         matching_files = list(parquet_dir.glob(pattern))
@@ -45,13 +49,13 @@ def find_parquet_files(input_dir, layer_name):
     
     return parquet_files
 
-def combine_layer_data(input_dir, layer_name, countries_list=None):
+def combine_layer_data(input_dir, layer_name, countries_list=None, scenario_subfolder=None):
     """Combine data from a specific layer across all countries (Parquet files only)"""
     
     input_path = Path(input_dir)
     
     # Find all parquet files for this layer
-    parquet_files = find_parquet_files(input_path, layer_name)
+    parquet_files = find_parquet_files(input_path, layer_name, scenario_subfolder)
     
     if countries_list:
         # Filter to only specified countries
@@ -195,8 +199,8 @@ def generate_global_summary(combined_layers, logger):
     
     logger.info("="*80)
 
-def combine_global_results(input_dir="outputs_per_country", output_file="global_supply_analysis.gpkg", 
-                         countries_list=None):
+def combine_global_results(input_dir="outputs_per_country", output_file="outputs_global/global_supply_analysis.gpkg", 
+                         countries_list=None, scenario_subfolder=None):
     """
     Combine all country results into global datasets by layer (Parquet input mode)
     
@@ -204,6 +208,7 @@ def combine_global_results(input_dir="outputs_per_country", output_file="global_
         input_dir: Directory containing country subdirectories with Parquet files
         output_file: Output file (supports .gpkg, .parquet extensions)
         countries_list: Optional list of countries to include
+        scenario_subfolder: Subfolder name under parquet directory (e.g., '2050_supply_100%')
     """
     
     # Setup logging
@@ -216,20 +221,29 @@ def combine_global_results(input_dir="outputs_per_country", output_file="global_
     
     # Create input and output directories if they don't exist
     input_path.mkdir(exist_ok=True)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
     
     if not input_path.exists():
         logger.error(f"Input directory {input_dir} does not exist")
         return False
     
-    # Check for Parquet files
-    parquet_dir = input_path / "parquet"
+    # Check for Parquet files - look in scenario subfolder if specified
+    if scenario_subfolder:
+        parquet_dir = input_path / "parquet" / scenario_subfolder
+    else:
+        parquet_dir = input_path / "parquet"
+    
     has_parquet = parquet_dir.exists() and list(parquet_dir.glob("*.parquet"))
     
     if not has_parquet:
         logger.error(f"No Parquet files found in {parquet_dir}")
-        logger.error("Expected structure: outputs_per_country/parquet/layer_ISO3.parquet")
+        if scenario_subfolder:
+            logger.error(f"Expected structure: outputs_per_country/parquet/{scenario_subfolder}/layer_ISO3.parquet")
+        else:
+            logger.error("Expected structure: outputs_per_country/parquet/layer_ISO3.parquet")
         return False
+    
+    logger.info(f"Processing scenario: {scenario_subfolder if scenario_subfolder else 'default'}")
     
     # Determine output format from file extension
     output_format = 'gpkg' if output_file.endswith('.gpkg') else 'parquet'
@@ -248,7 +262,8 @@ def combine_global_results(input_dir="outputs_per_country", output_file="global_
         combined_data = combine_layer_data(
             input_dir=input_dir,
             layer_name=layer_name,
-            countries_list=countries_list
+            countries_list=countries_list,
+            scenario_subfolder=scenario_subfolder
         )
         
         if combined_data is not None and not combined_data.empty:
@@ -309,8 +324,10 @@ def main():
     parser = argparse.ArgumentParser(description='Combine country supply analysis results into global dataset (Production mode - Parquet files)')
     parser.add_argument('--input-dir', default='outputs_per_country', 
                        help='Input directory with country subdirectories containing Parquet files')
-    parser.add_argument('--output', default='global_supply_analysis.gpkg', 
-                       help='Output file (.gpkg for visualization, .parquet for data)')
+    parser.add_argument('--output', default=None, 
+                       help='Output file (.gpkg for visualization, .parquet for data). Auto-generated if not specified.')
+    parser.add_argument('--scenario', default=None,
+                       help='Scenario subfolder name under parquet directory (e.g., "2050_supply_100%%")')
     parser.add_argument('--countries-file', 
                        help='File with list of countries to process (optional)')
     
@@ -322,23 +339,72 @@ def main():
     logger.info("STARTING GLOBAL RESULTS COMBINATION (PRODUCTION MODE)")
     logger.info("="*60)
     
+    # Auto-detect scenario subfolders if not specified
+    scenario_subfolder = args.scenario
+    scenarios_to_process = []
+    
+    if not scenario_subfolder:
+        # Look for all scenario subfolders in the parquet directory
+        parquet_base = Path(args.input_dir) / "parquet"
+        if parquet_base.exists():
+            subfolders = [d.name for d in parquet_base.iterdir() if d.is_dir()]
+            if subfolders:
+                scenarios_to_process = subfolders
+                logger.info(f"Found {len(scenarios_to_process)} scenario subfolders: {scenarios_to_process}")
+            else:
+                logger.warning("No scenario subfolders found, will use default parquet directory")
+                scenarios_to_process = [None]
+    else:
+        scenarios_to_process = [scenario_subfolder]
+    
     # Load countries list if specified
     countries_list = None
     if args.countries_file and Path(args.countries_file).exists():
         countries_list = [c.strip() for c in Path(args.countries_file).read_text().splitlines() if c.strip()]
         logger.info(f"Processing specific countries from {args.countries_file}: {len(countries_list)} countries")
     
-    success = combine_global_results(
-        input_dir=args.input_dir,
-        output_file=args.output,
-        countries_list=countries_list
-    )
+    # Process each scenario
+    all_success = True
+    for scenario in scenarios_to_process:
+        logger.info(f"\n{'='*80}")
+        logger.info(f"PROCESSING SCENARIO: {scenario if scenario else 'default'}")
+        logger.info(f"{'='*80}\n")
+        
+        # Generate output filename based on scenario
+        if args.output:
+            output_file = args.output
+        else:
+            if scenario:
+                output_file = f"outputs_global/{scenario}_global.gpkg"
+            else:
+                output_file = "outputs_global/global_supply_analysis.gpkg"
+        
+        logger.info(f"Output file: {output_file}")
+        
+        success = combine_global_results(
+            input_dir=args.input_dir,
+            output_file=output_file,
+            countries_list=countries_list,
+            scenario_subfolder=scenario
+        )
+        
+        if not success:
+            all_success = False
+            logger.error(f"Failed to process scenario: {scenario}")
+        else:
+            logger.info(f"Successfully processed scenario: {scenario}")
+    
+    success = all_success
     
     if success:
         logger.info("Global results combination completed successfully!")
-        print(f"\n🎉 Success! Global analysis saved to: {args.output}")
-        if args.output.endswith('.gpkg'):
-            print("💡 You can now open this GPKG file in QGIS for global visualization!")
+        if len(scenarios_to_process) == 1:
+            print(f"\n🎉 Success! Global analysis saved to: {output_file}")
+            if output_file.endswith('.gpkg'):
+                print("💡 You can now open this GPKG file in QGIS for global visualization!")
+        else:
+            print(f"\n🎉 Success! Processed {len(scenarios_to_process)} scenarios in outputs_global/")
+            print("💡 You can now open the GPKG files in QGIS for global visualization!")
     else:
         logger.error("Global results combination failed!")
         print("\n❌ Failed to create global analysis. Check the logs for details.")

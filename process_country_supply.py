@@ -88,7 +88,7 @@ GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching r
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
-SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+SUPPLY_FACTOR = 0.6  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False
@@ -1445,31 +1445,18 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 print(f"Test mode: Full GPKG saved to {output_file}")
                 output_result = str(output_file)
             else:
-                # Production mode: Lightweight Parquet files for global analysis
-                parquet_dir = output_path / "parquet"
-                parquet_dir.mkdir(exist_ok=True)
-                
-                # Define essential columns for each layer
-                parquet_schemas = {
-                    'centroids': ['geometry', 'GID_0', 'supplying_facility_type', 'supply_status'],
-                    'facilities': ['geometry', 'GID_0', 'Grouped_Type', 'total_mwh'],
-                    'grid_lines': ['geometry', 'GID_0', 'line_type'],
-                    'polylines': ['geometry', 'GID_0', 'facility_type']
-                }
+                # Production mode: Full Parquet files for global analysis (all columns retained)
+                scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
+                parquet_dir = output_path / "parquet" / scenario_suffix
+                parquet_dir.mkdir(parents=True, exist_ok=True)
                 
                 output_files = []
                 for layer_name, layer_data in layers.items():
-                    if layer_name in parquet_schemas and not layer_data.empty:
-                        # Select only essential columns
-                        essential_columns = parquet_schemas[layer_name]
-                        available_columns = [col for col in essential_columns if col in layer_data.columns]
-                        
-                        if available_columns:
-                            layer_essential = layer_data[available_columns].copy()
-                            parquet_file = parquet_dir / f"{layer_name}_{country_iso3}.parquet"
-                            layer_essential.to_parquet(parquet_file)
-                            output_files.append(str(parquet_file))
-                            print(f"  Saved {layer_name}: {len(layer_essential)} records → {parquet_file.name}")
+                    if not layer_data.empty:
+                        parquet_file = parquet_dir / f"{layer_name}_{country_iso3}.parquet"
+                        layer_data.to_parquet(parquet_file, compression='snappy')
+                        output_files.append(str(parquet_file))
+                        print(f"  Saved {layer_name}: {len(layer_data)} records, {len(layer_data.columns)} columns → {parquet_file.name}")
                 
                 print(f"Production mode: {len(output_files)} Parquet files saved to {parquet_dir}")
                 output_result = str(parquet_dir)
