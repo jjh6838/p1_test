@@ -81,22 +81,22 @@ except ImportError:
 
 # Constants
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
-ANALYSIS_YEAR = 2050  # Year for supply-demand analysis: 2024, 2030, or 2050
+ANALYSIS_YEAR = 2030  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
 POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
-SUPPLY_FACTOR = 0.6  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False
 
 def print_configuration_banner(test_mode=False):
-    """Emit configuration details once per process when test mode is active."""
+    """Emit configuration details once per process."""
     global _CONFIG_PRINTED
-    if not test_mode or _CONFIG_PRINTED:
+    if _CONFIG_PRINTED:
         return
 
     print("=" * 60)
@@ -443,27 +443,52 @@ def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_
         return grid_lines_gdf
     
     # MST-based stitching: connect components starting from largest
+    # OPTIMIZATION: Use KDTree for spatial indexing to avoid O(n²·m²) nested loops
     max_distance_m = max_distance_km * 1000
     component_sizes = sorted(enumerate(significant_components), key=lambda x: len(x[1]), reverse=True)
     connected_idxs = [component_sizes[0][0]]
     unconnected_idxs = [idx for idx, _ in component_sizes[1:]]
     
+    # Build spatial index for connected component nodes
+    from scipy.spatial import cKDTree
+    
+    def get_component_nodes_array(component):
+        """Extract valid 2D nodes from component as numpy array."""
+        nodes = [n for n in component if isinstance(n, tuple) and len(n) == 2]
+        return np.array(nodes) if nodes else np.empty((0, 2))
+    
     stitch_edges = []
     while unconnected_idxs:
+        # Build KDTree from all currently connected component nodes
+        connected_nodes = []
+        for cidx in connected_idxs:
+            connected_nodes.extend([n for n in significant_components[cidx] 
+                                   if isinstance(n, tuple) and len(n) == 2])
+        
+        if not connected_nodes:
+            break
+            
+        connected_tree = cKDTree(np.array(connected_nodes))
+        
         best_connection = None
         best_distance = float('inf')
         best_idx = None
         
+        # For each unconnected component, find nearest connected node using KDTree
         for uidx in unconnected_idxs:
-            for cidx in connected_idxs:
-                for n1 in significant_components[uidx]:
-                    for n2 in significant_components[cidx]:
-                        if isinstance(n1, tuple) and isinstance(n2, tuple) and len(n1) == 2 and len(n2) == 2:
-                            dist = ((n1[0] - n2[0]) ** 2 + (n1[1] - n2[1]) ** 2) ** 0.5
-                            if dist < best_distance:
-                                best_distance = dist
-                                best_connection = (n1, n2)
-                                best_idx = uidx
+            unconnected_nodes = get_component_nodes_array(significant_components[uidx])
+            if len(unconnected_nodes) == 0:
+                continue
+            
+            # Query KDTree for nearest neighbor from each unconnected node
+            distances, indices = connected_tree.query(unconnected_nodes, k=1)
+            min_idx = np.argmin(distances)
+            min_distance = distances[min_idx]
+            
+            if min_distance < best_distance:
+                best_distance = min_distance
+                best_connection = (tuple(unconnected_nodes[min_idx]), tuple(connected_nodes[indices[min_idx]]))
+                best_idx = uidx
         
         if best_connection and best_distance <= max_distance_m:
             stitch_edges.append(LineString([best_connection[0], best_connection[1]]))
