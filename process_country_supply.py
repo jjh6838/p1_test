@@ -54,9 +54,9 @@ from affine import Affine
 from shapely.geometry import Point, LineString, MultiLineString, MultiPoint, GeometryCollection
 from shapely.ops import unary_union, split, linemerge
 from shapely.strtree import STRtree
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-import multiprocessing as mp
+import heapq
 import time
 from contextlib import contextmanager
 
@@ -83,7 +83,7 @@ except ImportError:
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 ANALYSIS_YEAR = 2050  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
-POP_AGGREGATION_FACTOR = 100  # x100: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
+POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
@@ -1057,131 +1057,94 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
         path_cache[cache_key] = None
         return None
 
-def process_centroid_distances_batch_simple(batch_data, graph_edges, graph_nodes, centroid_mapping, facility_mapping):
-    """
-    Processes a batch of centroids for distance calculations using simple data structures.
-    Designed for ProcessPoolExecutor - all arguments must be picklable.
-    
-    Args:
-        batch_data: List of (centroid_idx, nearby_facility_indices, centroid_geom_wkt) tuples
-        graph_edges: List of (node1, node2, weight) tuples
-        graph_nodes: Dict of node -> node_data
-        centroid_mapping: Dict of centroid_idx -> network_node
-        facility_mapping: Dict of facility_idx -> network_node
-    """
-    import networkx as nx
-    from shapely import wkt
-    
-    # Rebuild graph in this process
-    G = nx.Graph()
-    for node, node_data in graph_nodes.items():
-        G.add_node(node, **node_data)
-    for n1, n2, weight in graph_edges:
-        G.add_edge(n1, n2, weight=weight)
-    
-    batch_results = []
-    
-    for centroid_idx, nearby_facilities, centroid_wkt, facility_data_list in batch_data:
-        network_centroid = centroid_mapping.get(centroid_idx)
-        distances = []
-        
-        if network_centroid is not None:
-            centroid_geom = wkt.loads(centroid_wkt)
-            
-            for fac_info in facility_data_list:
-                facility_idx = fac_info['idx']
-                network_facility = facility_mapping.get(facility_idx)
-                
-                if network_facility is not None:
-                    try:
-                        path_length = nx.shortest_path_length(G, network_centroid, network_facility, weight='weight')
-                        distance_km = path_length / 1000.0
-                        
-                        # Calculate euclidean distance
-                        euclidean_distance = ((centroid_geom.x - fac_info['lon'])**2 + 
-                                            (centroid_geom.y - fac_info['lat'])**2)**0.5 * 111.32
-                        
-                        distances.append({
-                            'facility_idx': facility_idx,
-                            'distance_km': distance_km,
-                            'path_nodes': [],  # Skip path nodes for performance
-                            'path_segments': [],
-                            'total_segments': 0,
-                            'facility_type': fac_info['type'],
-                            'facility_capacity': fac_info['capacity'],
-                            'facility_lat': fac_info['lat'],
-                            'facility_lon': fac_info['lon'],
-                            'gem_id': fac_info['gem_id'],
-                            'euclidean_distance_km': euclidean_distance,
-                            'network_path': []
-                        })
-                    except (nx.NetworkXNoPath, nx.NodeNotFound):
-                        pass
-        
-        distances.sort(key=lambda x: x['distance_km'])
-        batch_results.append({'centroid_idx': centroid_idx, 'distances': distances})
-    
-    return batch_results
+def _dijkstra_to_targets(network_graph, source_node, target_nodes, max_distance=None):
+    """Run Dijkstra from a single source until all target nodes are settled."""
+    if not target_nodes:
+        return {}, {}
+
+    queue = [(0.0, source_node)]
+    best_dist = {source_node: 0.0}
+    parents = {source_node: None}
+    remaining = set(target_nodes)
+    reached = {}
+
+    while queue and remaining:
+        dist, node = heapq.heappop(queue)
+        if dist > best_dist.get(node, float('inf')):
+            continue
+
+        if node in remaining:
+            remaining.remove(node)
+            reached[node] = dist
+            if not remaining:
+                break
+
+        for neighbor, edge_data in network_graph[node].items():
+            weight = edge_data.get('weight', edge_data.get('weight_cached', 1.0)) or 0.0
+            new_dist = dist + weight
+            if max_distance is not None and new_dist > max_distance:
+                continue
+            if new_dist < best_dist.get(neighbor, float('inf')):
+                best_dist[neighbor] = new_dist
+                parents[neighbor] = node
+                heapq.heappush(queue, (new_dist, neighbor))
+
+    return reached, parents
+
+
+def _reconstruct_path(node, parents):
+    path = []
+    current = node
+    while current is not None:
+        path.append(current)
+        current = parents.get(current)
+    return list(reversed(path))
+
 
 def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
-    """
-    Calculates network distances for all centroids to nearby facilities using parallel processing.
-    
-    OPTIMIZED:
-    - Precomputes UTM coordinates for all centroids and facilities once
-    - Builds KDTree for O(log n) facility radius queries instead of O(n) per centroid
-    - Uses ProcessPoolExecutor for true multi-core parallelism on CPU-bound Dijkstra
-    - Serializes graph to simple data structures for pickling
-    """
+    """Compute shortest-path distances from each facility to nearby centroids."""
     from scipy.spatial import cKDTree
-    
+
     num_centroids = len(centroids_gdf)
     num_facilities = len(facilities_gdf)
     print(f"Calculating distances for {num_centroids:,} centroids to {num_facilities:,} facilities...")
-    
-    # Create coordinate mappings from graph
+
+    # Build node lookups
     centroid_mapping = {}
     facility_mapping = {}
-    
     for node, data in network_graph.nodes(data=True):
         if data.get('type') == 'pop_centroid':
             centroid_mapping[data.get('centroid_idx')] = node
         elif data.get('type') == 'facility':
             facility_mapping[data.get('facility_idx')] = node
-    
-    # Get UTM CRS for distance calculations
-    center_point = centroids_gdf.geometry.union_all().centroid
-    utm_crs = get_utm_crs(center_point.x, center_point.y)
-    
-    # OPTIMIZATION 1: Precompute UTM coordinates ONCE for all centroids and facilities
-    print(f"  Precomputing UTM coordinates and building KDTree...")
-    precompute_start = time.time()
-    
+
+    if not centroid_mapping or not facility_mapping:
+        return []
+
+    utm_crs = network_graph.graph.get('utm_crs')
+    if not utm_crs:
+        center_point = centroids_gdf.geometry.union_all().centroid
+        utm_crs = get_utm_crs(center_point.x, center_point.y)
+
     centroids_utm = project_with_cache(centroids_gdf, utm_crs)
     facilities_utm = project_with_cache(facilities_gdf, utm_crs)
-    
-    # Build centroid UTM coordinate lookup
-    centroid_utm_coords = {}
-    for idx in centroids_gdf.index:
-        geom = centroids_utm.loc[idx].geometry
-        centroid_utm_coords[idx] = (geom.x, geom.y)
-    
-    # Build facility KDTree for fast radius queries
-    facility_indices = list(facilities_gdf.index)
-    facility_coords = np.vstack([
-        facilities_utm.geometry.x.values,
-        facilities_utm.geometry.y.values
-    ]).T
-    facility_tree = cKDTree(facility_coords)
-    
-    # Precompute facility data for serialization
-    facility_data = {}
+
+    centroid_indices = list(centroids_gdf.index)
+    centroid_coords = np.vstack([
+        centroids_utm.geometry.x.values,
+        centroids_utm.geometry.y.values
+    ]).T if len(centroids_gdf) else np.empty((0, 2))
+    centroid_tree = cKDTree(centroid_coords) if len(centroid_coords) else None
+
+    centroid_idx_by_pos = {pos: idx for pos, idx in enumerate(centroid_indices)}
+
+    # Precompute facility metadata for downstream use
+    facility_meta = {}
     for idx in facilities_gdf.index:
         fac = facilities_gdf.loc[idx]
         fac_utm_geom = facilities_utm.loc[idx].geometry
         gem_id_raw = fac.get('GEM unit/phase ID', '')
-        facility_data[idx] = {
-            'idx': idx,
+        facility_meta[idx] = {
             'type': fac.get('Grouped_Type', ''),
             'capacity': fac.get('Adjusted_Capacity_MW', 0),
             'lat': fac.geometry.y,
@@ -1190,112 +1153,72 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
             'utm_y': fac_utm_geom.y,
             'gem_id': str(gem_id_raw) if pd.notna(gem_id_raw) and gem_id_raw != '' else ''
         }
-    
-    print(f"  Precomputed in {time.time() - precompute_start:.2f}s")
-    
-    # OPTIMIZATION 2: Precompute nearby facilities for each centroid using KDTree
-    print(f"  Finding nearby facilities for each centroid...")
-    nearby_start = time.time()
-    
-    centroid_nearby = {}  # centroid_idx -> list of facility data dicts
-    for idx in centroids_gdf.index:
-        utm_coords = centroid_utm_coords.get(idx)
-        if not utm_coords:
-            centroid_nearby[idx] = []
+
+    search_radius_m = FACILITY_SEARCH_RADIUS_KM * 1000.0
+    centroid_results = defaultdict(list)
+
+    for facility_idx, facility_node in facility_mapping.items():
+        if facility_node is None:
             continue
 
-        nearby_positions = facility_tree.query_ball_point(utm_coords, r=FACILITY_SEARCH_RADIUS_KM * 1000.0)
-        if not nearby_positions:
-            centroid_nearby[idx] = []
+        facility_geom_utm = facilities_utm.loc[facility_idx].geometry
+        candidate_positions = []
+        if centroid_tree is not None:
+            candidate_positions = centroid_tree.query_ball_point((facility_geom_utm.x, facility_geom_utm.y), r=search_radius_m)
+        else:
+            candidate_positions = list(range(len(centroid_indices)))
+
+        if not candidate_positions:
             continue
 
-        ordered_facilities = []
-        for pos in nearby_positions:
-            fac_idx = facility_indices[pos]
-            fac_info = facility_data[fac_idx]
-            euclid = math.hypot(utm_coords[0] - fac_info['utm_x'], utm_coords[1] - fac_info['utm_y'])
-            ordered_facilities.append((euclid, fac_idx))
+        candidate_centroid_idxs = [centroid_idx_by_pos[pos] for pos in candidate_positions]
+        target_nodes = {
+            centroid_mapping[idx]
+            for idx in candidate_centroid_idxs
+            if idx in centroid_mapping
+        }
 
-        ordered_facilities.sort(key=lambda item: item[0])
-        centroid_nearby[idx] = [facility_data[fac_idx] for _, fac_idx in ordered_facilities]
-    
-    print(f"  Found nearby facilities in {time.time() - nearby_start:.2f}s")
-    
-    # OPTIMIZATION 3: Serialize graph to picklable format for ProcessPoolExecutor
-    print(f"  Serializing graph for parallel processing...")
-    serialize_start = time.time()
-    
-    # Extract only the essential graph structure (nodes and weighted edges)
-    graph_nodes = {node: dict(data) for node, data in network_graph.nodes(data=True)}
-    graph_edges = [(n1, n2, data.get('weight', 1.0)) for n1, n2, data in network_graph.edges(data=True)]
-    
-    print(f"  Serialized graph ({len(graph_nodes):,} nodes, {len(graph_edges):,} edges) in {time.time() - serialize_start:.2f}s")
-    
-    # Adaptive batch sizing
-    if num_centroids > 1000000:
-        batch_size = 100
-    elif num_centroids > 100000:
-        batch_size = 200
-    elif num_centroids > 50000:
-        batch_size = 300
-    else:
-        batch_size = max(100, num_centroids // min(16, MAX_WORKERS))
-    
-    # Create batch data (picklable)
-    batch_data_list = []
-    current_batch = []
-    for idx in centroids_gdf.index:
-        centroid_wkt = centroids_gdf.loc[idx].geometry.wkt
-        nearby_facs = centroid_nearby.get(idx, [])
-        if not nearby_facs:
+        if not target_nodes:
             continue
-        current_batch.append((idx, [f['idx'] for f in nearby_facs], centroid_wkt, nearby_facs))
-        
-        if len(current_batch) >= batch_size:
-            batch_data_list.append(current_batch)
-            current_batch = []
-    
-    if current_batch:
-        batch_data_list.append(current_batch)
-    
-    print(f"  Processing {len(batch_data_list)} batches of ~{batch_size} centroids with ProcessPoolExecutor...")
-    
-    # Progress reporting frequency
-    report_interval = max(1, len(batch_data_list) // 10)
-    
-    # Use ProcessPoolExecutor for true multi-core parallelism
-    num_workers = min(16, MAX_WORKERS)  # Cap at 16 for process overhead
-    all_results = []
-    
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        # Submit all batches
-        futures = []
-        for batch_data in batch_data_list:
-            future = executor.submit(
-                process_centroid_distances_batch_simple,
-                batch_data,
-                graph_edges,
-                graph_nodes,
-                centroid_mapping,
-                facility_mapping
-            )
-            futures.append(future)
-        
-        # Collect results with progress reporting
-        for i, future in enumerate(futures):
-            try:
-                batch_results = future.result()
-                all_results.extend(batch_results)
-                
-                if (i + 1) % report_interval == 0:
-                    progress_pct = (i + 1) / len(futures) * 100
-                    print(f"  Progress: {i + 1}/{len(futures)} batches ({progress_pct:.1f}%)")
-                    
-            except Exception as exc:
-                print(f"  Batch {i} generated an exception: {exc}")
-    
-    print(f"Distance calculation completed for {len(all_results)} centroids")
-    return all_results
+
+        reached, parents = _dijkstra_to_targets(network_graph, facility_node, target_nodes)
+
+        if not reached:
+            continue
+
+        for centroid_node, distance_m in reached.items():
+            centroid_idx = network_graph.nodes[centroid_node].get('centroid_idx')
+            if centroid_idx is None:
+                continue
+
+            path_nodes = _reconstruct_path(centroid_node, parents)
+            centroid_geom_wgs = centroids_gdf.loc[centroid_idx].geometry
+            meta = facility_meta[facility_idx]
+            euclidean_distance_km = ((centroid_geom_wgs.x - meta['lon']) ** 2 + (centroid_geom_wgs.y - meta['lat']) ** 2) ** 0.5 * 111.32
+
+            centroid_results[centroid_idx].append({
+                'facility_idx': facility_idx,
+                'distance_km': distance_m / 1000.0,
+                'path_nodes': path_nodes,
+                'path_segments': [],
+                'total_segments': max(len(path_nodes) - 1, 0),
+                'facility_type': meta['type'],
+                'facility_capacity': meta['capacity'],
+                'facility_lat': meta['lat'],
+                'facility_lon': meta['lon'],
+                'gem_id': meta['gem_id'],
+                'euclidean_distance_km': euclidean_distance_km,
+                'network_path': path_nodes
+            })
+
+    results = []
+    for centroid_idx in centroids_gdf.index:
+        distances = centroid_results.get(centroid_idx, [])
+        distances.sort(key=lambda x: x['distance_km'])
+        results.append({'centroid_idx': centroid_idx, 'distances': distances})
+
+    print(f"Distance calculation completed for {len(results)} centroids")
+    return results
 
 def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     """Creates the final grid lines layer, including original infrastructure and newly created connection lines (e.g., facility-to-grid, stitches)."""
@@ -1482,7 +1405,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             with timer("Allocate supply (Vectorized)"):
                 centroids_gdf, active_connections = allocate_supply_vectorized(
                     centroids_gdf, facilities_gdf, centroid_facility_distances,
-                    facility_remaining, facility_supplied, demand_col
+                    facility_remaining, facility_supplied, demand_col, network_graph
                 )
             
             # Update supply status for all centroids (keeping original loop for safety)
@@ -1615,8 +1538,38 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         print(f"Error processing {country_iso3} after {total_elapsed:.1f}s: {e}")
         return None
 
+
+def _build_path_segments_from_nodes(path_nodes, network_graph):
+    if network_graph is None or not path_nodes or len(path_nodes) < 2:
+        return []
+
+    segments = []
+    for i in range(len(path_nodes) - 1):
+        start = path_nodes[i]
+        end = path_nodes[i + 1]
+        edge_data = network_graph.get_edge_data(start, end) if network_graph.has_node(start) and network_graph.has_node(end) else None
+        edge_type = 'unknown'
+        geometry = None
+
+        if edge_data:
+            edge_type = edge_data.get('edge_type', 'unknown')
+            geometry = edge_data.get('geometry')
+
+        if geometry is None or geometry.is_empty:
+            geometry = LineString([start, end])
+
+        segments.append({
+            'from_node': start,
+            'to_node': end,
+            'edge_type': edge_type,
+            'geometry': geometry
+        })
+
+    return segments
+
+
 def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_distances, 
-                               facility_remaining, facility_supplied, demand_col):
+                               facility_remaining, facility_supplied, demand_col, network_graph=None):
     """
     Core supply allocation logic. This function matches supply (facilities) to demand (centroids).
     The logic is as follows:
@@ -1720,6 +1673,9 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
             
             # Track active connection (use original index for connection tracking)
             centroid_geom = centroids_gdf_reset.iloc[reset_centroid_idx].geometry
+            path_nodes = centroid_info['path_nodes']
+            path_segments = centroid_info.get('path_segments') or _build_path_segments_from_nodes(path_nodes, network_graph)
+
             active_connections.append({
                 'centroid_idx': centroid_info['original_idx'],  # Use original index for output
                 'facility_gem_id': facility_info['gem_id'],
@@ -1727,12 +1683,12 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
                 'centroid_lon': centroid_geom.x,
                 'facility_lat': facility_info['geometry'].y,
                 'facility_lon': facility_info['geometry'].x,
-                'network_path': centroid_info['path_nodes'],
+                'network_path': path_nodes,
                 'supply_mwh': allocated,
                 'distance_km': distance_km,
                 'facility_type': facility_info['facility_type'],
-                'path_nodes': centroid_info['path_nodes'],
-                'path_segments': centroid_info.get('path_segments', [])
+                'path_nodes': path_nodes,
+                'path_segments': path_segments
             })
     
     # Update original centroids_gdf with vectorized operations
