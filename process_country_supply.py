@@ -86,8 +86,24 @@ POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x3
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
-FACILITY_SEARCH_RADIUS_KM = 100  # 100 km: Max radius (in km) to search for facilities from each centroid
+FACILITY_SEARCH_RADIUS_KM = 250  # 100 km: Max radius (in km) to search for facilities from each centroid
 SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+
+# Print configuration
+print("="*60)
+print("CONFIGURATION PARAMETERS")
+print("="*60)
+print(f"Common CRS: {COMMON_CRS}")
+print(f"Analysis Year: {ANALYSIS_YEAR}")
+print(f"Demand Types: {', '.join(DEMAND_TYPES)}")
+print(f"Population Aggregation Factor: {POP_AGGREGATION_FACTOR}x (native 30\" → {POP_AGGREGATION_FACTOR*30}\")")
+print(f"Grid Stitch Distance: {GRID_STITCH_DISTANCE_KM} km")
+print(f"Node Snap Tolerance: {NODE_SNAP_TOLERANCE_M} m")
+print(f"Max Connection Distance: {MAX_CONNECTION_DISTANCE_M/1000:.1f} km")
+print(f"Facility Search Radius: {FACILITY_SEARCH_RADIUS_KM} km")
+print(f"Supply Factor (Sensitivity Analysis): {SUPPLY_FACTOR*100:.0f}%")
+print("="*60)
+print()
 
 
 # Get optimal number of workers based on available CPUs
@@ -1556,11 +1572,18 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         
         print(f"{'='*60}")
         
+        # Print total execution time
+        total_elapsed = time.time() - total_start
+        minutes = int(total_elapsed // 60)
+        seconds = total_elapsed % 60
+        print(f"\n*** TOTAL EXECUTION TIME: {minutes}m {seconds:.1f}s ({total_elapsed:.1f}s) ***")
+        
         print(f"Results saved to {output_result}")
         print(f"Processing completed using {MAX_WORKERS} parallel workers")
         return output_result
     except Exception as e:
-        print(f"Error processing {country_iso3}: {e}")
+        total_elapsed = time.time() - total_start
+        print(f"Error processing {country_iso3} after {total_elapsed:.1f}s: {e}")
         return None
 
 def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_distances, 
