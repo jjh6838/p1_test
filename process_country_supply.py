@@ -49,6 +49,7 @@ import argparse
 import sys
 import os
 import math
+from collections import defaultdict
 from affine import Affine
 from shapely.geometry import Point, LineString, MultiLineString, MultiPoint, GeometryCollection
 from shapely.ops import unary_union, split, linemerge
@@ -82,28 +83,40 @@ except ImportError:
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 ANALYSIS_YEAR = 2050  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
-POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
+POP_AGGREGATION_FACTOR = 100  # x100: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
-FACILITY_SEARCH_RADIUS_KM = 250  # 100 km: Max radius (in km) to search for facilities from each centroid
+FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
 SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
-# Print configuration
-print("="*60)
-print("CONFIGURATION PARAMETERS")
-print("="*60)
-print(f"Common CRS: {COMMON_CRS}")
-print(f"Analysis Year: {ANALYSIS_YEAR}")
-print(f"Demand Types: {', '.join(DEMAND_TYPES)}")
-print(f"Population Aggregation Factor: {POP_AGGREGATION_FACTOR}x (native 30\" → {POP_AGGREGATION_FACTOR*30}\")")
-print(f"Grid Stitch Distance: {GRID_STITCH_DISTANCE_KM} km")
-print(f"Node Snap Tolerance: {NODE_SNAP_TOLERANCE_M} m")
-print(f"Max Connection Distance: {MAX_CONNECTION_DISTANCE_M/1000:.1f} km")
-print(f"Facility Search Radius: {FACILITY_SEARCH_RADIUS_KM} km")
-print(f"Supply Factor (Sensitivity Analysis): {SUPPLY_FACTOR*100:.0f}%")
-print("="*60)
-print()
+# Configuration logging guard to avoid duplicate prints when imported by worker processes
+_CONFIG_PRINTED = False
+
+def print_configuration_banner(test_mode=False):
+    """Emit configuration details once per process when test mode is active."""
+    global _CONFIG_PRINTED
+    if not test_mode or _CONFIG_PRINTED:
+        return
+
+    print("=" * 60)
+    print("CONFIGURATION PARAMETERS")
+    print("=" * 60)
+    print(f"Common CRS: {COMMON_CRS}")
+    print(f"Analysis Year: {ANALYSIS_YEAR}")
+    print(f"Demand Types: {', '.join(DEMAND_TYPES)}")
+    print(
+        f"Population Aggregation Factor: {POP_AGGREGATION_FACTOR}x (native 30\" → {POP_AGGREGATION_FACTOR*30}\")"
+    )
+    print(f"Grid Stitch Distance: {GRID_STITCH_DISTANCE_KM} km")
+    print(f"Node Snap Tolerance: {NODE_SNAP_TOLERANCE_M} m")
+    print(f"Max Connection Distance: {MAX_CONNECTION_DISTANCE_M/1000:.1f} km")
+    print(f"Facility Search Radius: {FACILITY_SEARCH_RADIUS_KM} km")
+    print(f"Supply Factor (Sensitivity Analysis): {SUPPLY_FACTOR*100:.0f}%")
+    print("=" * 60)
+    print()
+
+    _CONFIG_PRINTED = True
 
 
 # Get optimal number of workers based on available CPUs
@@ -122,6 +135,23 @@ def timer(name):
     finally:
         elapsed = time.time() - start
         print(f"  [{name}]: {elapsed:.2f}s")
+
+
+def project_with_cache(gdf, target_crs):
+    """Project a GeoDataFrame using an in-memory cache to avoid repeated to_crs calls."""
+    if gdf is None or len(gdf) == 0:
+        return gdf
+
+    cache = gdf.attrs.setdefault('_projection_cache', {})
+    cache_key = str(target_crs)
+    if cache_key in cache:
+        return cache[cache_key]
+
+    if gdf.crs == target_crs:
+        cache[cache_key] = gdf
+    else:
+        cache[cache_key] = gdf.to_crs(target_crs)
+    return cache[cache_key]
 
 def get_utm_crs(lon, lat):
     """Get appropriate UTM CRS for given coordinates. UTM is essential for accurate distance calculations in meters."""
@@ -730,10 +760,10 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     
     print(f"Projecting to {utm_crs}")
     
-    # Project to UTM
-    facilities_utm = facilities_gdf.to_crs(utm_crs)
-    grid_lines_utm = grid_lines_gdf.to_crs(utm_crs)
-    centroids_utm = centroids_gdf.to_crs(utm_crs)
+    # Project to UTM (cached to avoid repeated to_crs work)
+    facilities_utm = project_with_cache(facilities_gdf, utm_crs)
+    grid_lines_utm = project_with_cache(grid_lines_gdf, utm_crs)
+    centroids_utm = project_with_cache(centroids_gdf, utm_crs)
     
     # Initialize graph
     G = nx.Graph()
@@ -815,7 +845,7 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
         if line_geom is None or line_geom.is_empty:
             continue
         edge_length = line_geom.length
-        G.add_edge(start, end, weight=edge_length, edge_type='grid_infrastructure', geometry=line_geom)
+        G.add_edge(start, end, weight=edge_length, weight_cached=edge_length, edge_type='grid_infrastructure', geometry=line_geom)
     
     # OPTIMIZATION 2: Use spatial index for finding nearest grid nodes
     print("Building spatial index for grid nodes...")
@@ -848,49 +878,29 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
             if dist <= max_distance:
                 nearest_grid = grid_node_list[idx]
                 connector = LineString([coord, nearest_grid])
-                G.add_edge(coord, nearest_grid, weight=dist, edge_type='grid_to_facility', geometry=connector)
+                G.add_edge(coord, nearest_grid, weight=dist, weight_cached=dist, edge_type='grid_to_facility', geometry=connector)
     
     print(f"  Facilities connected in {time.time() - connect_start:.2f}s")
     
-    # OPTIMIZATION 4: Process centroids in batches for large datasets
+    # OPTIMIZATION 4: Always process centroids in batches to keep memory bounded
     print(f"Connecting {len(centroids_utm)} centroids to nearest grid nodes...")
     connect_start = time.time()
-    
-    if len(centroid_nodes) > 10000:  # Large number of centroids
-        # Process in batches to avoid memory issues
-        batch_size = 5000
+    if centroid_nodes:
         centroid_list = centroid_nodes[:]
-        
+        batch_size = 5000 if len(centroid_list) > 5000 else len(centroid_list)
+        processed = 0
         for i in range(0, len(centroid_list), batch_size):
             batch_end = min(i + batch_size, len(centroid_list))
             batch_coords = np.array(centroid_list[i:batch_end])
-            
-            # Find nearest grid nodes for batch
             distances, indices = grid_tree.query(batch_coords, k=1)
-            
-            # Add edges for centroids within threshold
-            for j, (coord, dist, idx) in enumerate(zip(centroid_list[i:batch_end], distances, indices)):
+            for coord, dist, idx in zip(centroid_list[i:batch_end], distances, indices):
                 if dist <= max_distance:
                     nearest_grid = grid_node_list[idx]
                     connector = LineString([coord, nearest_grid])
-                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid', geometry=connector)
-            
-            if (i + batch_size) % 10000 == 0:
-                print(f"    Processed {min(i + batch_size, len(centroid_list)):,}/{len(centroid_list):,} centroids...")
-    else:
-        # Process all at once for smaller datasets
-        if centroid_nodes:
-            centroid_coords = np.array(centroid_nodes)
-            
-            # Find nearest grid node for each centroid
-            distances, indices = grid_tree.query(centroid_coords, k=1)
-            
-            # Add edges for centroids within threshold
-            for coord, dist, idx in zip(centroid_nodes, distances, indices):
-                if dist <= max_distance:
-                    nearest_grid = grid_node_list[idx]
-                    connector = LineString([coord, nearest_grid])
-                    G.add_edge(coord, nearest_grid, weight=dist, edge_type='centroid_to_grid', geometry=connector)
+                    G.add_edge(coord, nearest_grid, weight=dist, weight_cached=dist, edge_type='centroid_to_grid', geometry=connector)
+            processed = batch_end
+            if processed % 10000 == 0 or processed == len(centroid_list):
+                print(f"    Processed {processed:,}/{len(centroid_list):,} centroids...")
     
     print(f"  Centroids connected in {time.time() - connect_start:.2f}s")
     
@@ -1018,7 +1028,7 @@ def calculate_network_distance_manual(network_graph, start_node, end_node):
             
             # Get edge data
             edge_data = network_graph[current_node][next_node]
-            segment_weight = edge_data.get('weight', 0)
+            segment_weight = edge_data.get('weight_cached', edge_data.get('weight', 0))
             edge_type = edge_data.get('edge_type', 'unknown')
             segment_geom = edge_data.get('geometry')
             
@@ -1147,8 +1157,8 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     print(f"  Precomputing UTM coordinates and building KDTree...")
     precompute_start = time.time()
     
-    centroids_utm = centroids_gdf.to_crs(utm_crs)
-    facilities_utm = facilities_gdf.to_crs(utm_crs)
+    centroids_utm = project_with_cache(centroids_gdf, utm_crs)
+    facilities_utm = project_with_cache(facilities_gdf, utm_crs)
     
     # Build centroid UTM coordinate lookup
     centroid_utm_coords = {}
@@ -1168,6 +1178,7 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     facility_data = {}
     for idx in facilities_gdf.index:
         fac = facilities_gdf.loc[idx]
+        fac_utm_geom = facilities_utm.loc[idx].geometry
         gem_id_raw = fac.get('GEM unit/phase ID', '')
         facility_data[idx] = {
             'idx': idx,
@@ -1175,6 +1186,8 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
             'capacity': fac.get('Adjusted_Capacity_MW', 0),
             'lat': fac.geometry.y,
             'lon': fac.geometry.x,
+            'utm_x': fac_utm_geom.x,
+            'utm_y': fac_utm_geom.y,
             'gem_id': str(gem_id_raw) if pd.notna(gem_id_raw) and gem_id_raw != '' else ''
         }
     
@@ -1187,11 +1200,24 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     centroid_nearby = {}  # centroid_idx -> list of facility data dicts
     for idx in centroids_gdf.index:
         utm_coords = centroid_utm_coords.get(idx)
-        if utm_coords:
-            nearby_positions = facility_tree.query_ball_point(utm_coords, r=FACILITY_SEARCH_RADIUS_KM * 1000.0)
-            centroid_nearby[idx] = [facility_data[facility_indices[pos]] for pos in nearby_positions]
-        else:
+        if not utm_coords:
             centroid_nearby[idx] = []
+            continue
+
+        nearby_positions = facility_tree.query_ball_point(utm_coords, r=FACILITY_SEARCH_RADIUS_KM * 1000.0)
+        if not nearby_positions:
+            centroid_nearby[idx] = []
+            continue
+
+        ordered_facilities = []
+        for pos in nearby_positions:
+            fac_idx = facility_indices[pos]
+            fac_info = facility_data[fac_idx]
+            euclid = math.hypot(utm_coords[0] - fac_info['utm_x'], utm_coords[1] - fac_info['utm_y'])
+            ordered_facilities.append((euclid, fac_idx))
+
+        ordered_facilities.sort(key=lambda item: item[0])
+        centroid_nearby[idx] = [facility_data[fac_idx] for _, fac_idx in ordered_facilities]
     
     print(f"  Found nearby facilities in {time.time() - nearby_start:.2f}s")
     
@@ -1220,7 +1246,9 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
     current_batch = []
     for idx in centroids_gdf.index:
         centroid_wkt = centroids_gdf.loc[idx].geometry.wkt
-        nearby_facs = centroid_nearby[idx]
+        nearby_facs = centroid_nearby.get(idx, [])
+        if not nearby_facs:
+            continue
         current_batch.append((idx, [f['idx'] for f in nearby_facs], centroid_wkt, nearby_facs))
         
         if len(current_batch) >= batch_size:
@@ -1366,6 +1394,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
     # Clear path cache for each country
     global path_cache
     path_cache = {}
+    print_configuration_banner(test_mode)
     
     print(f"\nProcessing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
     total_start = time.time()
@@ -1633,6 +1662,26 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
     # Sort by capacity (largest first) - matches original behavior
     facility_capacities.sort(key=lambda x: x['total_capacity'], reverse=True)
     print(f"Processing {len(facility_capacities)} facilities by capacity (largest first)...")
+
+    # Build fast lookup from facility -> reachable centroids (sorted by network distance once)
+    facility_to_centroids = defaultdict(list)
+    for item in centroid_facility_distances:
+        original_centroid_idx = item['centroid_idx']
+        reset_centroid_idx = original_to_reset.get(original_centroid_idx)
+        if reset_centroid_idx is None:
+            continue
+        for distance_info in item.get('distances', []):
+            facility_idx = distance_info.get('facility_idx')
+            facility_to_centroids[facility_idx].append({
+                'centroid_idx': reset_centroid_idx,
+                'original_idx': original_centroid_idx,
+                'distance_to_this_facility': distance_info.get('distance_km'),
+                'path_nodes': distance_info.get('path_nodes', []),
+                'path_segments': distance_info.get('path_segments', [])
+            })
+
+    for centroid_list in facility_to_centroids.values():
+        centroid_list.sort(key=lambda x: x['distance_to_this_facility'])
     
     # Process each facility (preserving original allocation logic)
     for facility_info in facility_capacities:
@@ -1642,47 +1691,19 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
         if remaining_capacity <= 0:
             continue
         
-        # Find centroids that can reach this facility
-        facility_centroid_distances = []
-        for item in centroid_facility_distances:
-            original_centroid_idx = item['centroid_idx']
-            
-            # Map to reset index for array operations
-            if original_centroid_idx not in original_to_reset:
-                continue  # Skip if centroid was filtered out
-                
-            reset_centroid_idx = original_to_reset[original_centroid_idx]
-            
-            # Find this facility in the centroid's distance list
-            for distance_info in item['distances']:
-                if distance_info.get('facility_idx') == facility_idx:
-                    remaining_demand = centroid_demands[reset_centroid_idx] - centroid_received[reset_centroid_idx]
-                    
-                    if remaining_demand > 0:
-                        # Get nearest facility distance (for sorting)
-                        nearest_facility_distance = item['distances'][0]['distance_km'] if item['distances'] else float('inf')
-                        
-                        facility_centroid_distances.append({
-                            'centroid_idx': reset_centroid_idx,  # Use reset index
-                            'original_idx': original_centroid_idx,  # Keep original for reference
-                            'distance_to_this_facility': distance_info.get('distance_km'),
-                            'nearest_facility_distance': nearest_facility_distance,
-                            'remaining_demand': remaining_demand,
-                            'path_nodes': distance_info.get('path_nodes', []),
-                            'path_segments': distance_info.get('path_segments', [])
-                        })
-                    break
-        
-        # Sort by distance to this facility (preserving original sort logic)
-        facility_centroid_distances.sort(key=lambda x: x['distance_to_this_facility'])
-        
-        # Allocate to centroids
-        for centroid_info in facility_centroid_distances:
+        centroid_candidates = facility_to_centroids.get(facility_idx, [])
+        if not centroid_candidates:
+            continue
+
+        # Allocate to centroids (already sorted by distance)
+        for centroid_info in centroid_candidates:
             if remaining_capacity <= 0:
                 break
             
             reset_centroid_idx = centroid_info['centroid_idx']
-            remaining_demand = centroid_info['remaining_demand']
+            remaining_demand = centroid_demands[reset_centroid_idx] - centroid_received[reset_centroid_idx]
+            if remaining_demand <= 0:
+                continue
             distance_km = centroid_info['distance_to_this_facility']
             
             # Allocate supply
