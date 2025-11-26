@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p06_t1
+#SBATCH --job-name=p06_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_06_%j.out
 #SBATCH --error=outputs_global/logs/parallel_06_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 6/40 (T1) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: RUS"
-echo "[INFO] Tier: T1 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 6/40 (OTHER) at $(date)"
+echo "[INFO] Processing 8 countries in this batch: GHA, GMB, GNB, GNQ, GRC, GRL, GTM, GUM"
+echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,12 +34,68 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing RUS (T1)..."
-$PY process_country_supply.py RUS --output-dir outputs_per_country
+echo "[INFO] Processing GHA (OTHER)..."
+$PY process_country_supply.py GHA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] RUS completed"
+    echo "[SUCCESS] GHA completed"
 else
-    echo "[ERROR] RUS failed"
+    echo "[ERROR] GHA failed"
 fi
 
-echo "[INFO] Batch 6/40 (T1) completed at $(date)"
+echo "[INFO] Processing GMB (OTHER)..."
+$PY process_country_supply.py GMB --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GMB completed"
+else
+    echo "[ERROR] GMB failed"
+fi
+
+echo "[INFO] Processing GNB (OTHER)..."
+$PY process_country_supply.py GNB --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GNB completed"
+else
+    echo "[ERROR] GNB failed"
+fi
+
+echo "[INFO] Processing GNQ (OTHER)..."
+$PY process_country_supply.py GNQ --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GNQ completed"
+else
+    echo "[ERROR] GNQ failed"
+fi
+
+echo "[INFO] Processing GRC (OTHER)..."
+$PY process_country_supply.py GRC --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GRC completed"
+else
+    echo "[ERROR] GRC failed"
+fi
+
+echo "[INFO] Processing GRL (OTHER)..."
+$PY process_country_supply.py GRL --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GRL completed"
+else
+    echo "[ERROR] GRL failed"
+fi
+
+echo "[INFO] Processing GTM (OTHER)..."
+$PY process_country_supply.py GTM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GTM completed"
+else
+    echo "[ERROR] GTM failed"
+fi
+
+echo "[INFO] Processing GUM (OTHER)..."
+$PY process_country_supply.py GUM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GUM completed"
+else
+    echo "[ERROR] GUM failed"
+fi
+
+echo "[INFO] Batch 6/40 (OTHER) completed at $(date)"

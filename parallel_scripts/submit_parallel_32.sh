@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p32_other
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --job-name=p32_t2
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_32_%j.out
 #SBATCH --error=outputs_global/logs/parallel_32_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 32/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: DNK, DOM, ERI, EST, FIN, FJI, FRO, GEO"
-echo "[INFO] Tier: OTHER | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 32/40 (T2) at $(date)"
+echo "[INFO] Processing 2 countries in this batch: IRN, KAZ"
+echo "[INFO] Tier: T2 | Memory: 64G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,68 +34,20 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing DNK (OTHER)..."
-$PY process_country_supply.py DNK --output-dir outputs_per_country
+echo "[INFO] Processing IRN (T2)..."
+$PY process_country_supply.py IRN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] DNK completed"
+    echo "[SUCCESS] IRN completed"
 else
-    echo "[ERROR] DNK failed"
+    echo "[ERROR] IRN failed"
 fi
 
-echo "[INFO] Processing DOM (OTHER)..."
-$PY process_country_supply.py DOM --output-dir outputs_per_country
+echo "[INFO] Processing KAZ (T2)..."
+$PY process_country_supply.py KAZ --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] DOM completed"
+    echo "[SUCCESS] KAZ completed"
 else
-    echo "[ERROR] DOM failed"
+    echo "[ERROR] KAZ failed"
 fi
 
-echo "[INFO] Processing ERI (OTHER)..."
-$PY process_country_supply.py ERI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ERI completed"
-else
-    echo "[ERROR] ERI failed"
-fi
-
-echo "[INFO] Processing EST (OTHER)..."
-$PY process_country_supply.py EST --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] EST completed"
-else
-    echo "[ERROR] EST failed"
-fi
-
-echo "[INFO] Processing FIN (OTHER)..."
-$PY process_country_supply.py FIN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] FIN completed"
-else
-    echo "[ERROR] FIN failed"
-fi
-
-echo "[INFO] Processing FJI (OTHER)..."
-$PY process_country_supply.py FJI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] FJI completed"
-else
-    echo "[ERROR] FJI failed"
-fi
-
-echo "[INFO] Processing FRO (OTHER)..."
-$PY process_country_supply.py FRO --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] FRO completed"
-else
-    echo "[ERROR] FRO failed"
-fi
-
-echo "[INFO] Processing GEO (OTHER)..."
-$PY process_country_supply.py GEO --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GEO completed"
-else
-    echo "[ERROR] GEO failed"
-fi
-
-echo "[INFO] Batch 32/40 (OTHER) completed at $(date)"
+echo "[INFO] Batch 32/40 (T2) completed at $(date)"

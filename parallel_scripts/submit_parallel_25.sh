@@ -2,10 +2,10 @@
 #SBATCH --job-name=p25_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_25_%j.out
 #SBATCH --error=outputs_global/logs/parallel_25_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 25/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: THA, TKM, TUR, TZA"
-echo "[INFO] Tier: T3 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Processing 4 countries in this batch: PER, PHL, PNG, POL"
+echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing THA (T3)..."
-$PY process_country_supply.py THA --output-dir outputs_per_country
+echo "[INFO] Processing PER (T3)..."
+$PY process_country_supply.py PER --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] THA completed"
+    echo "[SUCCESS] PER completed"
 else
-    echo "[ERROR] THA failed"
+    echo "[ERROR] PER failed"
 fi
 
-echo "[INFO] Processing TKM (T3)..."
-$PY process_country_supply.py TKM --output-dir outputs_per_country
+echo "[INFO] Processing PHL (T3)..."
+$PY process_country_supply.py PHL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TKM completed"
+    echo "[SUCCESS] PHL completed"
 else
-    echo "[ERROR] TKM failed"
+    echo "[ERROR] PHL failed"
 fi
 
-echo "[INFO] Processing TUR (T3)..."
-$PY process_country_supply.py TUR --output-dir outputs_per_country
+echo "[INFO] Processing PNG (T3)..."
+$PY process_country_supply.py PNG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TUR completed"
+    echo "[SUCCESS] PNG completed"
 else
-    echo "[ERROR] TUR failed"
+    echo "[ERROR] PNG failed"
 fi
 
-echo "[INFO] Processing TZA (T3)..."
-$PY process_country_supply.py TZA --output-dir outputs_per_country
+echo "[INFO] Processing POL (T3)..."
+$PY process_country_supply.py POL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TZA completed"
+    echo "[SUCCESS] POL completed"
 else
-    echo "[ERROR] TZA failed"
+    echo "[ERROR] POL failed"
 fi
 
 echo "[INFO] Batch 25/40 (T3) completed at $(date)"

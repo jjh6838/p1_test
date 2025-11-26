@@ -19,7 +19,7 @@ python get_countries.py --create-parallel
 sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
 chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 
-# 3) Submit all 40 parallel jobs (in waves of 8)
+# 3) Submit all 40 parallel jobs (immediate submission, returns to prompt)
 ./submit_all_parallel.sh
 
 # 4) Monitor progress
@@ -68,29 +68,28 @@ python combine_global_results.py --input-dir outputs_per_country
 ## Shell Scripts Overview
 
 ### **Master Submission Script**
-- **`submit_all_parallel.sh`** - Submits all 40 jobs in controlled waves
-  - Respects per-user job limits (max 8 simultaneous)
-  - Monitors job count with `squeue -u $USER`
-  - Waits for slots before submitting next wave
-  - Prevents queue congestion, better cluster etiquette
-  - Submission takes ~30-60 minutes, but ensures steady execution
+- **`submit_all_parallel.sh`** - Submits all 40 jobs immediately
+  - Submits all jobs at once (returns to prompt in ~1 minute)
+  - SLURM automatically manages queue (max 8 jobs run simultaneously based on cluster limits)
+  - No active monitoring or wave management needed
+  - Script exits after submission, jobs continue running on cluster
 
 ### **Individual Job Scripts** (`parallel_scripts/submit_parallel_*.sh`)
-40 scripts with tiered country allocation:
+40 scripts with tiered country allocation (smallest first):
 
-| Script Range | Countries/Job | Country Tier | Examples |
-|--------------|---------------|--------------|----------|
-| `01-07` | 1 | Tier 1 (Largest) | USA, CHN, IND, RUS, BRA, CAN, AUS |
-| `08-19` | 2 | Tier 2 (Large) | ARG+KAZ, DZA+MEX, IDN+SDN, etc. |
-| `20-33` | 4 | Tier 3 (Medium) | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM, etc. |
-| `34-40` | 8 | Other (Small) | Island nations, small countries |
+| Script Range | Countries/Job | Country Tier | Execution Order | Examples |
+|--------------|---------------|--------------|-----------------|----------|
+| `01-XX` | 8 | Other (Smallest) | 1st | Island nations, small countries |
+| `XX-YY` | 4 | Tier 3 (Medium) | 2nd | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM, etc. |
+| `YY-ZZ` | 2 | Tier 2 (Large) | 3rd | ARG+KAZ, DZA+MEX, IDN+SDN, etc. |
+| `ZZ-40` | 1 | Tier 1 (Largest) | Last | USA, CHN, IND, RUS, BRA, CAN, AUS |
 
 **Each script:**
-- Requests 64 CPUs, 1024GB RAM (16GB/core)
+- Requests 40 CPUs
+- Memory: 64GB for all tiers (abundant on cluster, ~45 nodes available)
 - Partition assignment by tier:
-  - **Tier 1** (7 scripts): Long partition, 168h time limit
-  - **Tier 2** (~6 scripts): Medium partition, 48h time limit  
-  - **Tier 3 + Other** (~27 scripts): Short partition, 12h time limit
+  - **Other + Tier 3** (~60% of scripts): Short partition, 12h time limit
+  - **Tier 2 + Tier 1** (~40% of scripts): Medium partition, 48h time limit
 - Activates conda environment: `conda activate p1_etl`
 - Processes assigned countries: `python process_country_supply.py {ISO3}`
 - Outputs to: `outputs_per_country/parquet/{scenario}/{layer}_{ISO3}.parquet`
@@ -115,8 +114,12 @@ python combine_global_results.py --input-dir outputs_per_country
 
 ### **Automatic Core Detection**
 ```python
-MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
-# Result: 72 on cluster, 16 on laptop, 8 on older laptop
+# On cluster: Uses SLURM allocation (respects --cpus-per-task=40)
+slurm_cpus = os.environ.get('SLURM_CPUS_PER_TASK')
+if slurm_cpus:
+    MAX_WORKERS = int(slurm_cpus)  # Result: 40 on cluster
+else:
+    MAX_WORKERS = min(40, max(1, os.cpu_count() or 1))  # Result: 16 on laptop, 8 on older laptop
 ```
 
 ### **Parallelized Operations**
@@ -139,9 +142,9 @@ MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
 - Large datasets (Japan, China, USA) use full parallelization
 
 **Performance Impact:**
-- Korea: 8h+ → 15 mins (72-core cluster)
-- Japan: 2.5h+ → <30 mins target (72-core cluster)
-- China: Expected <30 mins (72-core cluster)
+- Korea: 8h+ → 15-25 mins (40-core cluster allocation)
+- Japan: 2.5h+ → 25-40 mins target (40-core cluster allocation)
+- China: Expected 30-50 mins (40-core cluster allocation)
 
 ---
 
@@ -156,7 +159,7 @@ NUMEXPR_NUM_THREADS = allocated_cpus
 ```
 
 ### **No Manual Configuration Needed**
-- Cluster: Automatically uses 72 cores per job
+- Cluster: Automatically uses SLURM-allocated cores (40 CPUs via `SLURM_CPUS_PER_TASK`)
 - Laptop: Automatically detects 8/16 cores
 - Threading overhead avoided for small datasets
 
@@ -166,30 +169,36 @@ NUMEXPR_NUM_THREADS = allocated_cpus
 
 ### **Tiered Resource Allocation**
 
-All jobs request full nodes for maximum performance:
+Resource allocation based on actual cluster specs (as of 11/26/2025):
+- **CPUs**: Largest nodes have 112 cores, most have 80 cores
+- **Memory**: 5 nodes with 758GB, ~5 nodes with 512GB, ~15 nodes with 300GB, ~45 nodes with 64GB
 
-| Country Tier | CPUs/Job | Memory | Partition | Time Limit | Countries/Job | Examples |
-|--------------|----------|--------|-----------|------------|---------------|----------|
-| **Tier 1** | 64 | 1024GB | Long | 168h (7 days) | 1 | USA, CHN, IND, RUS, BRA, CAN, AUS |
-| **Tier 2** | 64 | 1024GB | Medium | 48h (2 days) | 2 | ARG+KAZ, DZA+MEX, IDN+SDN, LBY+SAU |
-| **Tier 3** | 64 | 1024GB | Short | 12h | 4 | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM |
-| **Other** | 64 | 1024GB | Short | 12h | 8 | Small island nations |
+| Country Tier | CPUs/Job | Memory | Partition | Time Limit | Countries/Job | Execution Order | Examples |
+|--------------|----------|--------|-----------|------------|---------------|-----------------|----------|
+| **Other** | 40 | 64GB | Short | 12h | 8 | 1st (scripts 01-XX) | Small island nations |
+| **Tier 3** | 40 | 64GB | Short | 12h | 4 | 2nd (scripts XX-YY) | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM |
+| **Tier 2** | 40 | 64GB | Medium | 48h (2 days) | 2 | 3rd (scripts YY-ZZ) | ARG+KAZ, DZA+MEX, IDN+SDN, LBY+SAU |
+| **Tier 1** | 40 | 64GB | Medium | 48h (2 days) | 1 | Last (scripts ZZ-40) | USA, CHN, IND, RUS, BRA, CAN, AUS |
+
+**Execution Strategy:**
+- **Smallest countries first**: Provides early results, faster feedback on workflow health
+- **Progressive scaling**: Moves from simple to complex countries
+- **Resource optimization**: 40 CPUs works on all nodes (safe for 16-112 CPU range); 64GB for all countries (abundant, ~45 nodes available)
 
 **Partition Strategy:**
-- **Long** (few slots): Reserved for 7 largest countries requiring maximum time
-- **Medium** (some slots): Used for ~6 large countries needing 2 days
-- **Short** (many slots): Handles ~27 medium/small countries completing in hours
+- **Short** (many slots): Handles ~60% of countries (small/medium), completes in hours, uses 64GB
+- **Medium** (some slots): Used for large/largest countries needing up to 2 days, uses 64GB
 
 **Combination Step:**
-- Memory: 1152GB (72 CPUs × 16GB/core)
-- Partition: Short (12h is sufficient for combination)
-- CPUs: 72
+- Memory: 64GB
+- Partition: Medium (12h is sufficient for combination)
+- CPUs: 40
 
-### **Expected Performance (64-core cluster)**
-- **Tier 1 countries** (Long partition): 15-30 minutes, but 7 days available if needed
-- **Tier 2 countries** (Medium partition): 10-20 minutes, 2 days available
-- **Tier 3 countries** (Short partition): 5-15 minutes, completes well within 12h
+### **Expected Performance (40-core allocation)**
 - **Small countries** (Short partition): <5 minutes, completes within 12h
+- **Tier 3 countries** (Short partition): 5-15 minutes, completes well within 12h
+- **Tier 2 countries** (Medium partition): 15-25 minutes, 2 days available
+- **Tier 1 countries** (Medium partition): 20-35 minutes, 2 days available
 
 **Laptop Performance (16 cores):**
 - Small: <10 minutes

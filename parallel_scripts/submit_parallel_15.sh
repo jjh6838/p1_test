@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p15_t3
+#SBATCH --job-name=p15_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_15_%j.out
 #SBATCH --error=outputs_global/logs/parallel_15_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 15/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: BWA, CAF, CHL, CIV"
-echo "[INFO] Tier: T3 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 15/40 (OTHER) at $(date)"
+echo "[INFO] Processing 5 countries in this batch: URY, VIR, VNM, VUT, WSM"
+echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,44 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing BWA (T3)..."
-$PY process_country_supply.py BWA --output-dir outputs_per_country
+echo "[INFO] Processing URY (OTHER)..."
+$PY process_country_supply.py URY --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BWA completed"
+    echo "[SUCCESS] URY completed"
 else
-    echo "[ERROR] BWA failed"
+    echo "[ERROR] URY failed"
 fi
 
-echo "[INFO] Processing CAF (T3)..."
-$PY process_country_supply.py CAF --output-dir outputs_per_country
+echo "[INFO] Processing VIR (OTHER)..."
+$PY process_country_supply.py VIR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] CAF completed"
+    echo "[SUCCESS] VIR completed"
 else
-    echo "[ERROR] CAF failed"
+    echo "[ERROR] VIR failed"
 fi
 
-echo "[INFO] Processing CHL (T3)..."
-$PY process_country_supply.py CHL --output-dir outputs_per_country
+echo "[INFO] Processing VNM (OTHER)..."
+$PY process_country_supply.py VNM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] CHL completed"
+    echo "[SUCCESS] VNM completed"
 else
-    echo "[ERROR] CHL failed"
+    echo "[ERROR] VNM failed"
 fi
 
-echo "[INFO] Processing CIV (T3)..."
-$PY process_country_supply.py CIV --output-dir outputs_per_country
+echo "[INFO] Processing VUT (OTHER)..."
+$PY process_country_supply.py VUT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] CIV completed"
+    echo "[SUCCESS] VUT completed"
 else
-    echo "[ERROR] CIV failed"
+    echo "[ERROR] VUT failed"
 fi
 
-echo "[INFO] Batch 15/40 (T3) completed at $(date)"
+echo "[INFO] Processing WSM (OTHER)..."
+$PY process_country_supply.py WSM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] WSM completed"
+else
+    echo "[ERROR] WSM failed"
+fi
+
+echo "[INFO] Batch 15/40 (OTHER) completed at $(date)"

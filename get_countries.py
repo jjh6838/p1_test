@@ -143,16 +143,20 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
     # The goal is to pack jobs efficiently onto nodes. For example, a single node can run one Tier 1 job,
     # two Tier 2 jobs, four Tier 3 jobs, or eight "other" jobs, maximizing the use of its CPUs.
-    # Memory allocation: 16GB per core (cluster constraint) = 56 CPUs × 16GB = 896GB per node
-    # Partition strategy: All jobs use Short partition (12h time limit, many nodes available)
-    # CPU count: 56 CPUs (SLURM will allocate max available on assigned node)
+    # Memory allocation: 128GB for all tiers (many nodes with 100GB+ available)
+    # Partition strategy: Medium (2 days) for largest countries, Short (12h) for smaller ones
+    # CPU count: 40 CPUs for all tiers (safe for all nodes: 16-80 CPUs available)
+    # Cluster Spec as of 11/26/2025: The largest nodes have 112 Cores/CPUs but most nodes have 80;
+    # AND, 5 nodes with 758GB RAM; ~5 nodes with 512GB; ~15 nodes with 300GB; ~45 nodes with 64GB;
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"},   # 12 hours for largest countries (USA, CHN, IND, etc.)
-        "t2": {"max_countries_per_script": 2, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"},  # 12 hours for large countries
-        "t3": {"max_countries_per_script": 4, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"},   # 12 hours for medium countries
-        "other": {"max_countries_per_script": 8, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"}  # 12 hours for small countries
+        "t1": {"max_countries_per_script": 1, "mem": "64G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},   # 2 days for largest countries (USA, CHN, IND, etc.)
+        "t2": {"max_countries_per_script": 2, "mem": "64G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},  # 2 days for large countries
+        "t3": {"max_countries_per_script": 4, "mem": "64G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # 12 hours for medium countries
+        "other": {"max_countries_per_script": 8, "mem": "64G", "cpus": 40, "time": "12:00:00", "partition": "Short"}  # 12 hours for small countries
     }
     
+    
+
     def get_tier(country):
         if country in TIER_1:
             return "t1"
@@ -189,8 +193,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     all_batches = []
     script_counter = 1
     
-    # Process each tier
-    for tier in ["t1", "t2", "t3", "other"]:
+    # Process each tier - REVERSED ORDER: smallest countries first for faster initial results
+    for tier in ["other", "t3", "t2", "t1"]:
         tier_countries = countries_by_tier[tier]
         if not tier_countries:
             continue
@@ -223,7 +227,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # If we have more tiers but reached script limit, add remaining countries to existing scripts
     if script_counter <= num_scripts:
-        for tier in ["t1", "t2", "t3", "other"]:
+        for tier in ["other", "t3", "t2", "t1"]:
             tier_countries = countries_by_tier[tier]
             if tier_countries and not any(batch["tier"] == tier for batch in all_batches):
                 # Add remaining countries to the last batch
@@ -305,9 +309,9 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
         print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
     
     # Create master submission script
-    # This script submits jobs in waves of 8 to respect per-user job limits
+    # This script submits all jobs immediately and returns to prompt
     master_script = f"""#!/bin/bash
-# Submit all parallel jobs in waves of 8 (respects per-user job limits)
+# Submit all parallel jobs immediately (SLURM will queue them automatically)
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -315,37 +319,15 @@ source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
 
 conda activate p1_etl
 
-echo "[INFO] Submitting {len(all_batches)} parallel jobs in waves of 8..."
-echo "[INFO] This respects per-user job limits and prevents queue congestion"
+echo "[INFO] Submitting {len(all_batches)} parallel jobs..."
+echo "[INFO] SLURM will automatically queue and manage job execution (max 8 running at once)"
 echo ""
 
-# Function to count running/pending jobs
-count_jobs() {{
-    squeue -u $USER -h -t pending,running -r | wc -l
-}}
-
-# Function to wait until job count drops below threshold
-wait_for_slots() {{
-    local max_jobs=$1
-    while [ $(count_jobs) -ge $max_jobs ]; do
-        echo "[$(date +%H:%M:%S)] Waiting for job slots... ($(count_jobs)/$max_jobs running)"
-        sleep 60
-    done
-}}
-
-echo "[INFO] Starting wave-based submission..."
-echo ""
-
-# Submit jobs in waves
+# Submit all jobs
 for i in {{01..{len(all_batches):02d}}}; do
-    # Wait if we have 8 or more jobs running/pending
-    wait_for_slots 8
-    
     echo "[$(date +%H:%M:%S)] Submitting job $i..."
     sbatch parallel_scripts/submit_parallel_${{i}}.sh
-    
-    # Small delay to avoid overwhelming scheduler
-    sleep 2
+    sleep 1  # Small delay to avoid overwhelming scheduler
 done
 
 echo ""
@@ -353,16 +335,16 @@ echo "[INFO] All {len(all_batches)} jobs submitted!"
 echo ""
 echo "Monitor with:"
 echo "  squeue -u \\$USER"
-echo "  watch -n 60 'squeue -u \\$USER | wc -l'"
+echo "  watch -n 60 'squeue -u \\$USER'"
 echo ""
 echo "Check completion:"
 echo "  find outputs_per_country/parquet -name '*.parquet' | wc -l"
 echo ""
-echo "Resource allocation summary (tiered partition strategy):"
-echo "  Tier 1 (biggest):  1 country/script  | Long partition (168h/7d)   | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
-echo "  Tier 2 (large):    2 countries/script | Medium partition (48h/2d)  | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"  
+echo "Resource allocation summary (tiered partition strategy - smallest first):"
+echo "  Other (smallest):  8 countries/script | Short partition (12h)      | {TIER_CONFIG['other']['mem']}, {TIER_CONFIG['other']['cpus']} CPUs"
 echo "  Tier 3 (medium):   4 countries/script | Short partition (12h)      | {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
-echo "  Other (small):     8 countries/script | Short partition (12h)      | {TIER_CONFIG['other']['mem']}, {TIER_CONFIG['other']['cpus']} CPUs"
+echo "  Tier 2 (large):    2 countries/script | Medium partition (48h/2d)  | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"  
+echo "  Tier 1 (largest):  1 country/script  | Medium partition (48h/2d)  | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
 """
     
     master_file = Path("submit_all_parallel.sh")
@@ -374,12 +356,12 @@ echo "  Other (small):     8 countries/script | Short partition (12h)      | {TI
     # Create combination workflow script
     workflow_script = """#!/bin/bash --login
 #SBATCH --job-name=combine_global
-#SBATCH --partition=Short
+#SBATCH --partition=Medium
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/test_%j.out
 #SBATCH --error=outputs_global/logs/test_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -388,7 +370,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting global results combination at $(date)"
-echo "[INFO] Memory: 896GB | CPUs: 56 | Time limit: 12h"
+echo "[INFO] Memory: 64GB | CPUs: 40 | Time limit: 12h"
 
 # --- directories ---
 mkdir -p outputs_global outputs_global/logs

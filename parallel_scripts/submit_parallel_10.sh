@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p10_t2
+#SBATCH --job-name=p10_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_10_%j.out
 #SBATCH --error=outputs_global/logs/parallel_10_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 10/40 (T2) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: IRN, KAZ"
-echo "[INFO] Tier: T2 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 10/40 (OTHER) at $(date)"
+echo "[INFO] Processing 8 countries in this batch: MDV, MKD, MLT, MNE, MOZ, MUS, MWI, NAM"
+echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,20 +34,68 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing IRN (T2)..."
-$PY process_country_supply.py IRN --output-dir outputs_per_country
+echo "[INFO] Processing MDV (OTHER)..."
+$PY process_country_supply.py MDV --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] IRN completed"
+    echo "[SUCCESS] MDV completed"
 else
-    echo "[ERROR] IRN failed"
+    echo "[ERROR] MDV failed"
 fi
 
-echo "[INFO] Processing KAZ (T2)..."
-$PY process_country_supply.py KAZ --output-dir outputs_per_country
+echo "[INFO] Processing MKD (OTHER)..."
+$PY process_country_supply.py MKD --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] KAZ completed"
+    echo "[SUCCESS] MKD completed"
 else
-    echo "[ERROR] KAZ failed"
+    echo "[ERROR] MKD failed"
 fi
 
-echo "[INFO] Batch 10/40 (T2) completed at $(date)"
+echo "[INFO] Processing MLT (OTHER)..."
+$PY process_country_supply.py MLT --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MLT completed"
+else
+    echo "[ERROR] MLT failed"
+fi
+
+echo "[INFO] Processing MNE (OTHER)..."
+$PY process_country_supply.py MNE --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MNE completed"
+else
+    echo "[ERROR] MNE failed"
+fi
+
+echo "[INFO] Processing MOZ (OTHER)..."
+$PY process_country_supply.py MOZ --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MOZ completed"
+else
+    echo "[ERROR] MOZ failed"
+fi
+
+echo "[INFO] Processing MUS (OTHER)..."
+$PY process_country_supply.py MUS --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MUS completed"
+else
+    echo "[ERROR] MUS failed"
+fi
+
+echo "[INFO] Processing MWI (OTHER)..."
+$PY process_country_supply.py MWI --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MWI completed"
+else
+    echo "[ERROR] MWI failed"
+fi
+
+echo "[INFO] Processing NAM (OTHER)..."
+$PY process_country_supply.py NAM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] NAM completed"
+else
+    echo "[ERROR] NAM failed"
+fi
+
+echo "[INFO] Batch 10/40 (OTHER) completed at $(date)"

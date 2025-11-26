@@ -2,10 +2,10 @@
 #SBATCH --job-name=p22_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_22_%j.out
 #SBATCH --error=outputs_global/logs/parallel_22_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 22/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: NOR, NZL, OMN, PAK"
-echo "[INFO] Tier: T3 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Processing 4 countries in this batch: MAR, MDG, MLI, MMR"
+echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing NOR (T3)..."
-$PY process_country_supply.py NOR --output-dir outputs_per_country
+echo "[INFO] Processing MAR (T3)..."
+$PY process_country_supply.py MAR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] NOR completed"
+    echo "[SUCCESS] MAR completed"
 else
-    echo "[ERROR] NOR failed"
+    echo "[ERROR] MAR failed"
 fi
 
-echo "[INFO] Processing NZL (T3)..."
-$PY process_country_supply.py NZL --output-dir outputs_per_country
+echo "[INFO] Processing MDG (T3)..."
+$PY process_country_supply.py MDG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] NZL completed"
+    echo "[SUCCESS] MDG completed"
 else
-    echo "[ERROR] NZL failed"
+    echo "[ERROR] MDG failed"
 fi
 
-echo "[INFO] Processing OMN (T3)..."
-$PY process_country_supply.py OMN --output-dir outputs_per_country
+echo "[INFO] Processing MLI (T3)..."
+$PY process_country_supply.py MLI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] OMN completed"
+    echo "[SUCCESS] MLI completed"
 else
-    echo "[ERROR] OMN failed"
+    echo "[ERROR] MLI failed"
 fi
 
-echo "[INFO] Processing PAK (T3)..."
-$PY process_country_supply.py PAK --output-dir outputs_per_country
+echo "[INFO] Processing MMR (T3)..."
+$PY process_country_supply.py MMR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PAK completed"
+    echo "[SUCCESS] MMR completed"
 else
-    echo "[ERROR] PAK failed"
+    echo "[ERROR] MMR failed"
 fi
 
 echo "[INFO] Batch 22/40 (T3) completed at $(date)"

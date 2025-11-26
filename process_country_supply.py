@@ -119,9 +119,15 @@ def print_configuration_banner(test_mode=False):
     _CONFIG_PRINTED = True
 
 
-# Get optimal number of workers based on available CPUs
-MAX_WORKERS = min(72, max(1, os.cpu_count() or 1))
-print(f"Parallel processing configured for {MAX_WORKERS} workers")
+# Get optimal number of workers based on SLURM allocation or available CPUs
+# Use SLURM_CPUS_PER_TASK if running on cluster, otherwise use os.cpu_count()
+slurm_cpus = os.environ.get('SLURM_CPUS_PER_TASK')
+if slurm_cpus:
+    MAX_WORKERS = int(slurm_cpus)
+    print(f"Parallel processing configured for {MAX_WORKERS} workers (from SLURM allocation)")
+else:
+    MAX_WORKERS = min(40, max(1, os.cpu_count() or 1))
+    print(f"Parallel processing configured for {MAX_WORKERS} workers (from system CPU count)")
 
 # Cache for storing calculated paths to avoid re-computing shortest paths for the same node pairs
 path_cache = {}

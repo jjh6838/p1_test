@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p28_other
+#SBATCH --job-name=p28_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_28_%j.out
 #SBATCH --error=outputs_global/logs/parallel_28_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 28/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: ABW, ALB, ARE, ARM, ASM, ATG, AUT, AZE"
-echo "[INFO] Tier: OTHER | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 28/40 (T3) at $(date)"
+echo "[INFO] Processing 4 countries in this batch: UKR, UZB, YEM, ZAF"
+echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,68 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing ABW (OTHER)..."
-$PY process_country_supply.py ABW --output-dir outputs_per_country
+echo "[INFO] Processing UKR (T3)..."
+$PY process_country_supply.py UKR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ABW completed"
+    echo "[SUCCESS] UKR completed"
 else
-    echo "[ERROR] ABW failed"
+    echo "[ERROR] UKR failed"
 fi
 
-echo "[INFO] Processing ALB (OTHER)..."
-$PY process_country_supply.py ALB --output-dir outputs_per_country
+echo "[INFO] Processing UZB (T3)..."
+$PY process_country_supply.py UZB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ALB completed"
+    echo "[SUCCESS] UZB completed"
 else
-    echo "[ERROR] ALB failed"
+    echo "[ERROR] UZB failed"
 fi
 
-echo "[INFO] Processing ARE (OTHER)..."
-$PY process_country_supply.py ARE --output-dir outputs_per_country
+echo "[INFO] Processing YEM (T3)..."
+$PY process_country_supply.py YEM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ARE completed"
+    echo "[SUCCESS] YEM completed"
 else
-    echo "[ERROR] ARE failed"
+    echo "[ERROR] YEM failed"
 fi
 
-echo "[INFO] Processing ARM (OTHER)..."
-$PY process_country_supply.py ARM --output-dir outputs_per_country
+echo "[INFO] Processing ZAF (T3)..."
+$PY process_country_supply.py ZAF --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ARM completed"
+    echo "[SUCCESS] ZAF completed"
 else
-    echo "[ERROR] ARM failed"
+    echo "[ERROR] ZAF failed"
 fi
 
-echo "[INFO] Processing ASM (OTHER)..."
-$PY process_country_supply.py ASM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ASM completed"
-else
-    echo "[ERROR] ASM failed"
-fi
-
-echo "[INFO] Processing ATG (OTHER)..."
-$PY process_country_supply.py ATG --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ATG completed"
-else
-    echo "[ERROR] ATG failed"
-fi
-
-echo "[INFO] Processing AUT (OTHER)..."
-$PY process_country_supply.py AUT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] AUT completed"
-else
-    echo "[ERROR] AUT failed"
-fi
-
-echo "[INFO] Processing AZE (OTHER)..."
-$PY process_country_supply.py AZE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] AZE completed"
-else
-    echo "[ERROR] AZE failed"
-fi
-
-echo "[INFO] Batch 28/40 (OTHER) completed at $(date)"
+echo "[INFO] Batch 28/40 (T3) completed at $(date)"

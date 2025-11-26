@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p12_t2
+#SBATCH --job-name=p12_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_12_%j.out
 #SBATCH --error=outputs_global/logs/parallel_12_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 12/40 (T2) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: MNG, SAU"
-echo "[INFO] Tier: T2 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 12/40 (OTHER) at $(date)"
+echo "[INFO] Processing 8 countries in this batch: PSE, QAT, ROU, RWA, SEN, SGP, SLE, SLV"
+echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,20 +34,68 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing MNG (T2)..."
-$PY process_country_supply.py MNG --output-dir outputs_per_country
+echo "[INFO] Processing PSE (OTHER)..."
+$PY process_country_supply.py PSE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] MNG completed"
+    echo "[SUCCESS] PSE completed"
 else
-    echo "[ERROR] MNG failed"
+    echo "[ERROR] PSE failed"
 fi
 
-echo "[INFO] Processing SAU (T2)..."
-$PY process_country_supply.py SAU --output-dir outputs_per_country
+echo "[INFO] Processing QAT (OTHER)..."
+$PY process_country_supply.py QAT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SAU completed"
+    echo "[SUCCESS] QAT completed"
 else
-    echo "[ERROR] SAU failed"
+    echo "[ERROR] QAT failed"
 fi
 
-echo "[INFO] Batch 12/40 (T2) completed at $(date)"
+echo "[INFO] Processing ROU (OTHER)..."
+$PY process_country_supply.py ROU --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ROU completed"
+else
+    echo "[ERROR] ROU failed"
+fi
+
+echo "[INFO] Processing RWA (OTHER)..."
+$PY process_country_supply.py RWA --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] RWA completed"
+else
+    echo "[ERROR] RWA failed"
+fi
+
+echo "[INFO] Processing SEN (OTHER)..."
+$PY process_country_supply.py SEN --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SEN completed"
+else
+    echo "[ERROR] SEN failed"
+fi
+
+echo "[INFO] Processing SGP (OTHER)..."
+$PY process_country_supply.py SGP --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SGP completed"
+else
+    echo "[ERROR] SGP failed"
+fi
+
+echo "[INFO] Processing SLE (OTHER)..."
+$PY process_country_supply.py SLE --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SLE completed"
+else
+    echo "[ERROR] SLE failed"
+fi
+
+echo "[INFO] Processing SLV (OTHER)..."
+$PY process_country_supply.py SLV --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SLV completed"
+else
+    echo "[ERROR] SLV failed"
+fi
+
+echo "[INFO] Batch 12/40 (OTHER) completed at $(date)"

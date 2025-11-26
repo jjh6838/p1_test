@@ -2,10 +2,10 @@
 #SBATCH --job-name=p16_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=896G
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_16_%j.out
 #SBATCH --error=outputs_global/logs/parallel_16_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 16/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: CMR, COL, DEU, ECU"
-echo "[INFO] Tier: T3 | Memory: 896G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Processing 4 countries in this batch: AFG, AGO, BFA, BOL"
+echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing CMR (T3)..."
-$PY process_country_supply.py CMR --output-dir outputs_per_country
+echo "[INFO] Processing AFG (T3)..."
+$PY process_country_supply.py AFG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] CMR completed"
+    echo "[SUCCESS] AFG completed"
 else
-    echo "[ERROR] CMR failed"
+    echo "[ERROR] AFG failed"
 fi
 
-echo "[INFO] Processing COL (T3)..."
-$PY process_country_supply.py COL --output-dir outputs_per_country
+echo "[INFO] Processing AGO (T3)..."
+$PY process_country_supply.py AGO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] COL completed"
+    echo "[SUCCESS] AGO completed"
 else
-    echo "[ERROR] COL failed"
+    echo "[ERROR] AGO failed"
 fi
 
-echo "[INFO] Processing DEU (T3)..."
-$PY process_country_supply.py DEU --output-dir outputs_per_country
+echo "[INFO] Processing BFA (T3)..."
+$PY process_country_supply.py BFA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] DEU completed"
+    echo "[SUCCESS] BFA completed"
 else
-    echo "[ERROR] DEU failed"
+    echo "[ERROR] BFA failed"
 fi
 
-echo "[INFO] Processing ECU (T3)..."
-$PY process_country_supply.py ECU --output-dir outputs_per_country
+echo "[INFO] Processing BOL (T3)..."
+$PY process_country_supply.py BOL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ECU completed"
+    echo "[SUCCESS] BOL completed"
 else
-    echo "[ERROR] ECU failed"
+    echo "[ERROR] BOL failed"
 fi
 
 echo "[INFO] Batch 16/40 (T3) completed at $(date)"
