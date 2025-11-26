@@ -19,7 +19,7 @@ python get_countries.py --create-parallel
 sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
 chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 
-# 3) Submit all 40 parallel jobs
+# 3) Submit all 40 parallel jobs (in waves of 8)
 ./submit_all_parallel.sh
 
 # 4) Monitor progress
@@ -31,14 +31,16 @@ sbatch submit_workflow.sh
 ```
 
 **Key Files:**
-- `submit_all_parallel.sh` - Master script submitting 40 parallel SLURM jobs
+- `submit_all_parallel.sh` - Submits all 40 jobs in waves of 8 (respects per-user limits)
 - `parallel_scripts/submit_parallel_01.sh` through `submit_parallel_40.sh` - Individual job scripts
 - `submit_workflow.sh` - Combination step (runs after parallel jobs complete)
 
 **Tips:**
 - Use `./script.sh` on Linux/macOS when executing from current directory
 - Run `sed -i 's/\r$//'` on cluster if files prepared on Windows
-- Each job automatically uses 72 CPUs via internal parallelization
+- Each job automatically uses 64 CPUs via internal parallelization
+- **Wave-based submission**: Script waits when 8 jobs running, submits next when slots open
+- **Respects cluster limits**: Prevents queue congestion, better cluster etiquette
 
 ---
 
@@ -66,10 +68,12 @@ python combine_global_results.py --input-dir outputs_per_country
 ## Shell Scripts Overview
 
 ### **Master Submission Script**
-- **`submit_all_parallel.sh`** - Submits all 40 parallel jobs to SLURM
-  - Calls each `parallel_scripts/submit_parallel_*.sh` sequentially
-  - No dependencies between jobs (true parallel execution)
-  - Exit on first failure with error reporting
+- **`submit_all_parallel.sh`** - Submits all 40 jobs in controlled waves
+  - Respects per-user job limits (max 8 simultaneous)
+  - Monitors job count with `squeue -u $USER`
+  - Waits for slots before submitting next wave
+  - Prevents queue congestion, better cluster etiquette
+  - Submission takes ~30-60 minutes, but ensures steady execution
 
 ### **Individual Job Scripts** (`parallel_scripts/submit_parallel_*.sh`)
 40 scripts with tiered country allocation:
@@ -82,7 +86,11 @@ python combine_global_results.py --input-dir outputs_per_country
 | `34-40` | 8 | Other (Small) | Island nations, small countries |
 
 **Each script:**
-- Requests 72 CPUs, 340GB RAM, 168h time limit (Long partition)
+- Requests 64 CPUs, 1024GB RAM (16GB/core)
+- Partition assignment by tier:
+  - **Tier 1** (7 scripts): Long partition, 168h time limit
+  - **Tier 2** (~6 scripts): Medium partition, 48h time limit  
+  - **Tier 3 + Other** (~27 scripts): Short partition, 12h time limit
 - Activates conda environment: `conda activate p1_etl`
 - Processes assigned countries: `python process_country_supply.py {ISO3}`
 - Outputs to: `outputs_per_country/parquet/{scenario}/{layer}_{ISO3}.parquet`
@@ -91,7 +99,8 @@ python combine_global_results.py --input-dir outputs_per_country
 ### **Combination Script**
 - **`submit_workflow.sh`** - Combines all country results into global outputs
   - **When to run**: After all 40 parallel jobs complete
-  - **Resources**: 72 CPUs, 340GB RAM, 12h (Short partition)
+  - **Resources**: 72 CPUs, 1152GB RAM
+  - **Partition**: Short (12h sufficient for combination)
   - **What it does**: Runs `combine_global_results.py` to merge parquet files
   - **Auto-detects scenarios**: Scans `outputs_per_country/parquet/` for scenario subfolders
   - **Outputs**: `outputs_global/{scenario}_global.gpkg` (one per scenario)
@@ -159,23 +168,28 @@ NUMEXPR_NUM_THREADS = allocated_cpus
 
 All jobs request full nodes for maximum performance:
 
-| Country Tier | CPUs/Job | Memory | Time Limit | Countries/Job | Examples |
-|--------------|----------|--------|-----------|---------------|----------|
-| **Tier 1** | 72 | 340GB | 168h | 1 | USA, CHN, IND, RUS, BRA, CAN, AUS |
-| **Tier 2** | 72 | 340GB | 168h | 2 | ARG+KAZ, DZA+MEX, IDN+SDN, LBY+SAU |
-| **Tier 3** | 72 | 340GB | 168h | 4 | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM |
-| **Other** | 72 | 340GB | 168h | 8 | Small island nations |
+| Country Tier | CPUs/Job | Memory | Partition | Time Limit | Countries/Job | Examples |
+|--------------|----------|--------|-----------|------------|---------------|----------|
+| **Tier 1** | 64 | 1024GB | Long | 168h (7 days) | 1 | USA, CHN, IND, RUS, BRA, CAN, AUS |
+| **Tier 2** | 64 | 1024GB | Medium | 48h (2 days) | 2 | ARG+KAZ, DZA+MEX, IDN+SDN, LBY+SAU |
+| **Tier 3** | 64 | 1024GB | Short | 12h | 4 | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM |
+| **Other** | 64 | 1024GB | Short | 12h | 8 | Small island nations |
+
+**Partition Strategy:**
+- **Long** (few slots): Reserved for 7 largest countries requiring maximum time
+- **Medium** (some slots): Used for ~6 large countries needing 2 days
+- **Short** (many slots): Handles ~27 medium/small countries completing in hours
 
 **Combination Step:**
-- Memory: 340GB
-- Runtime: 12 hours (Short partition)
+- Memory: 1152GB (72 CPUs × 16GB/core)
+- Partition: Short (12h is sufficient for combination)
 - CPUs: 72
 
-### **Expected Performance (72-core cluster)**
-- **Small countries** (<1M pop): <5 minutes
-- **Medium countries** (1-10M pop): 5-15 minutes  
-- **Large countries** (10-50M pop): 15-30 minutes
-- **Very large countries** (CHN, IND, USA): 15-30 minutes (with internal parallelization)
+### **Expected Performance (64-core cluster)**
+- **Tier 1 countries** (Long partition): 15-30 minutes, but 7 days available if needed
+- **Tier 2 countries** (Medium partition): 10-20 minutes, 2 days available
+- **Tier 3 countries** (Short partition): 5-15 minutes, completes well within 12h
+- **Small countries** (Short partition): <5 minutes, completes within 12h
 
 **Laptop Performance (16 cores):**
 - Small: <10 minutes
@@ -229,11 +243,15 @@ tail -f outputs_global/logs/parallel_01.out | grep "Using parallel processing"
 4. **Permission denied**
    - Run: `chmod +x submit_all_parallel.sh parallel_scripts/*.sh`
 
-5. **Memory errors** (rare with 340GB allocation)
+5. **Memory errors** (rare with 1024GB allocation)
    - Check job output: `sacct -j <JOB_ID> --format=JobID,MaxRSS`
-   - Very large countries may need Long partition (168h)
 
-6. **Missing countries in output**
+6. **Time limit exceeded**
+   - Tier 1 (Long partition): 168h should be sufficient for all countries
+   - Tier 2/3 (Medium/Short): If job exceeds time, consider moving to higher tier
+   - Check logs to identify which country took longest
+
+7. **Missing countries in output**
    - Workflow skips countries without GADM boundaries
    - Check `countries_list.txt` for expected countries
    - Some islands may have no grid data (handled gracefully)

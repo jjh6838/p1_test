@@ -2,10 +2,10 @@
 #SBATCH --job-name=combine_global
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=340G
+#SBATCH --mem=896G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=72
+#SBATCH --cpus-per-task=56
 #SBATCH --output=outputs_global/logs/test_%j.out
 #SBATCH --error=outputs_global/logs/test_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,62 +13,35 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting global combination at $(date)"
-echo "[INFO] This job only combines results from parallel processing"
+echo "[INFO] Starting global results combination at $(date)"
+echo "[INFO] Memory: 896GB | CPUs: 56 | Time limit: 12h"
 
-# ─── directories ──────────────────────────────────────────────
+# --- directories ---
 mkdir -p outputs_global outputs_global/logs
 
-# ─── Check completion status ─────────────────────────────────
-# Check for Parquet files in country subdirectories (production mode)
-completed=0
-if [ -d "outputs_per_country" ]; then
-    completed=$(find outputs_per_country -name "*.parquet" -type f | wc -l)
-fi
-total=$(wc -l < countries_list.txt 2>/dev/null || echo "0")
-echo "[INFO] Found $completed parquet files from $total countries"
-
-if [ "$completed" -eq 0 ]; then
-    echo "[ERROR] No completed countries found!"
-    echo "[ERROR] Run parallel processing first (production mode):"
-    echo "[ERROR]   python get_countries.py --create-parallel"
-    echo "[ERROR]   ./submit_all_parallel.sh"
-    exit 1
-fi
-
-# ─── Conda bootstrap ─────────────────────────────────────────
+# --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
 source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
 
 conda --version
-conda activate p1_etl
+conda activate p1_etl || true
 
-# ─── Run global combination ──────────────────────────────────
-echo "[INFO] Running global combination at $(date)"
+# Use the env's absolute python path
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: $PY"
+$PY -c 'import sys; print(sys.executable)'
 
-# Option 1: Auto-detect and process all scenarios (recommended)
-python combine_global_results.py \
-    --input-dir outputs_per_country \
-    --countries-file countries_list.txt
+echo "[INFO] Combining all country results into global outputs..."
+echo "[INFO] Auto-detecting scenarios from outputs_per_country/parquet/"
 
-# The script will:
-# - Auto-detect all scenario subfolders in outputs_per_country/parquet/
-# - Process each scenario: 2030_supply_100%, 2050_supply_100%, etc.
-# - Generate outputs: outputs_global/{scenario}_global.gpkg for each scenario
+# Run combination script (auto-detects scenarios)
+$PY combine_global_results.py --input-dir outputs_per_country
 
-# Option 2: Process specific scenario only (uncomment if needed)
-# python combine_global_results.py \
-#     --input-dir outputs_per_country \
-#     --output outputs_global/2050_supply_100%_global.gpkg \
-#     --scenario "2050_supply_100%" \
-#     --countries-file countries_list.txt
-
-echo "[INFO] Global combination completed at $(date)"
-echo ""
-echo "=== COMBINATION COMPLETED ==="
-echo "Check outputs_global/ for combined results:"
-echo "  - {scenario}_global.gpkg (one per scenario)"
-echo "  - global_{layer}.csv (tabular data without geometry)"
-echo "  - logs/combine_results.log (processing log)"
-echo ""
-echo "You can now open the GPKG files in QGIS for global visualization!"
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] Global results combination completed at $(date)"
+    echo "[INFO] Output files:"
+    ls -lh outputs_global/*.gpkg
+else
+    echo "[ERROR] Global results combination failed at $(date)"
+    exit 1
+fi

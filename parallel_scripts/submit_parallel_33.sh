@@ -2,10 +2,10 @@
 #SBATCH --job-name=p33_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=340G
+#SBATCH --mem=896G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=72
+#SBATCH --cpus-per-task=56
 #SBATCH --output=outputs_global/logs/parallel_33_%j.out
 #SBATCH --error=outputs_global/logs/parallel_33_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 33/40 (OTHER) at $(date)"
 echo "[INFO] Processing 8 countries in this batch: GHA, GMB, GNB, GNQ, GRC, GRL, GTM, GUM"
-echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
+echo "[INFO] Tier: OTHER | Memory: 896G | CPUs: 56 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

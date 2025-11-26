@@ -142,12 +142,15 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
     # The goal is to pack jobs efficiently onto nodes. For example, a single node can run one Tier 1 job,
-    # two Tier 2 jobs, four Tier 3 jobs, or eight "other" jobs, maximizing the use of its 72 CPUs and 340GB RAM.
+    # two Tier 2 jobs, four Tier 3 jobs, or eight "other" jobs, maximizing the use of its CPUs.
+    # Memory allocation: 16GB per core (cluster constraint) = 56 CPUs × 16GB = 896GB per node
+    # Partition strategy: All jobs use Short partition (12h time limit, many nodes available)
+    # CPU count: 56 CPUs (SLURM will allocate max available on assigned node)
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 1 big country per node (max resources)
-        "t2": {"max_countries_per_script": 2, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 2 large countries per node
-        "t3": {"max_countries_per_script": 4, "mem": "340G", "cpus": 72, "time": "12:00:00"},  # 4 medium countries per node
-        "other": {"max_countries_per_script": 8, "mem": "340G", "cpus": 72, "time": "12:00:00"}  # 8 small countries per node
+        "t1": {"max_countries_per_script": 1, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"},   # 12 hours for largest countries (USA, CHN, IND, etc.)
+        "t2": {"max_countries_per_script": 2, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"},  # 12 hours for large countries
+        "t3": {"max_countries_per_script": 4, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"},   # 12 hours for medium countries
+        "other": {"max_countries_per_script": 8, "mem": "896G", "cpus": 56, "time": "12:00:00", "partition": "Short"}  # 12 hours for small countries
     }
     
     def get_tier(country):
@@ -242,7 +245,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         # resources (time, memory, CPUs) from the cluster scheduler.
         script_content = f"""#!/bin/bash --login
 #SBATCH --job-name=p{i:02d}_{tier}
-#SBATCH --partition=Short
+#SBATCH --partition={config["partition"]}
 #SBATCH --time={config["time"]}
 #SBATCH --mem={config["mem"]}
 #SBATCH --ntasks=1
@@ -302,44 +305,64 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
         print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
     
     # Create master submission script
-    # This script is a simple utility to submit all the generated parallel jobs to the SLURM scheduler at once.
+    # This script submits jobs in waves of 8 to respect per-user job limits
     master_script = f"""#!/bin/bash
-# Submit all parallel jobs with tiered resource allocation
+# Submit all parallel jobs in waves of 8 (respects per-user job limits)
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
 source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
 
-conda --version
 conda activate p1_etl
 
-echo "[INFO] Submitting {len(all_batches)} parallel jobs with tiered approach..."
+echo "[INFO] Submitting {len(all_batches)} parallel jobs in waves of 8..."
+echo "[INFO] This respects per-user job limits and prevents queue congestion"
 echo ""
 
-"""
-    
-    # Add information about each script
-    for i, batch_info in enumerate(all_batches, 1):
-        batch = batch_info["countries"]
-        tier = batch_info["tier"]
-        config = batch_info["config"]
-        master_script += f"echo \"Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {config['mem']}, {config['cpus']} CPUs\"\n"
-    
-    master_script += "\necho \"\"\n"
-    
-    for i in range(1, len(all_batches) + 1):
-        master_script += f"sbatch parallel_scripts/submit_parallel_{i:02d}.sh\n"
-    
-    master_script += f"""
-echo "All {len(all_batches)} jobs submitted!"
+# Function to count running/pending jobs
+count_jobs() {{
+    squeue -u $USER -h -t pending,running -r | wc -l
+}}
+
+# Function to wait until job count drops below threshold
+wait_for_slots() {{
+    local max_jobs=$1
+    while [ $(count_jobs) -ge $max_jobs ]; do
+        echo "[$(date +%H:%M:%S)] Waiting for job slots... ($(count_jobs)/$max_jobs running)"
+        sleep 60
+    done
+}}
+
+echo "[INFO] Starting wave-based submission..."
 echo ""
-echo "Resource allocation summary:"
-echo "  Tier 1 (biggest): 1 country/script, {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
-echo "  Tier 2 (large): 2 countries/script, {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"  
-echo "  Tier 3 (medium): 4 countries/script, {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
-echo "  Other (small): 8 countries/script, {TIER_CONFIG['other']['mem']}, {TIER_CONFIG['other']['cpus']} CPUs"
+
+# Submit jobs in waves
+for i in {{01..{len(all_batches):02d}}}; do
+    # Wait if we have 8 or more jobs running/pending
+    wait_for_slots 8
+    
+    echo "[$(date +%H:%M:%S)] Submitting job $i..."
+    sbatch parallel_scripts/submit_parallel_${{i}}.sh
+    
+    # Small delay to avoid overwhelming scheduler
+    sleep 2
+done
+
 echo ""
-echo "Monitor with: squeue -u $USER"
+echo "[INFO] All {len(all_batches)} jobs submitted!"
+echo ""
+echo "Monitor with:"
+echo "  squeue -u \\$USER"
+echo "  watch -n 60 'squeue -u \\$USER | wc -l'"
+echo ""
+echo "Check completion:"
+echo "  find outputs_per_country/parquet -name '*.parquet' | wc -l"
+echo ""
+echo "Resource allocation summary (tiered partition strategy):"
+echo "  Tier 1 (biggest):  1 country/script  | Long partition (168h/7d)   | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
+echo "  Tier 2 (large):    2 countries/script | Medium partition (48h/2d)  | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"  
+echo "  Tier 3 (medium):   4 countries/script | Short partition (12h)      | {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
+echo "  Other (small):     8 countries/script | Short partition (12h)      | {TIER_CONFIG['other']['mem']}, {TIER_CONFIG['other']['cpus']} CPUs"
 """
     
     master_file = Path("submit_all_parallel.sh")
@@ -347,7 +370,64 @@ echo "Monitor with: squeue -u $USER"
     master_file.chmod(0o755)
     
     print(f"\nCreated {master_file} to submit all parallel jobs")
-    print(f"Total resource allocation:")
+    
+    # Create combination workflow script
+    workflow_script = """#!/bin/bash --login
+#SBATCH --job-name=combine_global
+#SBATCH --partition=Short
+#SBATCH --time=12:00:00
+#SBATCH --mem=896G
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=56
+#SBATCH --output=outputs_global/logs/test_%j.out
+#SBATCH --error=outputs_global/logs/test_%j.err
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+cd "$SLURM_SUBMIT_DIR"
+
+echo "[INFO] Starting global results combination at $(date)"
+echo "[INFO] Memory: 896GB | CPUs: 56 | Time limit: 12h"
+
+# --- directories ---
+mkdir -p outputs_global outputs_global/logs
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+conda activate p1_etl || true
+
+# Use the env's absolute python path
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: $PY"
+$PY -c 'import sys; print(sys.executable)'
+
+echo "[INFO] Combining all country results into global outputs..."
+echo "[INFO] Auto-detecting scenarios from outputs_per_country/parquet/"
+
+# Run combination script (auto-detects scenarios)
+$PY combine_global_results.py --input-dir outputs_per_country
+
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] Global results combination completed at $(date)"
+    echo "[INFO] Output files:"
+    ls -lh outputs_global/*.gpkg
+else
+    echo "[ERROR] Global results combination failed at $(date)"
+    exit 1
+fi
+"""
+    
+    workflow_file = Path("submit_workflow.sh")
+    workflow_file.write_text(workflow_script, encoding='utf-8')
+    workflow_file.chmod(0o755)
+    
+    print(f"Created {workflow_file} for combining results")
+    
+    print(f"\nTotal resource allocation:")
     
     # Calculate total resources
     total_mem = sum(int(batch_info["config"]["mem"].replace("G", "")) for batch_info in all_batches)
