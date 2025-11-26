@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 33/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: GEO, GHA, GMB, GNB, GNQ, GRC, GRD, GRL"
+echo "[INFO] Processing 8 countries in this batch: GHA, GMB, GNB, GNQ, GRC, GRL, GTM, GUM"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -33,14 +33,6 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
-
-echo "[INFO] Processing GEO (OTHER)..."
-$PY process_country_supply.py GEO --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GEO completed"
-else
-    echo "[ERROR] GEO failed"
-fi
 
 echo "[INFO] Processing GHA (OTHER)..."
 $PY process_country_supply.py GHA --output-dir outputs_per_country
@@ -82,20 +74,28 @@ else
     echo "[ERROR] GRC failed"
 fi
 
-echo "[INFO] Processing GRD (OTHER)..."
-$PY process_country_supply.py GRD --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GRD completed"
-else
-    echo "[ERROR] GRD failed"
-fi
-
 echo "[INFO] Processing GRL (OTHER)..."
 $PY process_country_supply.py GRL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GRL completed"
 else
     echo "[ERROR] GRL failed"
+fi
+
+echo "[INFO] Processing GTM (OTHER)..."
+$PY process_country_supply.py GTM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GTM completed"
+else
+    echo "[ERROR] GTM failed"
+fi
+
+echo "[INFO] Processing GUM (OTHER)..."
+$PY process_country_supply.py GUM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GUM completed"
+else
+    echo "[ERROR] GUM failed"
 fi
 
 echo "[INFO] Batch 33/40 (OTHER) completed at $(date)"

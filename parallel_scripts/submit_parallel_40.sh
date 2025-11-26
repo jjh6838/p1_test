@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 40/40 (OTHER) at $(date)"
-echo "[INFO] Processing 29 countries in this batch: RWA, SEN, SGP, SLB, SLE, SLV, SRB, SSD, STP, SUR, SVK, SVN, SWZ, SYC, SYR, TGO, TJK, TLS, TON, TTO, TUN, TWN, UGA, URY, VCT, VIR, VNM, VUT, WSM"
+echo "[INFO] Processing 21 countries in this batch: SRB, SSD, SUR, SVK, SVN, SWZ, SYC, SYR, TGO, TJK, TLS, TON, TTO, TUN, TWN, UGA, URY, VIR, VNM, VUT, WSM"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -34,54 +34,6 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing RWA (OTHER)..."
-$PY process_country_supply.py RWA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] RWA completed"
-else
-    echo "[ERROR] RWA failed"
-fi
-
-echo "[INFO] Processing SEN (OTHER)..."
-$PY process_country_supply.py SEN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SEN completed"
-else
-    echo "[ERROR] SEN failed"
-fi
-
-echo "[INFO] Processing SGP (OTHER)..."
-$PY process_country_supply.py SGP --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SGP completed"
-else
-    echo "[ERROR] SGP failed"
-fi
-
-echo "[INFO] Processing SLB (OTHER)..."
-$PY process_country_supply.py SLB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SLB completed"
-else
-    echo "[ERROR] SLB failed"
-fi
-
-echo "[INFO] Processing SLE (OTHER)..."
-$PY process_country_supply.py SLE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SLE completed"
-else
-    echo "[ERROR] SLE failed"
-fi
-
-echo "[INFO] Processing SLV (OTHER)..."
-$PY process_country_supply.py SLV --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SLV completed"
-else
-    echo "[ERROR] SLV failed"
-fi
-
 echo "[INFO] Processing SRB (OTHER)..."
 $PY process_country_supply.py SRB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
@@ -96,14 +48,6 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] SSD completed"
 else
     echo "[ERROR] SSD failed"
-fi
-
-echo "[INFO] Processing STP (OTHER)..."
-$PY process_country_supply.py STP --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] STP completed"
-else
-    echo "[ERROR] STP failed"
 fi
 
 echo "[INFO] Processing SUR (OTHER)..."
@@ -224,14 +168,6 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] URY completed"
 else
     echo "[ERROR] URY failed"
-fi
-
-echo "[INFO] Processing VCT (OTHER)..."
-$PY process_country_supply.py VCT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] VCT completed"
-else
-    echo "[ERROR] VCT failed"
 fi
 
 echo "[INFO] Processing VIR (OTHER)..."

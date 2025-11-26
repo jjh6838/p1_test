@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 37/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: LUX, LVA, MDA, MDV, MKD, MLT, MNE, MOZ"
+echo "[INFO] Processing 8 countries in this batch: MDV, MKD, MLT, MNE, MOZ, MUS, MWI, NAM"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -33,30 +33,6 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
-
-echo "[INFO] Processing LUX (OTHER)..."
-$PY process_country_supply.py LUX --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LUX completed"
-else
-    echo "[ERROR] LUX failed"
-fi
-
-echo "[INFO] Processing LVA (OTHER)..."
-$PY process_country_supply.py LVA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LVA completed"
-else
-    echo "[ERROR] LVA failed"
-fi
-
-echo "[INFO] Processing MDA (OTHER)..."
-$PY process_country_supply.py MDA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] MDA completed"
-else
-    echo "[ERROR] MDA failed"
-fi
 
 echo "[INFO] Processing MDV (OTHER)..."
 $PY process_country_supply.py MDV --output-dir outputs_per_country
@@ -96,6 +72,30 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] MOZ completed"
 else
     echo "[ERROR] MOZ failed"
+fi
+
+echo "[INFO] Processing MUS (OTHER)..."
+$PY process_country_supply.py MUS --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MUS completed"
+else
+    echo "[ERROR] MUS failed"
+fi
+
+echo "[INFO] Processing MWI (OTHER)..."
+$PY process_country_supply.py MWI --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] MWI completed"
+else
+    echo "[ERROR] MWI failed"
+fi
+
+echo "[INFO] Processing NAM (OTHER)..."
+$PY process_country_supply.py NAM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] NAM completed"
+else
+    echo "[ERROR] NAM failed"
 fi
 
 echo "[INFO] Batch 37/40 (OTHER) completed at $(date)"

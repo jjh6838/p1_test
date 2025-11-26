@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 32/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: DMA, DNK, DOM, ERI, EST, FIN, FJI, FRO"
+echo "[INFO] Processing 8 countries in this batch: DNK, DOM, ERI, EST, FIN, FJI, FRO, GEO"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -33,14 +33,6 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
-
-echo "[INFO] Processing DMA (OTHER)..."
-$PY process_country_supply.py DMA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] DMA completed"
-else
-    echo "[ERROR] DMA failed"
-fi
 
 echo "[INFO] Processing DNK (OTHER)..."
 $PY process_country_supply.py DNK --output-dir outputs_per_country
@@ -96,6 +88,14 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] FRO completed"
 else
     echo "[ERROR] FRO failed"
+fi
+
+echo "[INFO] Processing GEO (OTHER)..."
+$PY process_country_supply.py GEO --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] GEO completed"
+else
+    echo "[ERROR] GEO failed"
 fi
 
 echo "[INFO] Batch 32/40 (OTHER) completed at $(date)"

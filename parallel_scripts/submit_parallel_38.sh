@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 38/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: MUS, MWI, NAM, NCL, NIC, NLD, NPL, NRU"
+echo "[INFO] Processing 8 countries in this batch: NCL, NIC, NLD, NPL, PAN, PRI, PRK, PRT"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -33,30 +33,6 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
-
-echo "[INFO] Processing MUS (OTHER)..."
-$PY process_country_supply.py MUS --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] MUS completed"
-else
-    echo "[ERROR] MUS failed"
-fi
-
-echo "[INFO] Processing MWI (OTHER)..."
-$PY process_country_supply.py MWI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] MWI completed"
-else
-    echo "[ERROR] MWI failed"
-fi
-
-echo "[INFO] Processing NAM (OTHER)..."
-$PY process_country_supply.py NAM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] NAM completed"
-else
-    echo "[ERROR] NAM failed"
-fi
 
 echo "[INFO] Processing NCL (OTHER)..."
 $PY process_country_supply.py NCL --output-dir outputs_per_country
@@ -90,12 +66,36 @@ else
     echo "[ERROR] NPL failed"
 fi
 
-echo "[INFO] Processing NRU (OTHER)..."
-$PY process_country_supply.py NRU --output-dir outputs_per_country
+echo "[INFO] Processing PAN (OTHER)..."
+$PY process_country_supply.py PAN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] NRU completed"
+    echo "[SUCCESS] PAN completed"
 else
-    echo "[ERROR] NRU failed"
+    echo "[ERROR] PAN failed"
+fi
+
+echo "[INFO] Processing PRI (OTHER)..."
+$PY process_country_supply.py PRI --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] PRI completed"
+else
+    echo "[ERROR] PRI failed"
+fi
+
+echo "[INFO] Processing PRK (OTHER)..."
+$PY process_country_supply.py PRK --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] PRK completed"
+else
+    echo "[ERROR] PRK failed"
+fi
+
+echo "[INFO] Processing PRT (OTHER)..."
+$PY process_country_supply.py PRT --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] PRT completed"
+else
+    echo "[ERROR] PRT failed"
 fi
 
 echo "[INFO] Batch 38/40 (OTHER) completed at $(date)"

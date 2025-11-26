@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 39/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: PAN, PRI, PRK, PRT, PSE, PYF, QAT, ROU"
+echo "[INFO] Processing 8 countries in this batch: PSE, QAT, ROU, RWA, SEN, SGP, SLE, SLV"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -34,52 +34,12 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing PAN (OTHER)..."
-$PY process_country_supply.py PAN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PAN completed"
-else
-    echo "[ERROR] PAN failed"
-fi
-
-echo "[INFO] Processing PRI (OTHER)..."
-$PY process_country_supply.py PRI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PRI completed"
-else
-    echo "[ERROR] PRI failed"
-fi
-
-echo "[INFO] Processing PRK (OTHER)..."
-$PY process_country_supply.py PRK --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PRK completed"
-else
-    echo "[ERROR] PRK failed"
-fi
-
-echo "[INFO] Processing PRT (OTHER)..."
-$PY process_country_supply.py PRT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PRT completed"
-else
-    echo "[ERROR] PRT failed"
-fi
-
 echo "[INFO] Processing PSE (OTHER)..."
 $PY process_country_supply.py PSE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] PSE completed"
 else
     echo "[ERROR] PSE failed"
-fi
-
-echo "[INFO] Processing PYF (OTHER)..."
-$PY process_country_supply.py PYF --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PYF completed"
-else
-    echo "[ERROR] PYF failed"
 fi
 
 echo "[INFO] Processing QAT (OTHER)..."
@@ -96,6 +56,46 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] ROU completed"
 else
     echo "[ERROR] ROU failed"
+fi
+
+echo "[INFO] Processing RWA (OTHER)..."
+$PY process_country_supply.py RWA --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] RWA completed"
+else
+    echo "[ERROR] RWA failed"
+fi
+
+echo "[INFO] Processing SEN (OTHER)..."
+$PY process_country_supply.py SEN --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SEN completed"
+else
+    echo "[ERROR] SEN failed"
+fi
+
+echo "[INFO] Processing SGP (OTHER)..."
+$PY process_country_supply.py SGP --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SGP completed"
+else
+    echo "[ERROR] SGP failed"
+fi
+
+echo "[INFO] Processing SLE (OTHER)..."
+$PY process_country_supply.py SLE --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SLE completed"
+else
+    echo "[ERROR] SLE failed"
+fi
+
+echo "[INFO] Processing SLV (OTHER)..."
+$PY process_country_supply.py SLV --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] SLV completed"
+else
+    echo "[ERROR] SLV failed"
 fi
 
 echo "[INFO] Batch 39/40 (OTHER) completed at $(date)"

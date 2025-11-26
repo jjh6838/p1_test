@@ -712,28 +712,37 @@ def split_intersecting_edges(lines):
         except RuntimeError as e:
             print(f"  Warning: STRtree split failed ({e}); using legacy splitter")
 
-    if num_lines > 10000:  # Very large grid networks (like CHN)
-        print(f"Processing {num_lines:,} grid lines using chunked approach...")
+    if num_lines > 10000:  # Very large grid networks (like JPN, CHN)
+        print(f"Processing {num_lines:,} grid lines using parallel chunked approach with {MAX_WORKERS} workers...")
         chunk_size = 500
-        all_segments = []
-        for i in range(0, num_lines, chunk_size):
-            chunk_end = min(i + chunk_size, num_lines)
-            chunk_lines = lines[i:chunk_end]
+        chunks = [lines[i:i+chunk_size] for i in range(0, num_lines, chunk_size)]
+        
+        def process_chunk_parallel(chunk_lines):
             chunk_merged = unary_union(chunk_lines)
+            chunk_segments = []
             if isinstance(chunk_merged, (LineString, MultiLineString)):
                 segments = [chunk_merged] if isinstance(chunk_merged, LineString) else list(chunk_merged.geoms)
                 for segment in segments:
                     coords = list(segment.coords)
                     for j in range(len(coords) - 1):
-                        all_segments.append(LineString([coords[j], coords[j + 1]]))
-            if (i + chunk_size) % 5000 == 0:
-                print(f"    Processed {min(i + chunk_size, num_lines):,}/{num_lines:,} grid lines...")
-        print(f"Split into {len(all_segments):,} segments")
+                        chunk_segments.append(LineString([coords[j], coords[j + 1]]))
+            return chunk_segments
+        
+        all_segments = []
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(process_chunk_parallel, chunk) for chunk in chunks]
+            for i, future in enumerate(futures):
+                all_segments.extend(future.result())
+                if (i + 1) % 10 == 0 or (i + 1) == len(futures):
+                    processed = min((i + 1) * chunk_size, num_lines)
+                    print(f"    Processed {processed:,}/{num_lines:,} grid lines...")
+        print(f"Split into {len(all_segments):,} segments in parallel")
         return all_segments
 
     if num_lines > 1000:
         print(f"Processing {num_lines:,} grid lines using {MAX_WORKERS} parallel workers...")
-        batch_size = max(1, num_lines // MAX_WORKERS)
+        # Optimize batch size for better load balancing
+        batch_size = max(50, num_lines // (MAX_WORKERS * 2))  # 2x workers for better distribution
         batches = [lines[i:i+batch_size] for i in range(0, num_lines, batch_size)]
 
         def process_batch(batch_lines):
@@ -754,7 +763,9 @@ def split_intersecting_edges(lines):
             for i, future in enumerate(futures):
                 batch_segments = future.result()
                 all_segments.extend(batch_segments)
-                print(f"  Processed grid batch {i+1}/{len(batches)}")
+                if (i + 1) % max(1, len(batches) // 10) == 0 or (i + 1) == len(batches):
+                    print(f"  Processed grid batch {i+1}/{len(batches)}")
+        print(f"  Parallel split complete: {len(all_segments):,} segments from {len(batches)} batches")
         return all_segments
 
     merged = unary_union(lines)
@@ -1181,60 +1192,145 @@ def calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph):
 
     search_radius_m = FACILITY_SEARCH_RADIUS_KM * 1000.0
     centroid_results = defaultdict(list)
-
-    for facility_idx, facility_node in facility_mapping.items():
-        if facility_node is None:
-            continue
-
-        facility_geom_utm = facilities_utm.loc[facility_idx].geometry
-        candidate_positions = []
-        if centroid_tree is not None:
-            candidate_positions = centroid_tree.query_ball_point((facility_geom_utm.x, facility_geom_utm.y), r=search_radius_m)
-        else:
-            candidate_positions = list(range(len(centroid_indices)))
-
-        if not candidate_positions:
-            continue
-
-        candidate_centroid_idxs = [centroid_idx_by_pos[pos] for pos in candidate_positions]
-        target_nodes = {
-            centroid_mapping[idx]
-            for idx in candidate_centroid_idxs
-            if idx in centroid_mapping
-        }
-
-        if not target_nodes:
-            continue
-
-        reached, parents = _dijkstra_to_targets(network_graph, facility_node, target_nodes)
-
-        if not reached:
-            continue
-
-        for centroid_node, distance_m in reached.items():
-            centroid_idx = network_graph.nodes[centroid_node].get('centroid_idx')
-            if centroid_idx is None:
+    
+    # Parallel facility distance calculation for large datasets
+    facility_items = list(facility_mapping.items())
+    
+    if len(facility_items) > 20 and num_centroids > 1000:  # Parallel for medium-large countries
+        print(f"  Using parallel processing for {len(facility_items)} facilities with {min(MAX_WORKERS, len(facility_items))} workers...")
+        
+        def process_facility_batch(batch_facilities):
+            """Process a batch of facilities and return results"""
+            batch_results = defaultdict(list)
+            
+            for facility_idx, facility_node in batch_facilities:
+                if facility_node is None:
+                    continue
+                
+                facility_geom_utm = facilities_utm.loc[facility_idx].geometry
+                candidate_positions = []
+                if centroid_tree is not None:
+                    candidate_positions = centroid_tree.query_ball_point((facility_geom_utm.x, facility_geom_utm.y), r=search_radius_m)
+                else:
+                    candidate_positions = list(range(len(centroid_indices)))
+                
+                if not candidate_positions:
+                    continue
+                
+                candidate_centroid_idxs = [centroid_idx_by_pos[pos] for pos in candidate_positions]
+                target_nodes = {
+                    centroid_mapping[idx]
+                    for idx in candidate_centroid_idxs
+                    if idx in centroid_mapping
+                }
+                
+                if not target_nodes:
+                    continue
+                
+                reached, parents = _dijkstra_to_targets(network_graph, facility_node, target_nodes)
+                
+                if not reached:
+                    continue
+                
+                meta = facility_meta[facility_idx]
+                
+                for centroid_node, distance_m in reached.items():
+                    centroid_idx = network_graph.nodes[centroid_node].get('centroid_idx')
+                    if centroid_idx is None:
+                        continue
+                    
+                    path_nodes = _reconstruct_path(centroid_node, parents)
+                    centroid_geom_wgs = centroids_gdf.loc[centroid_idx].geometry
+                    euclidean_distance_km = ((centroid_geom_wgs.x - meta['lon']) ** 2 + (centroid_geom_wgs.y - meta['lat']) ** 2) ** 0.5 * 111.32
+                    
+                    batch_results[centroid_idx].append({
+                        'facility_idx': facility_idx,
+                        'distance_km': distance_m / 1000.0,
+                        'path_nodes': path_nodes,
+                        'path_segments': [],
+                        'total_segments': max(len(path_nodes) - 1, 0),
+                        'facility_type': meta['type'],
+                        'facility_capacity': meta['capacity'],
+                        'facility_lat': meta['lat'],
+                        'facility_lon': meta['lon'],
+                        'gem_id': meta['gem_id'],
+                        'euclidean_distance_km': euclidean_distance_km,
+                        'network_path': path_nodes
+                    })
+            
+            return batch_results
+        
+        # Divide facilities into batches for parallel processing
+        batch_size = max(1, len(facility_items) // MAX_WORKERS)
+        facility_batches = [facility_items[i:i+batch_size] for i in range(0, len(facility_items), batch_size)]
+        
+        # Process facilities in parallel
+        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(facility_batches))) as executor:
+            futures = [executor.submit(process_facility_batch, batch) for batch in facility_batches]
+            
+            for i, future in enumerate(futures):
+                batch_result = future.result()
+                for centroid_idx, distances in batch_result.items():
+                    centroid_results[centroid_idx].extend(distances)
+                
+                if (i + 1) % max(1, len(futures) // 10) == 0 or (i + 1) == len(futures):
+                    facilities_processed = min((i+1) * batch_size, len(facility_items))
+                    print(f"    Processed {facilities_processed}/{len(facility_items)} facilities...")
+    else:
+        # Serial processing for small datasets (avoid threading overhead)
+        for facility_idx, facility_node in facility_items:
+            if facility_node is None:
                 continue
 
-            path_nodes = _reconstruct_path(centroid_node, parents)
-            centroid_geom_wgs = centroids_gdf.loc[centroid_idx].geometry
-            meta = facility_meta[facility_idx]
-            euclidean_distance_km = ((centroid_geom_wgs.x - meta['lon']) ** 2 + (centroid_geom_wgs.y - meta['lat']) ** 2) ** 0.5 * 111.32
+            facility_geom_utm = facilities_utm.loc[facility_idx].geometry
+            candidate_positions = []
+            if centroid_tree is not None:
+                candidate_positions = centroid_tree.query_ball_point((facility_geom_utm.x, facility_geom_utm.y), r=search_radius_m)
+            else:
+                candidate_positions = list(range(len(centroid_indices)))
 
-            centroid_results[centroid_idx].append({
-                'facility_idx': facility_idx,
-                'distance_km': distance_m / 1000.0,
-                'path_nodes': path_nodes,
-                'path_segments': [],
-                'total_segments': max(len(path_nodes) - 1, 0),
-                'facility_type': meta['type'],
-                'facility_capacity': meta['capacity'],
-                'facility_lat': meta['lat'],
-                'facility_lon': meta['lon'],
-                'gem_id': meta['gem_id'],
-                'euclidean_distance_km': euclidean_distance_km,
-                'network_path': path_nodes
-            })
+            if not candidate_positions:
+                continue
+
+            candidate_centroid_idxs = [centroid_idx_by_pos[pos] for pos in candidate_positions]
+            target_nodes = {
+                centroid_mapping[idx]
+                for idx in candidate_centroid_idxs
+                if idx in centroid_mapping
+            }
+
+            if not target_nodes:
+                continue
+
+            reached, parents = _dijkstra_to_targets(network_graph, facility_node, target_nodes)
+
+            if not reached:
+                continue
+
+            for centroid_node, distance_m in reached.items():
+                centroid_idx = network_graph.nodes[centroid_node].get('centroid_idx')
+                if centroid_idx is None:
+                    continue
+
+                path_nodes = _reconstruct_path(centroid_node, parents)
+                centroid_geom_wgs = centroids_gdf.loc[centroid_idx].geometry
+                meta = facility_meta[facility_idx]
+                euclidean_distance_km = ((centroid_geom_wgs.x - meta['lon']) ** 2 + (centroid_geom_wgs.y - meta['lat']) ** 2) ** 0.5 * 111.32
+
+                centroid_results[centroid_idx].append({
+                    'facility_idx': facility_idx,
+                    'distance_km': distance_m / 1000.0,
+                    'path_nodes': path_nodes,
+                    'path_segments': [],
+                    'total_segments': max(len(path_nodes) - 1, 0),
+                    'facility_type': meta['type'],
+                    'facility_capacity': meta['capacity'],
+                    'facility_lat': meta['lat'],
+                    'facility_lon': meta['lon'],
+                    'gem_id': meta['gem_id'],
+                    'euclidean_distance_km': euclidean_distance_km,
+                    'network_path': path_nodes
+                })
 
     results = []
     for centroid_idx in centroids_gdf.index:

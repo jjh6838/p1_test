@@ -46,16 +46,29 @@ conda activate p1_etl
 # ─── Run global combination ──────────────────────────────────
 echo "[INFO] Running global combination at $(date)"
 
+# Option 1: Auto-detect and process all scenarios (recommended)
 python combine_global_results.py \
     --input-dir outputs_per_country \
-    --output outputs_global/global_supply_analysis.gpkg \
     --countries-file countries_list.txt
+
+# The script will:
+# - Auto-detect all scenario subfolders in outputs_per_country/parquet/
+# - Process each scenario: 2030_supply_100%, 2050_supply_100%, etc.
+# - Generate outputs: outputs_global/{scenario}_global.gpkg for each scenario
+
+# Option 2: Process specific scenario only (uncomment if needed)
+# python combine_global_results.py \
+#     --input-dir outputs_per_country \
+#     --output outputs_global/2050_supply_100%_global.gpkg \
+#     --scenario "2050_supply_100%" \
+#     --countries-file countries_list.txt
 
 echo "[INFO] Global combination completed at $(date)"
 echo ""
 echo "=== COMBINATION COMPLETED ==="
 echo "Check outputs_global/ for combined results:"
-echo "  - global_supply_analysis.gpkg (main visualization file)"
+echo "  - {scenario}_global.gpkg (one per scenario)"
+echo "  - global_{layer}.csv (tabular data without geometry)"
 echo "  - logs/combine_results.log (processing log)"
 echo ""
-echo "You can now open global_supply_analysis.gpkg for global visualization!"
+echo "You can now open the GPKG files in QGIS for global visualization!"

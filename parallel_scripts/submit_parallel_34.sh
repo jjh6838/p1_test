@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 34/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: GTM, GUM, GUY, HND, HRV, HTI, HUN, IRL"
+echo "[INFO] Processing 8 countries in this batch: GUY, HND, HRV, HUN, IRL, ISL, ISR, JAM"
 echo "[INFO] Tier: OTHER | Memory: 340G | CPUs: 72 | Time: 12:00:00"
 
 # --- directories ---
@@ -33,22 +33,6 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
-
-echo "[INFO] Processing GTM (OTHER)..."
-$PY process_country_supply.py GTM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GTM completed"
-else
-    echo "[ERROR] GTM failed"
-fi
-
-echo "[INFO] Processing GUM (OTHER)..."
-$PY process_country_supply.py GUM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GUM completed"
-else
-    echo "[ERROR] GUM failed"
-fi
 
 echo "[INFO] Processing GUY (OTHER)..."
 $PY process_country_supply.py GUY --output-dir outputs_per_country
@@ -74,14 +58,6 @@ else
     echo "[ERROR] HRV failed"
 fi
 
-echo "[INFO] Processing HTI (OTHER)..."
-$PY process_country_supply.py HTI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] HTI completed"
-else
-    echo "[ERROR] HTI failed"
-fi
-
 echo "[INFO] Processing HUN (OTHER)..."
 $PY process_country_supply.py HUN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
@@ -96,6 +72,30 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] IRL completed"
 else
     echo "[ERROR] IRL failed"
+fi
+
+echo "[INFO] Processing ISL (OTHER)..."
+$PY process_country_supply.py ISL --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ISL completed"
+else
+    echo "[ERROR] ISL failed"
+fi
+
+echo "[INFO] Processing ISR (OTHER)..."
+$PY process_country_supply.py ISR --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ISR completed"
+else
+    echo "[ERROR] ISR failed"
+fi
+
+echo "[INFO] Processing JAM (OTHER)..."
+$PY process_country_supply.py JAM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] JAM completed"
+else
+    echo "[ERROR] JAM failed"
 fi
 
 echo "[INFO] Batch 34/40 (OTHER) completed at $(date)"
