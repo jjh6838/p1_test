@@ -13,9 +13,8 @@ __pycache__/
 *.pyo
 
 # Output files
+outputs_global/
 outputs_per_country/
-test_outputs/
-test_outputs_single/
 global_supply_analysis.*
 
 # Auto-generated files (users can regenerate)

@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p03_other
+#SBATCH --job-name=p03_t1
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=56
 #SBATCH --output=outputs_global/logs/parallel_03_%j.out
 #SBATCH --error=outputs_global/logs/parallel_03_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 3/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: BLR, BLZ, BMU, BRB, BRN, BTN, CHE, COG"
-echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 3/40 (T1) at $(date)"
+echo "[INFO] Processing 1 countries in this batch: CAN"
+echo "[INFO] Tier: T1 | Memory: 100G | CPUs: 56 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,68 +34,12 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing BLR (OTHER)..."
-$PY process_country_supply.py BLR --output-dir outputs_per_country
+echo "[INFO] Processing CAN (T1)..."
+$PY process_country_supply.py CAN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BLR completed"
+    echo "[SUCCESS] CAN completed"
 else
-    echo "[ERROR] BLR failed"
+    echo "[ERROR] CAN failed"
 fi
 
-echo "[INFO] Processing BLZ (OTHER)..."
-$PY process_country_supply.py BLZ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BLZ completed"
-else
-    echo "[ERROR] BLZ failed"
-fi
-
-echo "[INFO] Processing BMU (OTHER)..."
-$PY process_country_supply.py BMU --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BMU completed"
-else
-    echo "[ERROR] BMU failed"
-fi
-
-echo "[INFO] Processing BRB (OTHER)..."
-$PY process_country_supply.py BRB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BRB completed"
-else
-    echo "[ERROR] BRB failed"
-fi
-
-echo "[INFO] Processing BRN (OTHER)..."
-$PY process_country_supply.py BRN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BRN completed"
-else
-    echo "[ERROR] BRN failed"
-fi
-
-echo "[INFO] Processing BTN (OTHER)..."
-$PY process_country_supply.py BTN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BTN completed"
-else
-    echo "[ERROR] BTN failed"
-fi
-
-echo "[INFO] Processing CHE (OTHER)..."
-$PY process_country_supply.py CHE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] CHE completed"
-else
-    echo "[ERROR] CHE failed"
-fi
-
-echo "[INFO] Processing COG (OTHER)..."
-$PY process_country_supply.py COG --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] COG completed"
-else
-    echo "[ERROR] COG failed"
-fi
-
-echo "[INFO] Batch 3/40 (OTHER) completed at $(date)"
+echo "[INFO] Batch 3/40 (T1) completed at $(date)"

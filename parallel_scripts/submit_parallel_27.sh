@@ -2,7 +2,7 @@
 #SBATCH --job-name=p27_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 27/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: THA, TKM, TUR, TZA"
-echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 2 countries in this batch: ZMB, ZWE"
+echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,20 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing THA (T3)..."
-$PY process_country_supply.py THA --output-dir outputs_per_country
+echo "[INFO] Processing ZMB (T3)..."
+$PY process_country_supply.py ZMB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] THA completed"
+    echo "[SUCCESS] ZMB completed"
 else
-    echo "[ERROR] THA failed"
+    echo "[ERROR] ZMB failed"
 fi
 
-echo "[INFO] Processing TKM (T3)..."
-$PY process_country_supply.py TKM --output-dir outputs_per_country
+echo "[INFO] Processing ZWE (T3)..."
+$PY process_country_supply.py ZWE --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TKM completed"
+    echo "[SUCCESS] ZWE completed"
 else
-    echo "[ERROR] TKM failed"
-fi
-
-echo "[INFO] Processing TUR (T3)..."
-$PY process_country_supply.py TUR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TUR completed"
-else
-    echo "[ERROR] TUR failed"
-fi
-
-echo "[INFO] Processing TZA (T3)..."
-$PY process_country_supply.py TZA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TZA completed"
-else
-    echo "[ERROR] TZA failed"
+    echo "[ERROR] ZWE failed"
 fi
 
 echo "[INFO] Batch 27/40 (T3) completed at $(date)"

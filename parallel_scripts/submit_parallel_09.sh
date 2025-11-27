@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p09_other
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --job-name=p09_t2
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 9/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: LBR, LCA, LKA, LSO, LTU, LUX, LVA, MDA"
-echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 9/40 (T2) at $(date)"
+echo "[INFO] Processing 2 countries in this batch: DZA, IDN"
+echo "[INFO] Tier: T2 | Memory: 100G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,68 +34,20 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing LBR (OTHER)..."
-$PY process_country_supply.py LBR --output-dir outputs_per_country
+echo "[INFO] Processing DZA (T2)..."
+$PY process_country_supply.py DZA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LBR completed"
+    echo "[SUCCESS] DZA completed"
 else
-    echo "[ERROR] LBR failed"
+    echo "[ERROR] DZA failed"
 fi
 
-echo "[INFO] Processing LCA (OTHER)..."
-$PY process_country_supply.py LCA --output-dir outputs_per_country
+echo "[INFO] Processing IDN (T2)..."
+$PY process_country_supply.py IDN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LCA completed"
+    echo "[SUCCESS] IDN completed"
 else
-    echo "[ERROR] LCA failed"
+    echo "[ERROR] IDN failed"
 fi
 
-echo "[INFO] Processing LKA (OTHER)..."
-$PY process_country_supply.py LKA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LKA completed"
-else
-    echo "[ERROR] LKA failed"
-fi
-
-echo "[INFO] Processing LSO (OTHER)..."
-$PY process_country_supply.py LSO --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LSO completed"
-else
-    echo "[ERROR] LSO failed"
-fi
-
-echo "[INFO] Processing LTU (OTHER)..."
-$PY process_country_supply.py LTU --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LTU completed"
-else
-    echo "[ERROR] LTU failed"
-fi
-
-echo "[INFO] Processing LUX (OTHER)..."
-$PY process_country_supply.py LUX --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LUX completed"
-else
-    echo "[ERROR] LUX failed"
-fi
-
-echo "[INFO] Processing LVA (OTHER)..."
-$PY process_country_supply.py LVA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] LVA completed"
-else
-    echo "[ERROR] LVA failed"
-fi
-
-echo "[INFO] Processing MDA (OTHER)..."
-$PY process_country_supply.py MDA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] MDA completed"
-else
-    echo "[ERROR] MDA failed"
-fi
-
-echo "[INFO] Batch 9/40 (OTHER) completed at $(date)"
+echo "[INFO] Batch 9/40 (T2) completed at $(date)"

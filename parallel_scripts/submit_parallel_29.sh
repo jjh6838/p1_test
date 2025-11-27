@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p29_t3
+#SBATCH --job-name=p29_other
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 29/40 (T3) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: ZMB, ZWE"
-echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 29/40 (OTHER) at $(date)"
+echo "[INFO] Processing 8 countries in this batch: BDI, BEL, BEN, BGD, BGR, BHR, BHS, BIH"
+echo "[INFO] Tier: OTHER | Memory: 100G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,20 +34,68 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing ZMB (T3)..."
-$PY process_country_supply.py ZMB --output-dir outputs_per_country
+echo "[INFO] Processing BDI (OTHER)..."
+$PY process_country_supply.py BDI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ZMB completed"
+    echo "[SUCCESS] BDI completed"
 else
-    echo "[ERROR] ZMB failed"
+    echo "[ERROR] BDI failed"
 fi
 
-echo "[INFO] Processing ZWE (T3)..."
-$PY process_country_supply.py ZWE --output-dir outputs_per_country
+echo "[INFO] Processing BEL (OTHER)..."
+$PY process_country_supply.py BEL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ZWE completed"
+    echo "[SUCCESS] BEL completed"
 else
-    echo "[ERROR] ZWE failed"
+    echo "[ERROR] BEL failed"
 fi
 
-echo "[INFO] Batch 29/40 (T3) completed at $(date)"
+echo "[INFO] Processing BEN (OTHER)..."
+$PY process_country_supply.py BEN --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BEN completed"
+else
+    echo "[ERROR] BEN failed"
+fi
+
+echo "[INFO] Processing BGD (OTHER)..."
+$PY process_country_supply.py BGD --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BGD completed"
+else
+    echo "[ERROR] BGD failed"
+fi
+
+echo "[INFO] Processing BGR (OTHER)..."
+$PY process_country_supply.py BGR --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BGR completed"
+else
+    echo "[ERROR] BGR failed"
+fi
+
+echo "[INFO] Processing BHR (OTHER)..."
+$PY process_country_supply.py BHR --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BHR completed"
+else
+    echo "[ERROR] BHR failed"
+fi
+
+echo "[INFO] Processing BHS (OTHER)..."
+$PY process_country_supply.py BHS --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BHS completed"
+else
+    echo "[ERROR] BHS failed"
+fi
+
+echo "[INFO] Processing BIH (OTHER)..."
+$PY process_country_supply.py BIH --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BIH completed"
+else
+    echo "[ERROR] BIH failed"
+fi
+
+echo "[INFO] Batch 29/40 (OTHER) completed at $(date)"

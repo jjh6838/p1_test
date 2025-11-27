@@ -143,16 +143,17 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
     # The goal is to pack jobs efficiently onto nodes. For example, a single node can run one Tier 1 job,
     # two Tier 2 jobs, four Tier 3 jobs, or eight "other" jobs, maximizing the use of its CPUs.
-    # Memory allocation: 128GB for all tiers (many nodes with 100GB+ available)
-    # Partition strategy: Medium (2 days) for largest countries, Short (12h) for smaller ones
-    # CPU count: 40 CPUs for all tiers (safe for all nodes: 16-80 CPUs available)
-    # Cluster Spec as of 11/26/2025: The largest nodes have 112 Cores/CPUs but most nodes have 80;
-    # AND, 5 nodes with 758GB RAM; ~5 nodes with 512GB; ~15 nodes with 300GB; ~45 nodes with 64GB;
+    # Memory allocation: 100GB for all tiers (most nodes have 100GB+ available)
+    # Partition strategy: Short (12h) for Tier 1 and smallest countries, Medium (2 days) for Tier 2
+    # CPU count: Tier 1 uses 56 CPUs on Short partition (56CPUs/480GB nodes), others use 40 CPUs
+    # Cluster Spec as of 11/26/2025: Long nodes 40CPUs/100G, Medium nodes 40CPUs/100G, Short nodes 40CPUs/100GB or 56CPUs/480G
+    # Check culster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
+
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "64G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},   # 2 days for largest countries (USA, CHN, IND, etc.)
-        "t2": {"max_countries_per_script": 2, "mem": "64G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},  # 2 days for large countries
-        "t3": {"max_countries_per_script": 4, "mem": "64G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # 12 hours for medium countries
-        "other": {"max_countries_per_script": 8, "mem": "64G", "cpus": 40, "time": "12:00:00", "partition": "Short"}  # 12 hours for small countries
+        "t1": {"max_countries_per_script": 1, "mem": "100G", "cpus": 56, "time": "12:00:00", "partition": "Short"},   # 12 hours for largest countries (USA, CHN, IND, etc.) on high-memory Short nodes
+        "t2": {"max_countries_per_script": 2, "mem": "100G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},  # 2 days for large countries
+        "t3": {"max_countries_per_script": 4, "mem": "100G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # 12 hours for medium countries
+        "other": {"max_countries_per_script": 8, "mem": "100G", "cpus": 40, "time": "12:00:00", "partition": "Short"}  # 12 hours for small countries
     }
     
     
@@ -193,8 +194,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     all_batches = []
     script_counter = 1
     
-    # Process each tier - REVERSED ORDER: smallest countries first for faster initial results
-    for tier in ["other", "t3", "t2", "t1"]:
+    # Process each tier - start with largest countries first
+    for tier in ["t1", "t2", "t3", "other"]:
         tier_countries = countries_by_tier[tier]
         if not tier_countries:
             continue
@@ -227,7 +228,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # If we have more tiers but reached script limit, add remaining countries to existing scripts
     if script_counter <= num_scripts:
-        for tier in ["other", "t3", "t2", "t1"]:
+        for tier in ["t1", "t2", "t3", "other"]:
             tier_countries = countries_by_tier[tier]
             if tier_countries and not any(batch["tier"] == tier for batch in all_batches):
                 # Add remaining countries to the last batch
@@ -408,6 +409,46 @@ fi
     workflow_file.chmod(0o755)
     
     print(f"Created {workflow_file} for combining results")
+    
+    # Create individual script runner for re-running specific scripts
+    single_script = """#!/bin/bash
+# Run a single parallel script by number (e.g., ./submit_one.sh 06)
+# Usage: ./submit_one.sh <script_number>
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <script_number>"
+    echo "Example: $0 06"
+    echo ""
+    echo "Available scripts:"
+    ls -1 parallel_scripts/submit_parallel_*.sh | sed 's/.*submit_parallel_/  /' | sed 's/.sh//'
+    exit 1
+fi
+
+SCRIPT_NUM=$(printf "%02d" $1)
+SCRIPT_FILE="parallel_scripts/submit_parallel_${SCRIPT_NUM}.sh"
+
+if [ ! -f "$SCRIPT_FILE" ]; then
+    echo "Error: Script not found: $SCRIPT_FILE"
+    echo ""
+    echo "Available scripts:"
+    ls -1 parallel_scripts/submit_parallel_*.sh | sed 's/.*submit_parallel_/  /' | sed 's/.sh//'
+    exit 1
+fi
+
+echo "[INFO] Submitting script ${SCRIPT_NUM}..."
+sbatch "$SCRIPT_FILE"
+
+echo ""
+echo "Monitor with:"
+echo "  squeue -u \\$USER"
+echo "  watch -n 60 'squeue -u \\$USER'"
+"""
+    
+    single_file = Path("submit_one.sh")
+    single_file.write_text(single_script, encoding='utf-8')
+    single_file.chmod(0o755)
+    
+    print(f"Created {single_file} for submitting individual scripts")
     
     print(f"\nTotal resource allocation:")
     

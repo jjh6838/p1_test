@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p14_other
+#SBATCH --job-name=p14_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 14/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: TGO, TJK, TLS, TON, TTO, TUN, TWN, UGA"
-echo "[INFO] Tier: OTHER | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 14/40 (T3) at $(date)"
+echo "[INFO] Processing 4 countries in this batch: AFG, AGO, BFA, BOL"
+echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,68 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing TGO (OTHER)..."
-$PY process_country_supply.py TGO --output-dir outputs_per_country
+echo "[INFO] Processing AFG (T3)..."
+$PY process_country_supply.py AFG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TGO completed"
+    echo "[SUCCESS] AFG completed"
 else
-    echo "[ERROR] TGO failed"
+    echo "[ERROR] AFG failed"
 fi
 
-echo "[INFO] Processing TJK (OTHER)..."
-$PY process_country_supply.py TJK --output-dir outputs_per_country
+echo "[INFO] Processing AGO (T3)..."
+$PY process_country_supply.py AGO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TJK completed"
+    echo "[SUCCESS] AGO completed"
 else
-    echo "[ERROR] TJK failed"
+    echo "[ERROR] AGO failed"
 fi
 
-echo "[INFO] Processing TLS (OTHER)..."
-$PY process_country_supply.py TLS --output-dir outputs_per_country
+echo "[INFO] Processing BFA (T3)..."
+$PY process_country_supply.py BFA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TLS completed"
+    echo "[SUCCESS] BFA completed"
 else
-    echo "[ERROR] TLS failed"
+    echo "[ERROR] BFA failed"
 fi
 
-echo "[INFO] Processing TON (OTHER)..."
-$PY process_country_supply.py TON --output-dir outputs_per_country
+echo "[INFO] Processing BOL (T3)..."
+$PY process_country_supply.py BOL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TON completed"
+    echo "[SUCCESS] BOL completed"
 else
-    echo "[ERROR] TON failed"
+    echo "[ERROR] BOL failed"
 fi
 
-echo "[INFO] Processing TTO (OTHER)..."
-$PY process_country_supply.py TTO --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TTO completed"
-else
-    echo "[ERROR] TTO failed"
-fi
-
-echo "[INFO] Processing TUN (OTHER)..."
-$PY process_country_supply.py TUN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TUN completed"
-else
-    echo "[ERROR] TUN failed"
-fi
-
-echo "[INFO] Processing TWN (OTHER)..."
-$PY process_country_supply.py TWN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TWN completed"
-else
-    echo "[ERROR] TWN failed"
-fi
-
-echo "[INFO] Processing UGA (OTHER)..."
-$PY process_country_supply.py UGA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] UGA completed"
-else
-    echo "[ERROR] UGA failed"
-fi
-
-echo "[INFO] Batch 14/40 (OTHER) completed at $(date)"
+echo "[INFO] Batch 14/40 (T3) completed at $(date)"

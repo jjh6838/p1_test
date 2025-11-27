@@ -16,8 +16,8 @@ Process all countries via 40 parallel SLURM jobs (cluster) or locally with autom
 python get_countries.py --create-parallel
 
 # 2) Fix line endings & make executable (Linux/cluster)
-sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
-chmod +x submit_all_parallel.sh parallel_scripts/*.sh
+sed -i 's/\r$//' submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
+chmod +x submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
 
 # 3) Submit all 40 parallel jobs (immediate submission, returns to prompt)
 ./submit_all_parallel.sh
@@ -31,7 +31,8 @@ sbatch submit_workflow.sh
 ```
 
 **Key Files:**
-- `submit_all_parallel.sh` - Submits all 40 jobs in waves of 8 (respects per-user limits)
+- `submit_all_parallel.sh` - Submits all 40 jobs immediately (SLURM manages queue)
+- `submit_one.sh` - Submit a single script for re-running or testing (e.g., `./submit_one.sh 06`)
 - `parallel_scripts/submit_parallel_01.sh` through `submit_parallel_40.sh` - Individual job scripts
 - `submit_workflow.sh` - Combination step (runs after parallel jobs complete)
 
@@ -74,22 +75,30 @@ python combine_global_results.py --input-dir outputs_per_country
   - No active monitoring or wave management needed
   - Script exits after submission, jobs continue running on cluster
 
+### **Individual Script Submission**
+- **`submit_one.sh`** - Submit a single parallel script by number
+  - Usage: `./submit_one.sh 06` (submits script 06)
+  - Useful for re-running failed jobs or testing specific country batches
+  - Lists available scripts if run without arguments
+  - Example: `./submit_one.sh 12` submits `parallel_scripts/submit_parallel_12.sh`
+
 ### **Individual Job Scripts** (`parallel_scripts/submit_parallel_*.sh`)
 40 scripts with tiered country allocation (smallest first):
 
 | Script Range | Countries/Job | Country Tier | Execution Order | Examples |
 |--------------|---------------|--------------|-----------------|----------|
-| `01-XX` | 8 | Other (Smallest) | 1st | Island nations, small countries |
-| `XX-YY` | 4 | Tier 3 (Medium) | 2nd | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM, etc. |
-| `YY-ZZ` | 2 | Tier 2 (Large) | 3rd | ARG+KAZ, DZA+MEX, IDN+SDN, etc. |
-| `ZZ-40` | 1 | Tier 1 (Largest) | Last | USA, CHN, IND, RUS, BRA, CAN, AUS |
+| `01-07` | 1 | Tier 1 (Largest) | 1st | USA, CHN, IND, RUS, BRA, CAN, AUS |
+| `08-18` | 2 | Tier 2 (Large) | 2nd | ARG+KAZ, DZA+MEX, IDN+SDN, etc. |
+| `19-XX` | 4 | Tier 3 (Medium) | 3rd | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM, etc. |
+| `XX-40` | 8 | Other (Smallest) | Last | Island nations, small countries |
 
 **Each script:**
-- Requests 40 CPUs
-- Memory: 64GB for all tiers (abundant on cluster, ~45 nodes available)
+- CPUs: **Tier 1** uses 56 CPUs (high-memory Short nodes); **Tier 2/3/Other** use 40 CPUs
+- Memory: 100GB for all tiers
 - Partition assignment by tier:
-  - **Other + Tier 3** (~60% of scripts): Short partition, 12h time limit
-  - **Tier 2 + Tier 1** (~40% of scripts): Medium partition, 48h time limit
+  - **Tier 1** (~17% of scripts): Short partition, 12h time limit, 56 CPUs on high-memory nodes
+  - **Tier 2** (~28% of scripts): Medium partition, 48h time limit, 40 CPUs
+  - **Tier 3 + Other** (~55% of scripts): Short partition, 12h time limit, 40 CPUs
 - Activates conda environment: `conda activate p1_etl`
 - Processes assigned countries: `python process_country_supply.py {ISO3}`
 - Outputs to: `outputs_per_country/parquet/{scenario}/{layer}_{ISO3}.parquet`
@@ -98,8 +107,8 @@ python combine_global_results.py --input-dir outputs_per_country
 ### **Combination Script**
 - **`submit_workflow.sh`** - Combines all country results into global outputs
   - **When to run**: After all 40 parallel jobs complete
-  - **Resources**: 72 CPUs, 1152GB RAM
-  - **Partition**: Short (12h sufficient for combination)
+  - **Resources**: 40 CPUs, 100GB RAM
+  - **Partition**: Medium (12h sufficient for combination)
   - **What it does**: Runs `combine_global_results.py` to merge parquet files
   - **Auto-detects scenarios**: Scans `outputs_per_country/parquet/` for scenario subfolders
   - **Outputs**: `outputs_global/{scenario}_global.gpkg` (one per scenario)
@@ -170,35 +179,36 @@ NUMEXPR_NUM_THREADS = allocated_cpus
 ### **Tiered Resource Allocation**
 
 Resource allocation based on actual cluster specs (as of 11/26/2025):
-- **CPUs**: Largest nodes have 112 cores, most have 80 cores
-- **Memory**: 5 nodes with 758GB, ~5 nodes with 512GB, ~15 nodes with 300GB, ~45 nodes with 64GB
+- **Long partition**: 40 CPUs/100GB nodes
+- **Medium partition**: 40 CPUs/100GB nodes  
+- **Short partition**: 40 CPUs/100GB nodes OR 56 CPUs/480GB nodes (high-memory)
 
 | Country Tier | CPUs/Job | Memory | Partition | Time Limit | Countries/Job | Execution Order | Examples |
 |--------------|----------|--------|-----------|------------|---------------|-----------------|----------|
-| **Other** | 40 | 64GB | Short | 12h | 8 | 1st (scripts 01-XX) | Small island nations |
-| **Tier 3** | 40 | 64GB | Short | 12h | 4 | 2nd (scripts XX-YY) | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM |
-| **Tier 2** | 40 | 64GB | Medium | 48h (2 days) | 2 | 3rd (scripts YY-ZZ) | ARG+KAZ, DZA+MEX, IDN+SDN, LBY+SAU |
-| **Tier 1** | 40 | 64GB | Medium | 48h (2 days) | 1 | Last (scripts ZZ-40) | USA, CHN, IND, RUS, BRA, CAN, AUS |
+| **Tier 1** | 56 | 100GB | Short | 12h | 1 | 1st (scripts 01-07) | USA, CHN, IND, RUS, BRA, CAN, AUS |
+| **Tier 2** | 40 | 100GB | Medium | 48h (2 days) | 2 | 2nd (scripts 08-18) | ARG+KAZ, DZA+MEX, IDN+SDN, LBY+SAU |
+| **Tier 3** | 40 | 100GB | Short | 12h | 4 | 3rd (scripts 19-XX) | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM |
+| **Other** | 40 | 100GB | Short | 12h | 8 | Last (scripts XX-40) | Small island nations |
 
 **Execution Strategy:**
-- **Smallest countries first**: Provides early results, faster feedback on workflow health
-- **Progressive scaling**: Moves from simple to complex countries
-- **Resource optimization**: 40 CPUs works on all nodes (safe for 16-112 CPU range); 64GB for all countries (abundant, ~45 nodes available)
+- **Largest countries first**: Tier 1 uses high-memory Short nodes (56 CPUs/480GB) for fastest processing
+- **Progressive scaling**: Moves from largest to smallest countries
+- **Resource optimization**: 100GB memory standard across all tiers; Tier 1 leverages 56 CPUs on Short partition
 
 **Partition Strategy:**
-- **Short** (many slots): Handles ~60% of countries (small/medium), completes in hours, uses 64GB
-- **Medium** (some slots): Used for large/largest countries needing up to 2 days, uses 64GB
+- **Short** (many slots): Used for Tier 1 (largest, 12h on 56 CPUs/480GB nodes), Tier 3, and Other countries (~65% of jobs)
+- **Medium** (some slots): Used for Tier 2 (large countries needing up to 2 days, 100GB) (~35% of jobs)
 
 **Combination Step:**
-- Memory: 64GB
+- Memory: 100GB
 - Partition: Medium (12h is sufficient for combination)
 - CPUs: 40
 
-### **Expected Performance (40-core allocation)**
-- **Small countries** (Short partition): <5 minutes, completes within 12h
-- **Tier 3 countries** (Short partition): 5-15 minutes, completes well within 12h
-- **Tier 2 countries** (Medium partition): 15-25 minutes, 2 days available
-- **Tier 1 countries** (Medium partition): 20-35 minutes, 2 days available
+### **Expected Performance**
+- **Tier 1 countries** (Short partition, 56 CPUs): 15-30 minutes, 12h available, fastest processing on high-memory nodes
+- **Tier 2 countries** (Medium partition, 40 CPUs): 15-25 minutes, 2 days available
+- **Tier 3 countries** (Short partition, 40 CPUs): 5-15 minutes, completes well within 12h
+- **Small countries** (Short partition, 40 CPUs): <5 minutes, completes within 12h
 
 **Laptop Performance (16 cores):**
 - Small: <10 minutes
@@ -321,18 +331,20 @@ conda activate p1_etl
 python get_countries.py --create-parallel
 # Creates: parallel_scripts/submit_parallel_01.sh through 40.sh
 #          submit_all_parallel.sh (master script)
+#          submit_one.sh (test or fix script)
 
 # ═══════════════════════════════════════════════════════════
 # STEP 3: Transfer to cluster & fix line endings
 # ═══════════════════════════════════════════════════════════
 # On cluster:
-sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
-chmod +x submit_all_parallel.sh parallel_scripts/*.sh
+sed -i 's/\r$//' submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
+chmod +x submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
 
 # ═══════════════════════════════════════════════════════════
 # STEP 4: Submit all parallel jobs (40 jobs, ~8-12 hours)
 # ═══════════════════════════════════════════════════════════
 ./submit_all_parallel.sh
+./submit_one.sh 06 #In order to excute "parallel_scripts/submit_parallel_06.sh"
 
 # Monitor:
 squeue -u $USER
@@ -422,11 +434,12 @@ Each country output contains:
 ├── get_countries.py                   # Generates parallel scripts
 ├── combine_global_results.py          # Combines outputs
 ├── submit_all_parallel.sh             # Master SLURM submission
+├── submit_one.sh                      # Submit single script (e.g., ./submit_one.sh 06)
 ├── submit_workflow.sh                 # Combination step submission
 ├── Snakefile                          # Optional Snakemake workflow (combination only)
 ├── parallel_scripts/
-│   ├── submit_parallel_01.sh          # Job 1: AUS (Tier 1)
-│   ├── submit_parallel_02.sh          # Job 2: BRA (Tier 1)
+│   ├── submit_parallel_01.sh          # Job 1: USA (Tier 1)
+│   ├── submit_parallel_02.sh          # Job 2: CHN (Tier 1)
 │   └── ...submit_parallel_40.sh       # Job 40: Small countries
 ├── outputs_per_country/
 │   └── parquet/

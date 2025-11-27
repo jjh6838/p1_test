@@ -2,7 +2,7 @@
 #SBATCH --job-name=p26_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 26/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: PRY, SOM, SWE, TCD"
-echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 4 countries in this batch: UKR, UZB, YEM, ZAF"
+echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing PRY (T3)..."
-$PY process_country_supply.py PRY --output-dir outputs_per_country
+echo "[INFO] Processing UKR (T3)..."
+$PY process_country_supply.py UKR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PRY completed"
+    echo "[SUCCESS] UKR completed"
 else
-    echo "[ERROR] PRY failed"
+    echo "[ERROR] UKR failed"
 fi
 
-echo "[INFO] Processing SOM (T3)..."
-$PY process_country_supply.py SOM --output-dir outputs_per_country
+echo "[INFO] Processing UZB (T3)..."
+$PY process_country_supply.py UZB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SOM completed"
+    echo "[SUCCESS] UZB completed"
 else
-    echo "[ERROR] SOM failed"
+    echo "[ERROR] UZB failed"
 fi
 
-echo "[INFO] Processing SWE (T3)..."
-$PY process_country_supply.py SWE --output-dir outputs_per_country
+echo "[INFO] Processing YEM (T3)..."
+$PY process_country_supply.py YEM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SWE completed"
+    echo "[SUCCESS] YEM completed"
 else
-    echo "[ERROR] SWE failed"
+    echo "[ERROR] YEM failed"
 fi
 
-echo "[INFO] Processing TCD (T3)..."
-$PY process_country_supply.py TCD --output-dir outputs_per_country
+echo "[INFO] Processing ZAF (T3)..."
+$PY process_country_supply.py ZAF --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] TCD completed"
+    echo "[SUCCESS] ZAF completed"
 else
-    echo "[ERROR] TCD failed"
+    echo "[ERROR] ZAF failed"
 fi
 
 echo "[INFO] Batch 26/40 (T3) completed at $(date)"

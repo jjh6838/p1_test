@@ -2,7 +2,7 @@
 #SBATCH --job-name=p20_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=100G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 20/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: GAB, GBR, GIN, IRQ"
-echo "[INFO] Tier: T3 | Memory: 64G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 4 countries in this batch: MAR, MDG, MLI, MMR"
+echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,36 +34,36 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing GAB (T3)..."
-$PY process_country_supply.py GAB --output-dir outputs_per_country
+echo "[INFO] Processing MAR (T3)..."
+$PY process_country_supply.py MAR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GAB completed"
+    echo "[SUCCESS] MAR completed"
 else
-    echo "[ERROR] GAB failed"
+    echo "[ERROR] MAR failed"
 fi
 
-echo "[INFO] Processing GBR (T3)..."
-$PY process_country_supply.py GBR --output-dir outputs_per_country
+echo "[INFO] Processing MDG (T3)..."
+$PY process_country_supply.py MDG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GBR completed"
+    echo "[SUCCESS] MDG completed"
 else
-    echo "[ERROR] GBR failed"
+    echo "[ERROR] MDG failed"
 fi
 
-echo "[INFO] Processing GIN (T3)..."
-$PY process_country_supply.py GIN --output-dir outputs_per_country
+echo "[INFO] Processing MLI (T3)..."
+$PY process_country_supply.py MLI --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GIN completed"
+    echo "[SUCCESS] MLI completed"
 else
-    echo "[ERROR] GIN failed"
+    echo "[ERROR] MLI failed"
 fi
 
-echo "[INFO] Processing IRQ (T3)..."
-$PY process_country_supply.py IRQ --output-dir outputs_per_country
+echo "[INFO] Processing MMR (T3)..."
+$PY process_country_supply.py MMR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] IRQ completed"
+    echo "[SUCCESS] MMR completed"
 else
-    echo "[ERROR] IRQ failed"
+    echo "[ERROR] MMR failed"
 fi
 
 echo "[INFO] Batch 20/40 (T3) completed at $(date)"
