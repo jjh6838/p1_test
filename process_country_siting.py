@@ -85,9 +85,9 @@ def load_facilities(country_iso3, scenario_suffix, output_dir="outputs_per_count
 
 
 def calculate_num_clusters(facilities_gdf, settlements_gdf):
-    """Calculate optimal number of clusters based on supply-demand matching."""
+    """Calculate number of clusters based on remaining capacity by energy type (capacity-driven approach)."""
     print("\n" + "="*60)
-    print("CALCULATING NUMBER OF CLUSTERS FROM SUPPLY-DEMAND BALANCE")
+    print("CALCULATING CLUSTERS FROM REMAINING CAPACITY (CAPACITY-DRIVEN)")
     print("="*60)
     
     # Filter facilities with remaining capacity
@@ -97,56 +97,87 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf):
     
     if len(facilities_with_capacity) == 0:
         print("No facilities with remaining capacity found!")
-        return 1, 0, 0
+        return 1, {}, 0, 0
     
-    # Calculate total remaining supply
-    total_remaining_supply = facilities_with_capacity['remaining_mwh'].sum()
+    # Calculate remaining supply by energy type - THIS IS THE PRIMARY DRIVER
+    remaining_by_type = facilities_with_capacity.groupby('Grouped_Type')['remaining_mwh'].sum().to_dict()
+    total_remaining_supply = sum(remaining_by_type.values())
     
-    # Calculate demand gap for settlements (Total_Demand - supply_received_mwh)
+    # Calculate demand gap for settlements
     demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
     if demand_col in settlements_gdf.columns:
         settlements_gdf['demand_gap_mwh'] = settlements_gdf[demand_col] - settlements_gdf['supply_received_mwh']
     else:
-        # Fallback: use supply_received_mwh as proxy for unmet demand
         settlements_gdf['demand_gap_mwh'] = settlements_gdf['supply_received_mwh']
     
-    # Ensure demand_gap is non-negative
     settlements_gdf['demand_gap_mwh'] = settlements_gdf['demand_gap_mwh'].clip(lower=0)
     total_demand_gap = settlements_gdf['demand_gap_mwh'].sum()
     
-    print(f"\nSupply-Demand Analysis:")
-    print(f"  Total remaining supply: {total_remaining_supply:,.2f} MWh")
-    print(f"  Total demand gap: {total_demand_gap:,.2f} MWh")
-    print(f"  Supply/Demand ratio: {total_remaining_supply/total_demand_gap:.2f}x" if total_demand_gap > 0 else "  Supply/Demand ratio: N/A (no demand gap)")
+    print(f"\nRemaining capacity by energy type (PRIMARY DRIVER):")
+    for energy_type, remaining_mwh in sorted(remaining_by_type.items()):
+        print(f"  {energy_type}: {remaining_mwh:,.2f} MWh")
     
-    # Count facilities by Grouped_Type
-    cluster_counts = facilities_with_capacity.groupby('Grouped_Type').size().to_dict()
+    print(f"\nTotal remaining supply: {total_remaining_supply:,.2f} MWh")
+    print(f"Total demand gap: {total_demand_gap:,.2f} MWh")
+    print(f"Supply/Demand ratio: {total_remaining_supply/total_demand_gap:.2f}x" if total_demand_gap > 0 else "Supply/Demand ratio: N/A (no demand gap)")
     
-    print(f"\nFacilities by energy type:")
-    total_facilities = 0
-    for energy_type, count in sorted(cluster_counts.items()):
-        print(f"  {energy_type}: {count} facilities")
-        total_facilities += count
+    # Calculate average total_mwh by energy type for the entire facilities dataset
+    avg_total_mwh_by_type = facilities_gdf.groupby('Grouped_Type')['total_mwh'].mean().to_dict()
     
-    # Calculate optimal number of clusters
-    # Use number of facilities as base, but ensure it's reasonable given settlements
+    print(f"\nAverage total_mwh by energy type (for cluster range calculation):")
+    for energy_type, avg_mwh in sorted(avg_total_mwh_by_type.items()):
+        print(f"  {energy_type}: {avg_mwh:,.2f} MWh")
+    
+    # Calculate clusters per energy type with min/max range
+    # min = 1 cluster per facility (baseline)
+    # max = remaining_mwh / avg_total_mwh if remaining_mwh > avg_total_mwh
+    clusters_per_type = {}
+    total_clusters = 0
+    
+    print(f"\nCluster allocation by energy type (with range based on capacity):")
+    for energy_type in remaining_by_type.keys():
+        # Get facilities of this type with remaining capacity
+        type_facilities = facilities_with_capacity[facilities_with_capacity['Grouped_Type'] == energy_type]
+        
+        min_clusters_for_type = len(type_facilities)  # 1 per facility (baseline)
+        
+        # Calculate max clusters: if any facility has remaining_mwh > avg_total_mwh, allow splitting
+        avg_total_mwh = avg_total_mwh_by_type.get(energy_type, 0)
+        max_clusters_for_type = min_clusters_for_type
+        
+        if avg_total_mwh > 0:
+            for _, facility in type_facilities.iterrows():
+                facility_remaining = facility['remaining_mwh']
+                if facility_remaining > avg_total_mwh:
+                    # This facility can be split into multiple clusters
+                    additional_clusters = int(facility_remaining / avg_total_mwh) - 1
+                    max_clusters_for_type += additional_clusters
+        
+        clusters_per_type[energy_type] = max_clusters_for_type
+        total_clusters += max_clusters_for_type
+        
+        remaining_mwh = remaining_by_type[energy_type]
+        capacity_per_cluster = remaining_mwh / max_clusters_for_type if max_clusters_for_type > 0 else 0
+        print(f"  {energy_type}: {len(type_facilities)} facilities → {min_clusters_for_type}-{max_clusters_for_type} clusters ({remaining_mwh:,.2f} MWh → {capacity_per_cluster:,.2f} MWh per cluster)")
+    
+    # Ensure we don't exceed number of available settlements
     n_settlements = len(settlements_gdf)
-    n_clusters = min(total_facilities, n_settlements)
+    if total_clusters > n_settlements:
+        print(f"\nWarning: Calculated {total_clusters} clusters exceeds {n_settlements} settlements.")
+        print(f"  Scaling down clusters proportionally...")
+        scale_factor = n_settlements / total_clusters
+        for energy_type in clusters_per_type:
+            clusters_per_type[energy_type] = max(1, int(clusters_per_type[energy_type] * scale_factor))
+        total_clusters = sum(clusters_per_type.values())
+        print(f"  Adjusted total clusters: {total_clusters}")
     
-    # If we have more supply than demand, we might need fewer clusters
-    # If we have less supply than demand, use all facilities
-    if total_demand_gap > 0:
-        supply_demand_ratio = total_remaining_supply / total_demand_gap
-        if supply_demand_ratio > 2:
-            # Excess supply - reduce clusters slightly
-            n_clusters = max(1, int(n_clusters * 0.7))
+    print(f"\nFinal cluster configuration:")
+    print(f"  Total clusters across all types: {total_clusters}")
+    for energy_type, n_clusters in sorted(clusters_per_type.items()):
+        capacity_per_cluster = remaining_by_type[energy_type] / n_clusters
+        print(f"  {energy_type}: {n_clusters} clusters × {capacity_per_cluster:,.2f} MWh = {remaining_by_type[energy_type]:,.2f} MWh")
     
-    print(f"\nCluster calculation:")
-    print(f"  Total facilities with capacity: {total_facilities}")
-    print(f"  Total settlements to cluster: {n_settlements}")
-    print(f"  Optimal number of clusters: {n_clusters}")
-    
-    return n_clusters, total_remaining_supply, total_demand_gap
+    return total_clusters, clusters_per_type, total_remaining_supply, total_demand_gap
 
 
 def filter_settlements(centroids_gdf):
@@ -188,9 +219,9 @@ def filter_settlements(centroids_gdf):
 
 
 def cluster_settlements(settlements_gdf, n_clusters):
-    """Step 2: Cluster unfilled settlements using K-means based on spatial proximity."""
+    """Cluster settlements using weighted K-means based on demand_gap_mwh."""
     print("\n" + "="*60)
-    print("STEP 2: CLUSTER SETTLEMENTS")
+    print("STEP 2: CLUSTER SETTLEMENTS (WEIGHTED K-MEANS)")
     print("="*60)
     
     if len(settlements_gdf) == 0:
@@ -204,82 +235,174 @@ def cluster_settlements(settlements_gdf, n_clusters):
     # Ensure n_clusters doesn't exceed number of settlements
     n_clusters = min(n_clusters, len(settlements_gdf))
     
+    print(f"\nClustering parameters:")
+    print(f"  Algorithm: Weighted K-means")
+    print(f"  Weight metric: demand_gap_mwh")
+    print(f"  Number of clusters: {n_clusters}")
+    print(f"  Total settlements: {len(settlements_gdf)}")
+    
     coords = np.column_stack([
         settlements_gdf.geometry.x,
         settlements_gdf.geometry.y
     ])
     
-    print(f"\nClustering parameters:")
-    print(f"  Algorithm: K-means")
-    print(f"  Number of clusters: {n_clusters}")
-    print(f"  Total settlements: {len(settlements_gdf)}")
+    # Use demand_gap_mwh as sample weights for clustering
+    weights = settlements_gdf['demand_gap_mwh'].values
+    if weights.sum() > 0:
+        weights = weights / weights.sum()  # Normalize
+    else:
+        weights = np.ones(len(weights)) / len(weights)  # Equal weights if no demand gap
+    
+    print(f"\nDemand gap statistics:")
+    print(f"  Total demand gap: {settlements_gdf['demand_gap_mwh'].sum():,.2f} MWh")
+    print(f"  Average demand gap: {settlements_gdf['demand_gap_mwh'].mean():,.2f} MWh")
+    print(f"  Max demand gap: {settlements_gdf['demand_gap_mwh'].max():,.2f} MWh")
     
     kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    cluster_labels = kmeans.fit_predict(coords)
+    cluster_labels = kmeans.fit_predict(coords, sample_weight=weights)
     
     settlements_gdf['cluster_id'] = cluster_labels
     
     print(f"\nClustering results:")
-    print(f"  Total clusters: {n_clusters}")
-    
     cluster_sizes = settlements_gdf.groupby('cluster_id').size().sort_values(ascending=False)
-    print(f"\nCluster size distribution:")
     print(f"  Largest cluster: {cluster_sizes.iloc[0] if len(cluster_sizes) > 0 else 0} settlements")
     print(f"  Smallest cluster: {cluster_sizes.iloc[-1] if len(cluster_sizes) > 0 else 0} settlements")
     print(f"  Average cluster size: {cluster_sizes.mean():.1f} settlements")
     print(f"  Median cluster size: {cluster_sizes.median():.1f} settlements")
     
+    # Report total demand gap per cluster
+    cluster_demand = settlements_gdf.groupby('cluster_id')['demand_gap_mwh'].sum().sort_values(ascending=False)
+    print(f"\nDemand gap by cluster:")
+    print(f"  Highest demand cluster: {cluster_demand.iloc[0]:,.2f} MWh")
+    print(f"  Lowest demand cluster: {cluster_demand.iloc[-1]:,.2f} MWh")
+    print(f"  Average per cluster: {cluster_demand.mean():,.2f} MWh")
+    
     return settlements_gdf
 
 
-def calculate_cluster_centers(settlements_gdf):
-    """Calculate cluster center points weighted by demand gap."""
-    cluster_centers = []
+def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type, remaining_by_type):
+    """Match settlements to facilities such that cluster demand_gap_mwh equals facility remaining_mwh."""
     
-    for cluster_id in settlements_gdf['cluster_id'].unique():
-        cluster_points = settlements_gdf[settlements_gdf['cluster_id'] == cluster_id]
+    if len(settlements_gdf) == 0:
+        return gpd.GeoDataFrame(columns=['cluster_id', 'geometry', 'num_settlements', 
+                                        'Grouped_Type', 'remaining_mwh', 'center_lon', 'center_lat'],
+                               crs=COMMON_CRS)
+    
+    # Get facilities with remaining capacity
+    facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy().reset_index(drop=True)
+    
+    print(f"\nMatching settlements to facilities (demand_gap_mwh = remaining_mwh):")
+    print(f"  Total settlements: {len(settlements_gdf)}")
+    print(f"  Total facilities with capacity: {len(facilities_with_capacity)}")
+    print(f"  Total demand gap: {settlements_gdf['demand_gap_mwh'].sum():,.2f} MWh")
+    print(f"  Total remaining capacity: {facilities_with_capacity['remaining_mwh'].sum():,.2f} MWh")
+    
+    # Create clusters by iteratively assigning settlements to facilities
+    # Strategy: For each facility, find settlements that match its remaining_mwh
+    
+    settlements_remaining = settlements_gdf.copy()
+    settlements_remaining['assigned_cluster'] = -1
+    
+    cluster_info = []
+    cluster_id = 0
+    
+    # Sort facilities by remaining capacity (largest first) for better matching
+    facilities_sorted = facilities_with_capacity.sort_values('remaining_mwh', ascending=False)
+    
+    for fac_idx, facility in facilities_sorted.iterrows():
+        if len(settlements_remaining[settlements_remaining['assigned_cluster'] == -1]) == 0:
+            break
         
-        # Use demand_gap_mwh as the primary metric
-        if 'demand_gap_mwh' in cluster_points.columns:
-            total_demand = cluster_points['demand_gap_mwh'].sum()
-            weights = cluster_points['demand_gap_mwh'].values
-        else:
-            demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
-            if demand_col in cluster_points.columns:
-                total_demand = cluster_points[demand_col].sum()
-                weights = cluster_points[demand_col].values
-            else:
-                total_demand = cluster_points['supply_received_mwh'].sum()
-                weights = cluster_points['supply_received_mwh'].values
+        facility_capacity = facility['remaining_mwh']
+        facility_type = facility['Grouped_Type']
+        facility_geom = facility.geometry
         
+        # Find unassigned settlements
+        unassigned = settlements_remaining[settlements_remaining['assigned_cluster'] == -1].copy()
+        
+        if len(unassigned) == 0:
+            continue
+        
+        # Calculate distance from facility to each unassigned settlement
+        unassigned['distance_to_facility'] = unassigned.geometry.apply(lambda g: g.distance(facility_geom))
+        
+        # Sort by distance (nearest first)
+        unassigned = unassigned.sort_values('distance_to_facility')
+        
+        # Greedily assign settlements until we match the facility's capacity
+        cumulative_demand = 0
+        selected_settlements = []
+        
+        for idx, settlement in unassigned.iterrows():
+            settlement_demand = settlement['demand_gap_mwh']
+            
+            # Check if adding this settlement would exceed capacity
+            if cumulative_demand + settlement_demand <= facility_capacity * 1.1:  # Allow 10% tolerance
+                selected_settlements.append(idx)
+                cumulative_demand += settlement_demand
+                
+                # Stop if we've matched the capacity (within tolerance)
+                if abs(cumulative_demand - facility_capacity) / facility_capacity < 0.05:  # Within 5%
+                    break
+        
+        # If no settlements selected but unassigned exist, take at least one
+        if len(selected_settlements) == 0 and len(unassigned) > 0:
+            selected_settlements.append(unassigned.index[0])
+            cumulative_demand = unassigned.iloc[0]['demand_gap_mwh']
+        
+        # Assign these settlements to this cluster
+        settlements_remaining.loc[selected_settlements, 'assigned_cluster'] = cluster_id
+        
+        # Calculate weighted cluster center
+        cluster_settlements = settlements_remaining.loc[selected_settlements]
+        weights = cluster_settlements['demand_gap_mwh'].values
         if weights.sum() > 0:
             weights = weights / weights.sum()
         else:
             weights = np.ones(len(weights)) / len(weights)
         
-        center_lon = np.average(cluster_points.geometry.x, weights=weights)
-        center_lat = np.average(cluster_points.geometry.y, weights=weights)
+        center_lon = np.average(cluster_settlements.geometry.x, weights=weights)
+        center_lat = np.average(cluster_settlements.geometry.y, weights=weights)
         
-        cluster_centers.append({
+        cluster_info.append({
             'cluster_id': cluster_id,
             'geometry': Point(center_lon, center_lat),
-            'num_settlements': len(cluster_points),
-            'total_demand_gap_mwh': total_demand,
+            'num_settlements': len(selected_settlements),
+            'demand_gap_mwh': cumulative_demand,
+            'Grouped_Type': facility_type,
+            'remaining_mwh': facility_capacity,  # Use facility's actual remaining capacity
             'center_lon': center_lon,
-            'center_lat': center_lat
+            'center_lat': center_lat,
+            'matched_facility_id': fac_idx,
+            'capacity_match_ratio': cumulative_demand / facility_capacity if facility_capacity > 0 else 0
         })
+        
+        cluster_id += 1
     
-    if not cluster_centers:
-        return gpd.GeoDataFrame(columns=['cluster_id', 'geometry', 'num_settlements', 
-                                        'total_demand_gap_mwh', 'center_lon', 'center_lat'],
-                               crs=COMMON_CRS)
+    # Handle any remaining unassigned settlements
+    unassigned_final = settlements_remaining[settlements_remaining['assigned_cluster'] == -1]
+    if len(unassigned_final) > 0:
+        print(f"\nWarning: {len(unassigned_final)} settlements could not be matched to facilities")
+        print(f"  Unassigned demand: {unassigned_final['demand_gap_mwh'].sum():,.2f} MWh")
     
-    cluster_centers_gdf = gpd.GeoDataFrame(cluster_centers, crs=COMMON_CRS)
+    # Update settlements_gdf with cluster assignments
+    settlements_gdf['cluster_id'] = settlements_remaining['assigned_cluster'].values
     
-    print(f"\nCluster centers summary:")
-    print(f"  Total clusters: {len(cluster_centers_gdf)}")
-    print(f"  Total demand gap across clusters: {cluster_centers_gdf['total_demand_gap_mwh'].sum():,.2f} MWh")
-    print(f"  Average demand gap per cluster: {cluster_centers_gdf['total_demand_gap_mwh'].mean():,.2f} MWh")
+    cluster_centers_gdf = gpd.GeoDataFrame(cluster_info, crs=COMMON_CRS)
+    
+    print(f"\nCluster matching results:")
+    print(f"  Total clusters created: {len(cluster_centers_gdf)}")
+    print(f"  Total demand in clusters: {cluster_centers_gdf['demand_gap_mwh'].sum():,.2f} MWh")
+    print(f"  Total capacity allocated: {cluster_centers_gdf['remaining_mwh'].sum():,.2f} MWh")
+    print(f"  Average capacity match ratio: {cluster_centers_gdf['capacity_match_ratio'].mean():.2%}")
+    
+    print(f"\nCapacity matching by energy type:")
+    for energy_type in sorted(cluster_centers_gdf['Grouped_Type'].unique()):
+        type_clusters = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
+        type_demand = type_clusters['demand_gap_mwh'].sum()
+        type_capacity = type_clusters['remaining_mwh'].sum()
+        match_ratio = type_demand / type_capacity if type_capacity > 0 else 0
+        print(f"  {energy_type}: {len(type_clusters)} clusters, demand: {type_demand:,.2f} MWh, capacity: {type_capacity:,.2f} MWh (ratio: {match_ratio:.2%})")
     
     return cluster_centers_gdf
 
@@ -509,11 +632,18 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
             print("\nNo settlements to process!")
             return None
         
-        # Calculate optimal number of clusters based on supply-demand balance
-        n_clusters, total_supply, total_demand = calculate_num_clusters(facilities_gdf, settlements_gdf)
+        # Calculate clusters based on remaining capacity (capacity-driven approach)
+        n_clusters, clusters_per_type, total_supply, total_demand = calculate_num_clusters(facilities_gdf, settlements_gdf)
         
+        # Calculate remaining capacity by energy type for allocation
+        facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy()
+        remaining_by_type = facilities_with_capacity.groupby('Grouped_Type')['remaining_mwh'].sum().to_dict()
+        
+        # Cluster settlements using weighted K-means (weighted by demand_gap_mwh)
         settlements_gdf = cluster_settlements(settlements_gdf, n_clusters)
-        cluster_centers_gdf = calculate_cluster_centers(settlements_gdf)
+        
+        # Match each cluster to a specific facility considering demand gap + energy type + remaining capacity
+        cluster_centers_gdf = calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type, remaining_by_type)
         cluster_centers_gdf = compute_grid_distances(cluster_centers_gdf, grid_lines_gdf)
         networks_gdf = build_remote_networks(settlements_gdf, cluster_centers_gdf)
         

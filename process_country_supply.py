@@ -88,7 +88,7 @@ GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching r
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
-SUPPLY_FACTOR = 0.8  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False

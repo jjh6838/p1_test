@@ -250,8 +250,32 @@ def combine_global_results(input_dir="outputs_per_country", output_file="outputs
     
     logger.info(f"Processing Parquet files, Output format: {output_format}")
     
-    # Define layers to combine
-    layers_to_combine = ['centroids', 'facilities', 'grid_lines', 'polylines']
+    # Define core layers to combine
+    core_layers = ['centroids', 'facilities', 'grid_lines', 'polylines']
+    
+    # Define additional siting layers
+    siting_layers = ['siting_clusters', 'siting_settlements', 'siting_networks']
+    
+    # Check if any siting layers exist
+    has_siting_layers = False
+    for siting_layer in siting_layers:
+        siting_files = find_parquet_files(input_dir, siting_layer, scenario_subfolder)
+        if siting_files:
+            has_siting_layers = True
+            break
+    
+    # Determine layers to combine and update output filename if needed
+    if has_siting_layers:
+        layers_to_combine = core_layers + siting_layers
+        # Update output filename to add _v2 before extension
+        if output_format == 'gpkg':
+            output_path_obj = Path(output_file)
+            output_file = str(output_path_obj.parent / f"{output_path_obj.stem}_v2{output_path_obj.suffix}")
+            output_path = Path(output_file)
+            logger.info(f"Siting layers detected - output will be saved as: {output_file}")
+    else:
+        layers_to_combine = core_layers
+        output_path = Path(output_file)
     
     # Combine each layer
     combined_layers = {}
