@@ -131,29 +131,28 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # Define tiers based on country size/complexity. This is determined empirically based on
     # the computational intensity (number of centroids, grid lines) of each country.
-    TIER_1 = {"USA", "CHN", "IND", "RUS", "BRA", "CAN", "AUS"}  # Largest countries, require maximum resources.
-    TIER_2 = {"ARG", "KAZ", "DZA", "COD", "SAU", "MEX", "IDN", "SDN", "LBY", "IRN", "MNG"}  # Large countries.
-    TIER_3 = {
-        "KOR", "PER", "TCD", "NER", "AGO", "MLI", "ZAF", "COL", "ETH", "BOL", "MRT", "EGY", "TZA", "NGA",
-        "VEN", "PAK", "TUR", "CHL", "ZMB", "MMR", "AFG", "SOM", "CAF", "UKR", "MDG", "BWA", "KEN", "FRA",
-        "YEM", "THA", "ESP", "TKM", "CMR", "PNG", "SWE", "UZB", "MAR", "IRQ", "PRY", "ZWE", "JPN", "DEU",
-        "NOR", "MYS", "CIV", "POL", "OMN", "ITA", "PHL", "ECU", "BFA", "NZL", "GAB", "GIN", "GBR"
-    }
+    TIER_1 = {"CHN", "USA"}  # Largest countries, require maximum resources.
+    TIER_2 = {"IND", "CAN", "MEX"}  # Large countries.
+    TIER_3 = {"RUS", "BRA", "AUS", "ARG", "KAZ", "SAU", "IDN", "IRN", "ZAF", "EGY"}  # Medium-large countries.
+    TIER_4 = {
+        "TUR", "NGA", "COL", "PAK", "PER", "DZA", "VEN", "UKR", "ETH", "PHL", "MLI", "TCD", "SDN", "FRA",
+        "SWE", "NOR", "DEU", "IRQ", "MMR", "JPN"
+    }  # Medium countries.
     
     # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
-    # The goal is to pack jobs efficiently onto nodes. For example, a single node can run one Tier 1 job,
-    # two Tier 2 jobs, four Tier 3 jobs, or eight "other" jobs, maximizing the use of its CPUs.
-    # Memory allocation: 100GB for all tiers (most nodes have 100GB+ available)
-    # Partition strategy: Short (12h) for Tier 1 and smallest countries, Medium (2 days) for Tier 2
-    # CPU count: Tier 1 uses 56 CPUs on Short partition (56CPUs/480GB nodes), others use 40 CPUs
+    # The goal is to pack jobs efficiently onto nodes based on computational requirements.
+    # Memory allocation: Tier 1 uses 200GB (high-memory nodes), others use 90GB
+    # Partition strategy: Interactive (48h) for Tier 1, Medium (48h) for Tier 2, Short (12h) for Tiers 3-5
+    # CPU count: Tier 1 uses 56 CPUs, others use 40 CPUs
     # Cluster Spec as of 11/26/2025: Long nodes 40CPUs/100G, Medium nodes 40CPUs/100G, Short nodes 40CPUs/100GB or 56CPUs/480G
     # Check culster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "100G", "cpus": 56, "time": "12:00:00", "partition": "Short"},   # 12 hours for largest countries (USA, CHN, IND, etc.) on high-memory Short nodes
-        "t2": {"max_countries_per_script": 2, "mem": "100G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},  # 2 days for large countries
-        "t3": {"max_countries_per_script": 4, "mem": "100G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # 12 hours for medium countries
-        "other": {"max_countries_per_script": 8, "mem": "100G", "cpus": 40, "time": "12:00:00", "partition": "Short"}  # 12 hours for small countries
+        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 56, "time": "48:00:00", "partition": "Interactive"},  # CHN, USA - one country per script
+        "t2": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},     # IND, CAN, MEX - one country per script
+        "t3": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # RUS, BRA, AUS, etc. - one country per script
+        "t4": {"max_countries_per_script": 2, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
+        "t5": {"max_countries_per_script": 11, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
     }
     
     
@@ -165,15 +164,18 @@ def create_parallel_scripts(num_scripts=40, countries=None):
             return "t2"
         elif country in TIER_3:
             return "t3"
+        elif country in TIER_4:
+            return "t4"
         else:
-            return "other"
+            return "t5"
     
     # Sort countries by tier (biggest first)
     countries_by_tier = {
         "t1": [c for c in countries if get_tier(c) == "t1"],
         "t2": [c for c in countries if get_tier(c) == "t2"],
         "t3": [c for c in countries if get_tier(c) == "t3"],
-        "other": [c for c in countries if get_tier(c) == "other"]
+        "t4": [c for c in countries if get_tier(c) == "t4"],
+        "t5": [c for c in countries if get_tier(c) == "t5"]
     }
     
     print("Countries by tier:")
@@ -195,7 +197,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     script_counter = 1
     
     # Process each tier - start with largest countries first
-    for tier in ["t1", "t2", "t3", "other"]:
+    for tier in ["t1", "t2", "t3", "t4", "t5"]:
         tier_countries = countries_by_tier[tier]
         if not tier_countries:
             continue
@@ -203,32 +205,62 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         config = TIER_CONFIG[tier]
         max_per_script = config["max_countries_per_script"]
         
-        # Create batches for this tier
-        for i in range(0, len(tier_countries), max_per_script):
-            batch = tier_countries[i:i + max_per_script]
-            batch_info = {
-                "countries": batch,
-                "tier": tier,
-                "config": config,
-                "script_num": script_counter
-            }
-            all_batches.append(batch_info)
-            script_counter += 1
+        # For Tier 5, distribute evenly to avoid overloading the last script
+        if tier == "t5" and len(tier_countries) > max_per_script:
+            # Calculate optimal batch size to distribute evenly
+            scripts_available = num_scripts - script_counter + 1
+            num_batches = min(scripts_available, (len(tier_countries) + max_per_script - 1) // max_per_script)
             
-            # Stop if we reach the max number of scripts
-            if script_counter > num_scripts:
-                # If we have too many batches, combine remaining into last script
-                remaining_countries = tier_countries[i + max_per_script:]
-                if remaining_countries:
-                    all_batches[-1]["countries"].extend(remaining_countries)
-                break
+            if num_batches > 0:
+                # Distribute countries as evenly as possible
+                countries_per_batch = len(tier_countries) // num_batches
+                extra_countries = len(tier_countries) % num_batches
+                
+                tier_countries_copy = tier_countries.copy()
+                for batch_idx in range(num_batches):
+                    # First 'extra_countries' batches get one extra country
+                    batch_size = countries_per_batch + (1 if batch_idx < extra_countries else 0)
+                    batch = tier_countries_copy[:batch_size]
+                    tier_countries_copy = tier_countries_copy[batch_size:]
+                    
+                    batch_info = {
+                        "countries": batch,
+                        "tier": tier,
+                        "config": config,
+                        "script_num": script_counter
+                    }
+                    all_batches.append(batch_info)
+                    script_counter += 1
+                    
+                    if script_counter > num_scripts:
+                        break
+        else:
+            # For other tiers, use standard batching
+            for i in range(0, len(tier_countries), max_per_script):
+                batch = tier_countries[i:i + max_per_script]
+                batch_info = {
+                    "countries": batch,
+                    "tier": tier,
+                    "config": config,
+                    "script_num": script_counter
+                }
+                all_batches.append(batch_info)
+                script_counter += 1
+                
+                # Stop if we reach the max number of scripts
+                if script_counter > num_scripts:
+                    # If we have too many batches, combine remaining into last script
+                    remaining_countries = tier_countries[i + max_per_script:]
+                    if remaining_countries:
+                        all_batches[-1]["countries"].extend(remaining_countries)
+                    break
         
         if script_counter > num_scripts:
             break
     
     # If we have more tiers but reached script limit, add remaining countries to existing scripts
     if script_counter <= num_scripts:
-        for tier in ["t1", "t2", "t3", "other"]:
+        for tier in ["t1", "t2", "t3", "t4", "t5"]:
             tier_countries = countries_by_tier[tier]
             if tier_countries and not any(batch["tier"] == tier for batch in all_batches):
                 # Add remaining countries to the last batch
@@ -341,11 +373,12 @@ echo ""
 echo "Check completion:"
 echo "  find outputs_per_country/parquet -name '*.parquet' | wc -l"
 echo ""
-echo "Resource allocation summary (tiered partition strategy - smallest first):"
-echo "  Other (smallest):  8 countries/script | Short partition (12h)      | {TIER_CONFIG['other']['mem']}, {TIER_CONFIG['other']['cpus']} CPUs"
-echo "  Tier 3 (medium):   4 countries/script | Short partition (12h)      | {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
-echo "  Tier 2 (large):    2 countries/script | Medium partition (48h/2d)  | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"  
-echo "  Tier 1 (largest):  1 country/script  | Medium partition (48h/2d)  | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
+echo "Resource allocation summary (tiered partition strategy):"
+echo "  Tier 1 (CHN, USA):              1 country/script  | Interactive partition (48h) | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
+echo "  Tier 2 (IND, CAN, MEX):         1 country/script  | Medium partition (48h)      | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"
+echo "  Tier 3 (RUS, BRA, AUS, etc.):   1 country/script  | Short partition (12h)       | {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
+echo "  Tier 4 (TUR, NGA, COL, etc.):   2 countries/script | Short partition (12h)       | {TIER_CONFIG['t4']['mem']}, {TIER_CONFIG['t4']['cpus']} CPUs"
+echo "  Tier 5 (all others):           11 countries/script | Short partition (12h)       | {TIER_CONFIG['t5']['mem']}, {TIER_CONFIG['t5']['cpus']} CPUs"
 """
     
     master_file = Path("submit_all_parallel.sh")
