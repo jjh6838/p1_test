@@ -4,9 +4,6 @@ bigdata_gridfinder/
 bigdata_jrc_pop/
 bigdata_jrc_pop2030/
 
-# Snakemake temporary files
-.snakemake/
-
 # Python cache
 __pycache__/
 *.pyc
@@ -15,13 +12,6 @@ __pycache__/
 # Output files
 outputs_global/
 outputs_per_country/
-global_supply_analysis.*
-
-# Auto-generated files (users can regenerate)
-# countries_list.txt
-
-# Conda environment files (optional)
-# *.log
 
 # OS files
 .DS_Store
