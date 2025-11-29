@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing JOR (OTHER)..."
-$PY process_country_supply.py JOR --output-dir outputs_per_country
+$PY process_country_supply.py JOR --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] JOR completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing KGZ (OTHER)..."
-$PY process_country_supply.py KGZ --output-dir outputs_per_country
+$PY process_country_supply.py KGZ --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KGZ completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing KHM (OTHER)..."
-$PY process_country_supply.py KHM --output-dir outputs_per_country
+$PY process_country_supply.py KHM --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KHM completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing KIR (OTHER)..."
-$PY process_country_supply.py KIR --output-dir outputs_per_country
+$PY process_country_supply.py KIR --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KIR completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing KNA (OTHER)..."
-$PY process_country_supply.py KNA --output-dir outputs_per_country
+$PY process_country_supply.py KNA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KNA completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing KWT (OTHER)..."
-$PY process_country_supply.py KWT --output-dir outputs_per_country
+$PY process_country_supply.py KWT --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] KWT completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing LAO (OTHER)..."
-$PY process_country_supply.py LAO --output-dir outputs_per_country
+$PY process_country_supply.py LAO --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LAO completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing LBN (OTHER)..."
-$PY process_country_supply.py LBN --output-dir outputs_per_country
+$PY process_country_supply.py LBN --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LBN completed"
 else

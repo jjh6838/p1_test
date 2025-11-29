@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing BWA (T3)..."
-$PY process_country_supply.py BWA --output-dir outputs_per_country
+$PY process_country_supply.py BWA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BWA completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing CAF (T3)..."
-$PY process_country_supply.py CAF --output-dir outputs_per_country
+$PY process_country_supply.py CAF --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CAF completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing CHL (T3)..."
-$PY process_country_supply.py CHL --output-dir outputs_per_country
+$PY process_country_supply.py CHL --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CHL completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing CIV (T3)..."
-$PY process_country_supply.py CIV --output-dir outputs_per_country
+$PY process_country_supply.py CIV --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] CIV completed"
 else

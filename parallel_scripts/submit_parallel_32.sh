@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing DNK (OTHER)..."
-$PY process_country_supply.py DNK --output-dir outputs_per_country
+$PY process_country_supply.py DNK --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] DNK completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing DOM (OTHER)..."
-$PY process_country_supply.py DOM --output-dir outputs_per_country
+$PY process_country_supply.py DOM --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] DOM completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing ERI (OTHER)..."
-$PY process_country_supply.py ERI --output-dir outputs_per_country
+$PY process_country_supply.py ERI --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ERI completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing EST (OTHER)..."
-$PY process_country_supply.py EST --output-dir outputs_per_country
+$PY process_country_supply.py EST --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] EST completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing FIN (OTHER)..."
-$PY process_country_supply.py FIN --output-dir outputs_per_country
+$PY process_country_supply.py FIN --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] FIN completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing FJI (OTHER)..."
-$PY process_country_supply.py FJI --output-dir outputs_per_country
+$PY process_country_supply.py FJI --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] FJI completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing FRO (OTHER)..."
-$PY process_country_supply.py FRO --output-dir outputs_per_country
+$PY process_country_supply.py FRO --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] FRO completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing GEO (OTHER)..."
-$PY process_country_supply.py GEO --output-dir outputs_per_country
+$PY process_country_supply.py GEO --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GEO completed"
 else

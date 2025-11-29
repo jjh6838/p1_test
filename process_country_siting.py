@@ -540,8 +540,6 @@ def main():
     parser.add_argument('country_iso3', help='ISO3 country code')
     parser.add_argument('--output-dir', default='outputs_per_country', 
                        help='Output directory')
-    parser.add_argument('--supply-factor', type=float, default=None,
-                       help='Single supply factor (0.0-1.0, e.g., 0.8 for 80%%)')
     parser.add_argument('--run-all-scenarios', action='store_true',
                        help='Run all supply scenarios: 100%%, 90%%, 80%%, 70%%, 60%%')
     
@@ -554,7 +552,7 @@ def main():
         print("RUNNING ALL SUPPLY SCENARIOS: 100%, 90%, 80%, 70%, 60%")
         print("="*60)
     else:
-        supply_factors = [args.supply_factor if args.supply_factor is not None else 1.0]
+        supply_factors = [1.0]  # Default: 100% supply scenario
     
     global SUPPLY_FACTOR
     all_success = True

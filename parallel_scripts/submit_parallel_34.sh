@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing GUY (OTHER)..."
-$PY process_country_supply.py GUY --output-dir outputs_per_country
+$PY process_country_supply.py GUY --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GUY completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing HND (OTHER)..."
-$PY process_country_supply.py HND --output-dir outputs_per_country
+$PY process_country_supply.py HND --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] HND completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing HRV (OTHER)..."
-$PY process_country_supply.py HRV --output-dir outputs_per_country
+$PY process_country_supply.py HRV --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] HRV completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing HUN (OTHER)..."
-$PY process_country_supply.py HUN --output-dir outputs_per_country
+$PY process_country_supply.py HUN --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] HUN completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing IRL (OTHER)..."
-$PY process_country_supply.py IRL --output-dir outputs_per_country
+$PY process_country_supply.py IRL --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] IRL completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing ISL (OTHER)..."
-$PY process_country_supply.py ISL --output-dir outputs_per_country
+$PY process_country_supply.py ISL --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ISL completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing ISR (OTHER)..."
-$PY process_country_supply.py ISR --output-dir outputs_per_country
+$PY process_country_supply.py ISR --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] ISR completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing JAM (OTHER)..."
-$PY process_country_supply.py JAM --output-dir outputs_per_country
+$PY process_country_supply.py JAM --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] JAM completed"
 else

@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing GHA (OTHER)..."
-$PY process_country_supply.py GHA --output-dir outputs_per_country
+$PY process_country_supply.py GHA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GHA completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing GMB (OTHER)..."
-$PY process_country_supply.py GMB --output-dir outputs_per_country
+$PY process_country_supply.py GMB --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GMB completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing GNB (OTHER)..."
-$PY process_country_supply.py GNB --output-dir outputs_per_country
+$PY process_country_supply.py GNB --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GNB completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing GNQ (OTHER)..."
-$PY process_country_supply.py GNQ --output-dir outputs_per_country
+$PY process_country_supply.py GNQ --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GNQ completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing GRC (OTHER)..."
-$PY process_country_supply.py GRC --output-dir outputs_per_country
+$PY process_country_supply.py GRC --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GRC completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing GRL (OTHER)..."
-$PY process_country_supply.py GRL --output-dir outputs_per_country
+$PY process_country_supply.py GRL --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GRL completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing GTM (OTHER)..."
-$PY process_country_supply.py GTM --output-dir outputs_per_country
+$PY process_country_supply.py GTM --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GTM completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing GUM (OTHER)..."
-$PY process_country_supply.py GUM --output-dir outputs_per_country
+$PY process_country_supply.py GUM --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] GUM completed"
 else

@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing LBR (OTHER)..."
-$PY process_country_supply.py LBR --output-dir outputs_per_country
+$PY process_country_supply.py LBR --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LBR completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing LCA (OTHER)..."
-$PY process_country_supply.py LCA --output-dir outputs_per_country
+$PY process_country_supply.py LCA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LCA completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing LKA (OTHER)..."
-$PY process_country_supply.py LKA --output-dir outputs_per_country
+$PY process_country_supply.py LKA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LKA completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing LSO (OTHER)..."
-$PY process_country_supply.py LSO --output-dir outputs_per_country
+$PY process_country_supply.py LSO --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LSO completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing LTU (OTHER)..."
-$PY process_country_supply.py LTU --output-dir outputs_per_country
+$PY process_country_supply.py LTU --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LTU completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing LUX (OTHER)..."
-$PY process_country_supply.py LUX --output-dir outputs_per_country
+$PY process_country_supply.py LUX --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LUX completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing LVA (OTHER)..."
-$PY process_country_supply.py LVA --output-dir outputs_per_country
+$PY process_country_supply.py LVA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] LVA completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing MDA (OTHER)..."
-$PY process_country_supply.py MDA --output-dir outputs_per_country
+$PY process_country_supply.py MDA --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MDA completed"
 else

@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing MDV (OTHER)..."
-$PY process_country_supply.py MDV --output-dir outputs_per_country
+$PY process_country_supply.py MDV --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MDV completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing MKD (OTHER)..."
-$PY process_country_supply.py MKD --output-dir outputs_per_country
+$PY process_country_supply.py MKD --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MKD completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing MLT (OTHER)..."
-$PY process_country_supply.py MLT --output-dir outputs_per_country
+$PY process_country_supply.py MLT --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MLT completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing MNE (OTHER)..."
-$PY process_country_supply.py MNE --output-dir outputs_per_country
+$PY process_country_supply.py MNE --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MNE completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing MOZ (OTHER)..."
-$PY process_country_supply.py MOZ --output-dir outputs_per_country
+$PY process_country_supply.py MOZ --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MOZ completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing MUS (OTHER)..."
-$PY process_country_supply.py MUS --output-dir outputs_per_country
+$PY process_country_supply.py MUS --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MUS completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing MWI (OTHER)..."
-$PY process_country_supply.py MWI --output-dir outputs_per_country
+$PY process_country_supply.py MWI --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] MWI completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing NAM (OTHER)..."
-$PY process_country_supply.py NAM --output-dir outputs_per_country
+$PY process_country_supply.py NAM --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] NAM completed"
 else

@@ -88,12 +88,12 @@ GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching r
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
-SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+SUPPLY_FACTOR = 0.8  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False
 
-def print_configuration_banner(test_mode=False):
+def print_configuration_banner(test_mode=False, scenario_suffix=""):
     """Emit configuration details once per process."""
     global _CONFIG_PRINTED
     if _CONFIG_PRINTED:
@@ -104,6 +104,8 @@ def print_configuration_banner(test_mode=False):
     print("=" * 60)
     print(f"Common CRS: {COMMON_CRS}")
     print(f"Analysis Year: {ANALYSIS_YEAR}")
+    if scenario_suffix:
+        print(f"Scenario: {scenario_suffix}")
     print(f"Demand Types: {', '.join(DEMAND_TYPES)}")
     print(
         f"Population Aggregation Factor: {POP_AGGREGATION_FACTOR}x (native 30\" → {POP_AGGREGATION_FACTOR*30}\")"
@@ -377,6 +379,12 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
     # Demand_centroid = Population_Share_centroid × National_Demand_year
     demand_col = f"Total_Demand_{year}_centroid"
     centroids_gdf[demand_col] = population_share * total_national_demand
+    
+    # Also allocate demand by energy type to each centroid
+    for demand_type in demand_types:
+        type_demand_col = f"{demand_type}_{year}_centroid"
+        type_national_demand = demand_breakdown.get(demand_type, 0)
+        centroids_gdf[type_demand_col] = population_share * type_national_demand
     
     print(f"  Allocated {total_national_demand:,.0f} MWh across {len(centroids_gdf)} centroids")
     print(f"  Per capita demand: {total_national_demand/total_country_population_year:.2f} MWh/person/year")
@@ -1414,7 +1422,12 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     
     # Facilities layer - energy generation facilities with capacity, production, and allocation data
     if not facilities_gdf.empty:
-        facilities_simplified = facilities_gdf[['geometry', 'GEM unit/phase ID', 'Grouped_Type', 'Latitude', 'Longitude', 'Adjusted_Capacity_MW', 'total_mwh']].copy()
+        # Select base columns, including available_total_mwh if it exists
+        base_columns = ['geometry', 'GEM unit/phase ID', 'Grouped_Type', 'Latitude', 'Longitude', 'Adjusted_Capacity_MW', 'total_mwh']
+        if 'available_total_mwh' in facilities_gdf.columns:
+            base_columns.append('available_total_mwh')
+        
+        facilities_simplified = facilities_gdf[base_columns].copy()
         facilities_simplified['GID_0'] = country_iso3
         
         # total_mwh is now directly available from the facility data
@@ -1427,7 +1440,7 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
         else:
             # Default values if no allocation data available
             facilities_simplified['supplied_mwh'] = 0.0
-            facilities_simplified['remaining_mwh'] = facilities_simplified['total_mwh']
+            facilities_simplified['remaining_mwh'] = facilities_simplified.get('available_total_mwh', facilities_simplified['total_mwh'])
         
         cols = ['geometry', 'GID_0'] + [c for c in facilities_simplified.columns if c not in ['geometry', 'GID_0']]
         layers['facilities'] = facilities_simplified[cols]
@@ -1439,12 +1452,97 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     
     return layers
 
+def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facility_supplied, facility_remaining, demand_col, total_available_supply):
+    """Create summary statistics DataFrame for Excel export."""
+    
+    # Configuration parameters
+    config_params = [
+        ('Country', country_iso3),
+        ('Analysis_Year', ANALYSIS_YEAR),
+        ('Common_CRS', COMMON_CRS),
+        ('Demand_Types', ', '.join(DEMAND_TYPES)),
+        ('Population_Aggregation_Factor', f'{POP_AGGREGATION_FACTOR}x (native 30" → {POP_AGGREGATION_FACTOR*30}")'),
+        ('Grid_Stitch_Distance_km', GRID_STITCH_DISTANCE_KM),
+        ('Node_Snap_Tolerance_m', NODE_SNAP_TOLERANCE_M),
+        ('Max_Connection_Distance_km', MAX_CONNECTION_DISTANCE_M / 1000),
+        ('Facility_Search_Radius_km', FACILITY_SEARCH_RADIUS_KM),
+        ('Supply_Factor_Pct', SUPPLY_FACTOR * 100)
+    ]
+    
+    # Calculate demand and supply statistics
+    centroid_demand_mwh = centroids_gdf[demand_col].sum()
+    # Sum of adjusted facility capacity (available_total_mwh = total_mwh * SUPPLY_FACTOR)
+    total_available_supply_mwh = total_available_supply
+    # Sum of actually supplied to centroids
+    total_supplied_mwh = sum(facility_supplied.values()) if facility_supplied else 0
+    total_unsupplied_mwh = sum(facility_remaining.values()) if facility_remaining else 0
+    demand_coverage_pct = (total_supplied_mwh / centroid_demand_mwh * 100) if centroid_demand_mwh > 0 else 0
+    additional_needed_mwh = max(0, centroid_demand_mwh - total_supplied_mwh)
+    
+    # Calculate centroid status counts
+    status_counts = centroids_gdf['supply_status'].value_counts()
+    total_centroids = len(centroids_gdf)
+    centroids_filled = status_counts.get('Filled', 0)
+    centroids_partially = status_counts.get('Partially Filled', 0)
+    centroids_not_filled = status_counts.get('Not Filled', 0)
+    centroids_no_demand = status_counts.get('No Demand', 0)
+    
+    # Demand and supply summary
+    demand_supply_params = [
+        ('Country', country_iso3),
+        ('Analysis_Year', ANALYSIS_YEAR),
+        ('Centroid_Demand_MWh', centroid_demand_mwh),
+        ('Available_Supply_MWh (adjusted by factor)', total_available_supply_mwh),
+        ('Actually_Supplied_MWh', total_supplied_mwh),
+        ('Unsupplied_MWh', total_unsupplied_mwh),
+        ('Demand_Coverage_Pct', demand_coverage_pct),
+        ('Additional_Needed_MWh', additional_needed_mwh),
+        ('Centroids_Filled', centroids_filled),
+        ('Centroids_Partially_Filled', centroids_partially),
+        ('Centroids_Not_Filled', centroids_not_filled),
+        ('Centroids_No_Demand', centroids_no_demand),
+        ('Total_Centroids', total_centroids),
+        ('Pct_Filled', (centroids_filled / total_centroids * 100) if total_centroids > 0 else 0),
+        ('Pct_Partially_Filled', (centroids_partially / total_centroids * 100) if total_centroids > 0 else 0),
+        ('Pct_Not_Filled', (centroids_not_filled / total_centroids * 100) if total_centroids > 0 else 0),
+        ('Pct_No_Demand', (centroids_no_demand / total_centroids * 100) if total_centroids > 0 else 0),
+        ('Supply_Factor', SUPPLY_FACTOR)
+    ]
+    
+    # Calculate by energy type
+    energy_type_params = []
+    if not facilities_gdf.empty and facility_supplied:
+        for energy_type in DEMAND_TYPES:
+            facilities_of_type = facilities_gdf[facilities_gdf['Grouped_Type'] == energy_type]
+            # Total_MWh_{type} = sum of available_total_mwh (adjusted by factor)
+            if 'available_total_mwh' in facilities_of_type.columns:
+                total_mwh = sum(fac.get('available_total_mwh', 0) or 0 for _, fac in facilities_of_type.iterrows())
+            else:
+                # Fallback if column doesn't exist yet
+                total_mwh = sum((fac.get('total_mwh', 0) or 0) * SUPPLY_FACTOR for _, fac in facilities_of_type.iterrows())
+            # Supplied_MWh_{type} = sum of actually supplied (from network analysis)
+            supplied_mwh = sum(facility_supplied.get(idx, 0) for idx in facilities_of_type.index)
+            
+            energy_type_params.append((f'Total_MWh_{energy_type}', total_mwh))
+            energy_type_params.append((f'Supplied_MWh_{energy_type}', supplied_mwh))
+    
+    # Combine all parameters
+    all_params = config_params + demand_supply_params + energy_type_params
+    
+    # Create DataFrame
+    summary_df = pd.DataFrame(all_params, columns=['Parameter', 'Value'])
+    
+    return summary_df
+
 def process_country_supply(country_iso3, output_dir="outputs_per_country", test_mode=False):
     """Main function to process supply analysis for a single country, orchestrating all steps."""
     # Clear path cache for each country
-    global path_cache
+    global path_cache, _CONFIG_PRINTED
     path_cache = {}
-    print_configuration_banner(test_mode)
+    _CONFIG_PRINTED = False  # Reset to allow banner to print for each scenario
+    
+    scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
+    print_configuration_banner(test_mode, scenario_suffix)
     
     print(f"\nProcessing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
     total_start = time.time()
@@ -1493,31 +1591,68 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 centroid_facility_distances = calculate_facility_distances(centroids_gdf, facilities_gdf, network_graph)
             
             # Initialize facility remaining capacities (MWh/year) and track supplied amounts
-            # SUPPLY_FACTOR determines what % of total demand is available as supply
-            # This available supply is distributed proportionally across facilities by their capacity share
+            # SUPPLY_FACTOR determines what % of demand is available as supply
+            # Each facility's total_mwh is based on its proportional share of ENERGY-TYPE-SPECIFIC demand
             demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
             total_demand = centroids_gdf[demand_col].sum()
-            total_available_supply = total_demand * SUPPLY_FACTOR  # e.g., 60% of demand
             
-            # Calculate total facility capacity to get proportional shares
-            total_facility_capacity = sum((facility.get('total_mwh', 0) or 0) for _, facility in facilities_gdf.iterrows())
-            
+            # Calculate type-specific allocations using dictionaries to preserve index order
             facility_remaining = {}
             facility_supplied = {}
-            for idx, facility in facilities_gdf.iterrows():
-                facility_capacity = facility.get('total_mwh', 0) or 0
-                # Each facility gets a proportional share of the available supply
-                if total_facility_capacity > 0:
-                    facility_share = facility_capacity / total_facility_capacity
-                    allocated_supply = total_available_supply * facility_share
+            new_total_mwh_dict = {}
+            new_available_total_mwh_dict = {}
+            
+            for energy_type in DEMAND_TYPES:
+                # Get demand for this energy type
+                type_demand_col = f"{energy_type}_{ANALYSIS_YEAR}_centroid"
+                if type_demand_col in centroids_gdf.columns:
+                    type_demand = centroids_gdf[type_demand_col].sum()
                 else:
-                    allocated_supply = 0
-                facility_remaining[idx] = allocated_supply
-                facility_supplied[idx] = 0.0
+                    type_demand = 0
+                
+                # Get facilities of this type
+                facilities_of_type = facilities_gdf[facilities_gdf['Grouped_Type'] == energy_type]
+                
+                if len(facilities_of_type) == 0 or type_demand == 0:
+                    # No facilities or no demand for this type
+                    for idx in facilities_of_type.index:
+                        new_total_mwh_dict[idx] = 0
+                        new_available_total_mwh_dict[idx] = 0
+                        facility_remaining[idx] = 0
+                        facility_supplied[idx] = 0.0
+                    continue
+                
+                # Calculate total original capacity for facilities of this type
+                type_facility_capacity = sum((fac.get('total_mwh', 0) or 0) for _, fac in facilities_of_type.iterrows())
+                
+                # Allocate type-specific demand proportionally across facilities of this type
+                for idx, facility in facilities_of_type.iterrows():
+                    original_facility_mwh = facility.get('total_mwh', 0) or 0
+                    
+                    if type_facility_capacity > 0:
+                        facility_share = original_facility_mwh / type_facility_capacity
+                        new_total_mwh = type_demand * facility_share
+                    else:
+                        new_total_mwh = 0
+                    
+                    # available_total_mwh = total_mwh adjusted by SUPPLY_FACTOR
+                    available_total_mwh = new_total_mwh * SUPPLY_FACTOR
+                    
+                    new_total_mwh_dict[idx] = new_total_mwh
+                    new_available_total_mwh_dict[idx] = available_total_mwh
+                    facility_remaining[idx] = available_total_mwh
+                    facility_supplied[idx] = 0.0
+            
+            # Replace total_mwh with energy-type-specific demand-based allocation (preserving index order)
+            facilities_gdf['total_mwh'] = facilities_gdf.index.map(lambda idx: new_total_mwh_dict.get(idx, 0))
+            # Add available_total_mwh as adjusted by SUPPLY_FACTOR
+            facilities_gdf['available_total_mwh'] = facilities_gdf.index.map(lambda idx: new_available_total_mwh_dict.get(idx, 0))
+            
+            total_available_supply = sum(new_available_total_mwh_dict.values())
             
             if SUPPLY_FACTOR < 1.0:
                 print(f"Sensitivity analysis: Available supply = {SUPPLY_FACTOR*100:.0f}% of demand = {total_available_supply:,.0f} MWh")
-                print(f"  Distributed proportionally across {len(facilities_gdf)} facilities")
+                print(f"  Distributed proportionally across {len(facilities_gdf)} facilities by capacity share")
             
             # Prepare centroid columns for supply allocation
             centroids_gdf['supplying_facility_distance'] = ''
@@ -1560,20 +1695,42 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         with timer("Create output layers"):
             layers = create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_graph, active_connections, country_iso3, facility_supplied, facility_remaining)
         
+        # Define demand column for summary statistics
+        demand_col_year = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
+        
         # Write outputs based on mode
         with timer("Save outputs"):
+            scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
+            
             if test_mode:
-                # Test mode: Full GPKG output for detailed analysis
-                output_file = output_path / f"p1_{country_iso3}.gpkg"
+                # Test mode: Full GPKG output with scenario suffix in filename
+                output_file = output_path / f"{scenario_suffix}_{country_iso3}.gpkg"
                 
                 for layer_name, layer_data in layers.items():
                     layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
                 
                 print(f"Test mode: Full GPKG saved to {output_file}")
+                
+                # Also save Excel summary for test mode (same directory as GPKG)
+                excel_file = output_path / f"{scenario_suffix}_{country_iso3}.xlsx"
+                
+                # Create summary statistics DataFrame
+                summary_data = create_summary_statistics(
+                    country_iso3, centroids_gdf, facilities_gdf, 
+                    facility_supplied, facility_remaining, demand_col_year, total_available_supply
+                )
+                
+                with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+                    summary_data.to_excel(writer, sheet_name='Summary', index=False)
+                    # Auto-adjust column widths
+                    worksheet = writer.sheets['Summary']
+                    worksheet.column_dimensions['A'].width = 35
+                    worksheet.column_dimensions['B'].width = 25
+                
+                print(f"Test mode: Excel summary saved to {excel_file}")
                 output_result = str(output_file)
             else:
                 # Production mode: Full Parquet files for global analysis (all columns retained)
-                scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
                 parquet_dir = output_path / "parquet" / scenario_suffix
                 parquet_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -1585,7 +1742,24 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                         output_files.append(str(parquet_file))
                         print(f"  Saved {layer_name}: {len(layer_data)} records, {len(layer_data.columns)} columns → {parquet_file.name}")
                 
+                # Also save Excel summary for production mode (same directory as parquet files)
+                excel_file = parquet_dir / f"{scenario_suffix}_{country_iso3}.xlsx"
+                
+                # Create summary statistics DataFrame
+                summary_data = create_summary_statistics(
+                    country_iso3, centroids_gdf, facilities_gdf,
+                    facility_supplied, facility_remaining, demand_col_year, total_available_supply
+                )
+                
+                with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+                    summary_data.to_excel(writer, sheet_name='Summary', index=False)
+                    # Auto-adjust column widths
+                    worksheet = writer.sheets['Summary']
+                    worksheet.column_dimensions['A'].width = 35
+                    worksheet.column_dimensions['B'].width = 25
+                
                 print(f"Production mode: {len(output_files)} Parquet files saved to {parquet_dir}")
+                print(f"Production mode: Excel summary saved to {excel_file}")
                 output_result = str(parquet_dir)
         
         # Generate summary statistics for ANALYSIS_YEAR
@@ -1822,14 +1996,49 @@ def main():
     parser.add_argument('--output-dir', default='outputs_per_country', help='Output directory')
     parser.add_argument('--test', action='store_true', 
                        help='Test mode: generate full GPKG with all layers for detailed analysis')
+    parser.add_argument('--run-all-scenarios', action='store_true',
+                       help='Run all supply scenarios: 100%%, 90%%, 80%%, 70%%, 60%%')
+    
     args = parser.parse_args()
-    result = process_country_supply(args.country_iso3, args.output_dir, test_mode=args.test)
-    if result:
-        print(f"Successfully processed {args.country_iso3}")
-        return 0
+    
+    global SUPPLY_FACTOR
+    all_success = True
+    
+    # Determine which scenarios to run
+    if args.run_all_scenarios:
+        supply_factors = [1.0, 0.9, 0.8, 0.7, 0.6]
+        print("\n" + "="*60)
+        print("RUNNING ALL SUPPLY SCENARIOS: 100%, 90%, 80%, 70%, 60%")
+        print("="*60)
     else:
-        print(f"Failed to process {args.country_iso3}")
-        return 1
+        supply_factors = [SUPPLY_FACTOR]  # Use the global SUPPLY_FACTOR constant
+    
+    for supply_factor in supply_factors:
+        SUPPLY_FACTOR = supply_factor
+        
+        if len(supply_factors) > 1:
+            print(f"\n\n{'#'*60}")
+            print(f"# PROCESSING SUPPLY SCENARIO: {int(SUPPLY_FACTOR*100)}%")
+            print(f"{'#'*60}\n")
+        
+        result = process_country_supply(args.country_iso3, args.output_dir, test_mode=args.test)
+        
+        if result:
+            print(f"\n✓ Successfully processed {args.country_iso3} at {int(SUPPLY_FACTOR*100)}% supply")
+        else:
+            print(f"\n✗ Failed to process {args.country_iso3} at {int(SUPPLY_FACTOR*100)}% supply")
+            all_success = False
+    
+    if len(supply_factors) > 1:
+        print("\n" + "="*60)
+        print("ALL SCENARIOS COMPLETE")
+        print("="*60)
+        if all_success:
+            print(f"✓ Successfully processed all {len(supply_factors)} scenarios for {args.country_iso3}")
+        else:
+            print(f"⚠ Some scenarios failed for {args.country_iso3}")
+    
+    return 0 if all_success else 1
 
 if __name__ == "__main__":
     sys.exit(main())

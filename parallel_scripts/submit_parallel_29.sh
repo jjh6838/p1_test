@@ -32,10 +32,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check for scenario flag
+SCENARIO_FLAG=""
+if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
+else
+    echo "[INFO] Running default 100% supply scenario"
+fi
+echo ""
+
 # Process countries in this batch
 
 echo "[INFO] Processing BDI (OTHER)..."
-$PY process_country_supply.py BDI --output-dir outputs_per_country
+$PY process_country_supply.py BDI --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BDI completed"
 else
@@ -43,7 +53,7 @@ else
 fi
 
 echo "[INFO] Processing BEL (OTHER)..."
-$PY process_country_supply.py BEL --output-dir outputs_per_country
+$PY process_country_supply.py BEL --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BEL completed"
 else
@@ -51,7 +61,7 @@ else
 fi
 
 echo "[INFO] Processing BEN (OTHER)..."
-$PY process_country_supply.py BEN --output-dir outputs_per_country
+$PY process_country_supply.py BEN --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BEN completed"
 else
@@ -59,7 +69,7 @@ else
 fi
 
 echo "[INFO] Processing BGD (OTHER)..."
-$PY process_country_supply.py BGD --output-dir outputs_per_country
+$PY process_country_supply.py BGD --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BGD completed"
 else
@@ -67,7 +77,7 @@ else
 fi
 
 echo "[INFO] Processing BGR (OTHER)..."
-$PY process_country_supply.py BGR --output-dir outputs_per_country
+$PY process_country_supply.py BGR --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BGR completed"
 else
@@ -75,7 +85,7 @@ else
 fi
 
 echo "[INFO] Processing BHR (OTHER)..."
-$PY process_country_supply.py BHR --output-dir outputs_per_country
+$PY process_country_supply.py BHR --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BHR completed"
 else
@@ -83,7 +93,7 @@ else
 fi
 
 echo "[INFO] Processing BHS (OTHER)..."
-$PY process_country_supply.py BHS --output-dir outputs_per_country
+$PY process_country_supply.py BHS --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BHS completed"
 else
@@ -91,7 +101,7 @@ else
 fi
 
 echo "[INFO] Processing BIH (OTHER)..."
-$PY process_country_supply.py BIH --output-dir outputs_per_country
+$PY process_country_supply.py BIH --output-dir outputs_per_country $SCENARIO_FLAG
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] BIH completed"
 else
