@@ -467,49 +467,208 @@ def compute_grid_distances(cluster_centers_gdf, grid_lines_gdf):
 
 
 def build_steiner_network(settlements_gdf, cluster_id):
-    """Step 4: Build MST-style Steiner-like network for a remote cluster."""
+    """Step 4: Build Steiner tree network for a remote cluster using approximation algorithm."""
     cluster_settlements = settlements_gdf[settlements_gdf['cluster_id'] == cluster_id]
     
     if len(cluster_settlements) <= 1:
         return []
     
+    if len(cluster_settlements) == 2:
+        # For 2 points, Steiner tree is just a direct line
+        settlement_list = cluster_settlements.reset_index(drop=True)
+        point1 = settlement_list.iloc[0].geometry
+        point2 = settlement_list.iloc[1].geometry
+        distance_km = haversine_distance_km(point1.y, point1.x, point2.y, point2.x)
+        return [{
+            'geometry': LineString([point1, point2]),
+            'cluster_id': cluster_id,
+            'distance_km': distance_km,
+            'from_idx': settlement_list.index[0],
+            'to_idx': settlement_list.index[1],
+            'is_steiner_point': False
+        }]
+    
+    # For 3+ points, use sparse distance computation for scalability
+    settlement_list = cluster_settlements.reset_index(drop=True)
+    n_points = len(cluster_settlements)
+    
     coords = np.column_stack([
-        cluster_settlements.geometry.y,
-        cluster_settlements.geometry.x
+        cluster_settlements.geometry.x,
+        cluster_settlements.geometry.y
     ])
     
-    n_points = len(coords)
-    dist_matrix = np.zeros((n_points, n_points))
+    # For large clusters, use sparse k-nearest neighbors approach
+    # For small clusters, use full distance matrix
+    SPARSE_THRESHOLD = 300  # Switch to sparse computation above this size
+    K_NEIGHBORS = min(15, n_points - 1)  # Number of nearest neighbors to consider
     
-    for i in range(n_points):
-        for j in range(i+1, n_points):
-            dist = haversine_distance_km(
-                coords[i, 0], coords[i, 1],
-                coords[j, 0], coords[j, 1]
-            )
-            dist_matrix[i, j] = dist
-            dist_matrix[j, i] = dist
+    if n_points > SPARSE_THRESHOLD:
+        # Sparse approach: Build MST using k-nearest neighbors
+        from scipy.spatial import KDTree
+        
+        # Build KD-tree for efficient nearest neighbor search
+        tree = KDTree(coords)
+        
+        # For each point, find k nearest neighbors
+        edges_candidates = []
+        for i in range(n_points):
+            point = coords[i]
+            distances, indices = tree.query(point, k=K_NEIGHBORS + 1)  # +1 because it includes itself
+            
+            for j, neighbor_idx in enumerate(indices[1:]):  # Skip first (itself)
+                if neighbor_idx < n_points:
+                    # Calculate actual haversine distance
+                    dist_km = haversine_distance_km(
+                        settlement_list.iloc[i].geometry.y,
+                        settlement_list.iloc[i].geometry.x,
+                        settlement_list.iloc[neighbor_idx].geometry.y,
+                        settlement_list.iloc[neighbor_idx].geometry.x
+                    )
+                    edges_candidates.append((i, neighbor_idx, dist_km))
+        
+        # Build sparse distance matrix from k-nearest neighbors
+        from scipy.sparse import lil_matrix
+        sparse_dist = lil_matrix((n_points, n_points))
+        
+        for i, j, dist in edges_candidates:
+            sparse_dist[i, j] = dist
+            sparse_dist[j, i] = dist
+        
+        # Compute MST on sparse graph
+        mst = minimum_spanning_tree(sparse_dist)
+        mst_array = mst.toarray()
+        
+    else:
+        # Dense approach: Full distance matrix for small clusters
+        dist_matrix = np.zeros((n_points, n_points))
+        for i in range(n_points):
+            for j in range(i+1, n_points):
+                dist = haversine_distance_km(
+                    settlement_list.iloc[i].geometry.y,
+                    settlement_list.iloc[i].geometry.x,
+                    settlement_list.iloc[j].geometry.y,
+                    settlement_list.iloc[j].geometry.x
+                )
+                dist_matrix[i, j] = dist
+                dist_matrix[j, i] = dist
+        
+        # Compute MST
+        mst = minimum_spanning_tree(dist_matrix)
+        mst_array = mst.toarray()
     
-    mst = minimum_spanning_tree(dist_matrix)
-    mst_array = mst.toarray()
-    
-    edges = []
-    settlement_list = cluster_settlements.reset_index(drop=True)
-    
+    # Build adjacency list from MST
+    adjacency = {i: [] for i in range(n_points)}
+    mst_edges = []
     for i in range(n_points):
         for j in range(i+1, n_points):
             if mst_array[i, j] > 0 or mst_array[j, i] > 0:
-                point1 = settlement_list.iloc[i].geometry
-                point2 = settlement_list.iloc[j].geometry
-                distance_km = haversine_distance_km(point1.y, point1.x, point2.y, point2.x)
-                
-                edges.append({
-                    'geometry': LineString([point1, point2]),
-                    'cluster_id': cluster_id,
-                    'distance_km': distance_km,
-                    'from_idx': settlement_list.index[i],
-                    'to_idx': settlement_list.index[j]
-                })
+                adjacency[i].append(j)
+                adjacency[j].append(i)
+                dist_val = mst_array[i, j] if mst_array[i, j] > 0 else mst_array[j, i]
+                mst_edges.append((i, j, dist_val))
+    
+    # Identify vertices with degree >= 3 (junction points for Steiner optimization)
+    high_degree_vertices = [v for v in range(n_points) if len(adjacency[v]) >= 3]
+    
+    if not high_degree_vertices:
+        # No junctions - return MST as-is
+        edges = []
+        for i, j, dist in mst_edges:
+            point1 = settlement_list.iloc[i].geometry
+            point2 = settlement_list.iloc[j].geometry
+            edges.append({
+                'geometry': LineString([point1, point2]),
+                'cluster_id': cluster_id,
+                'distance_km': dist,
+                'from_idx': settlement_list.index[i],
+                'to_idx': settlement_list.index[j],
+                'is_steiner_point': False
+            })
+        return edges
+    
+    # Add Steiner points at high-degree junctions and rebuild connections
+    # Strategy: Replace each high-degree vertex with a Steiner point at optimal location
+    edges = []
+    steiner_point_map = {}  # Maps original vertex -> steiner point info
+    steiner_node_offset = 1000000  # Offset to distinguish Steiner node IDs from settlement IDs
+    
+    for vertex in high_degree_vertices:
+        neighbors = adjacency[vertex]
+        
+        # Calculate Steiner point location (centroid of vertex + neighbors)
+        all_junction_points = [coords[vertex]] + [coords[n] for n in neighbors]
+        steiner_x = np.mean([p[0] for p in all_junction_points])
+        steiner_y = np.mean([p[1] for p in all_junction_points])
+        
+        steiner_point_map[vertex] = {
+            'geometry': Point(steiner_x, steiner_y),
+            'node_id': steiner_node_offset + vertex  # Unique integer ID for Steiner point
+        }
+    
+    # Now rebuild edges: 
+    # - If edge connects to high-degree vertex, route through its Steiner point
+    # - Otherwise, keep original edge
+    for i, j, dist in mst_edges:
+        point_i = settlement_list.iloc[i].geometry
+        point_j = settlement_list.iloc[j].geometry
+        idx_i = settlement_list.index[i]
+        idx_j = settlement_list.index[j]
+        
+        # Check if either endpoint is a high-degree vertex (has Steiner point)
+        i_has_steiner = i in steiner_point_map
+        j_has_steiner = j in steiner_point_map
+        
+        if i_has_steiner and j_has_steiner:
+            # Both ends are junctions - connect their Steiner points
+            steiner_i = steiner_point_map[i]['geometry']
+            steiner_j = steiner_point_map[j]['geometry']
+            steiner_id_i = steiner_point_map[i]['node_id']
+            steiner_id_j = steiner_point_map[j]['node_id']
+            dist_steiner = haversine_distance_km(steiner_i.y, steiner_i.x, steiner_j.y, steiner_j.x)
+            edges.append({
+                'geometry': LineString([steiner_i, steiner_j]),
+                'cluster_id': cluster_id,
+                'distance_km': dist_steiner,
+                'from_idx': steiner_id_i,
+                'to_idx': steiner_id_j,
+                'is_steiner_point': True
+            })
+        elif i_has_steiner:
+            # i is junction - connect j to i's Steiner point
+            steiner_i = steiner_point_map[i]['geometry']
+            steiner_id_i = steiner_point_map[i]['node_id']
+            dist_to_steiner = haversine_distance_km(point_j.y, point_j.x, steiner_i.y, steiner_i.x)
+            edges.append({
+                'geometry': LineString([point_j, steiner_i]),
+                'cluster_id': cluster_id,
+                'distance_km': dist_to_steiner,
+                'from_idx': idx_j,
+                'to_idx': steiner_id_i,
+                'is_steiner_point': True
+            })
+        elif j_has_steiner:
+            # j is junction - connect i to j's Steiner point
+            steiner_j = steiner_point_map[j]['geometry']
+            steiner_id_j = steiner_point_map[j]['node_id']
+            dist_to_steiner = haversine_distance_km(point_i.y, point_i.x, steiner_j.y, steiner_j.x)
+            edges.append({
+                'geometry': LineString([point_i, steiner_j]),
+                'cluster_id': cluster_id,
+                'distance_km': dist_to_steiner,
+                'from_idx': idx_i,
+                'to_idx': steiner_id_j,
+                'is_steiner_point': True
+            })
+        else:
+            # Neither is junction - keep original MST edge
+            edges.append({
+                'geometry': LineString([point_i, point_j]),
+                'cluster_id': cluster_id,
+                'distance_km': dist,
+                'from_idx': idx_i,
+                'to_idx': idx_j,
+                'is_steiner_point': False
+            })
     
     return edges
 
@@ -541,11 +700,15 @@ def build_remote_networks(settlements_gdf, cluster_centers_gdf):
     if not all_edges:
         print("No network edges generated!")
         return gpd.GeoDataFrame(columns=['geometry', 'cluster_id', 'distance_km', 
-                                        'from_idx', 'to_idx'], crs=COMMON_CRS)
+                                        'from_idx', 'to_idx', 'is_steiner_point'], crs=COMMON_CRS)
     
     networks_gdf = gpd.GeoDataFrame(all_edges, crs=COMMON_CRS)
     
+    # Count Steiner points
+    steiner_edges = networks_gdf[networks_gdf['is_steiner_point'] == True]
     print(f"\nTotal network edges: {len(networks_gdf)}")
+    print(f"  Edges with Steiner points: {len(steiner_edges)}")
+    print(f"  Direct settlement edges: {len(networks_gdf) - len(steiner_edges)}")
     print(f"Total network length: {networks_gdf['distance_km'].sum():.2f} km")
     
     return networks_gdf
