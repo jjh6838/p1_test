@@ -84,7 +84,7 @@ COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 ANALYSIS_YEAR = 2030  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
 POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
-GRID_STITCH_DISTANCE_KM = 10  # 10 km: istance threshold (in km) for stitching raw grid segments
+GRID_STITCH_DISTANCE_KM = 10  # 10 km: Distance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
@@ -396,22 +396,82 @@ def load_population_and_demand_projections(centroids_gdf, country_iso3):
     
     return centroids_filtered
 
-def load_energy_facilities(country_iso3, year=2024):
-    """Load energy facilities for a specific country and year from the processed facility-level data."""
+def load_siting_clusters(scenario, country_iso3):
+    """Load siting clusters from parquet if available."""
+    clusters_path = Path(f"outputs_per_country/parquet/{scenario}/siting_clusters_{country_iso3}.parquet")
+    
+    if not clusters_path.exists():
+        return None
+    
+    try:
+        clusters_df = pd.read_parquet(clusters_path)
+        print(f"Loaded {len(clusters_df)} siting clusters from {clusters_path}")
+        return clusters_df
+    except Exception as e:
+        print(f"Warning: Could not load siting clusters: {e}")
+        return None
+
+def load_energy_facilities(country_iso3, year=2024, scenario=None):
+    """Load energy facilities for a specific country and year from the processed facility-level data.
+    If scenario is provided and siting data exists, load existing facilities parquet and append siting clusters."""
     sheet_mapping = {2024: 'Grouped_cur_fac_lvl', 2030: 'Grouped_2030_fac_lvl', 2050: 'Grouped_2050_fac_lvl'}
     sheet_name = sheet_mapping.get(year, 'Grouped_cur_fac_lvl')
     
+    # Check if siting data exists - if so, load existing facilities parquet instead of Excel
+    if scenario and country_iso3:
+        siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
+        if siting_summary_path.exists():
+            existing_facilities_path = Path(f"outputs_per_country/parquet/{scenario}/facilities_{country_iso3}.parquet")
+            if existing_facilities_path.exists():
+                print(f"Loading existing facilities from {existing_facilities_path}")
+                facilities_gdf = gpd.read_parquet(existing_facilities_path)
+                
+                # Reset supplied_mwh and remaining_mwh for existing facilities
+                facilities_gdf['supplied_mwh'] = 0.0
+                facilities_gdf['remaining_mwh'] = 0.0
+                print(f"Loaded {len(facilities_gdf)} existing facilities and reset supplied/remaining MWh")
+                
+                # Load and append siting clusters
+                clusters_df = load_siting_clusters(scenario, country_iso3)
+                
+                if clusters_df is not None and not clusters_df.empty:
+                    # Map siting clusters to facility format
+                    cluster_facilities = pd.DataFrame({
+                        'GID_0': country_iso3,
+                        'Country Code': country_iso3,
+                        'GEM unit/phase ID': clusters_df['cluster_id'].astype(str),
+                        'Grouped_Type': clusters_df['Grouped_Type'],
+                        'Latitude': clusters_df['center_lat'],
+                        'Longitude': clusters_df['center_lon'],
+                        'Adjusted_Capacity_MW': np.nan,
+                        'total_mwh': clusters_df['remaining_mwh'],
+                        'available_total_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR,
+                        'supplied_mwh': 0.0,
+                        'remaining_mwh': 0.0
+                    })
+                    
+                    # Create geometry for cluster facilities
+                    cluster_geometry = gpd.points_from_xy(cluster_facilities['Longitude'], cluster_facilities['Latitude'])
+                    cluster_facilities_gdf = gpd.GeoDataFrame(cluster_facilities, geometry=cluster_geometry, crs=COMMON_CRS)
+                    
+                    # Append cluster facilities to existing facilities
+                    facilities_gdf = pd.concat([facilities_gdf, cluster_facilities_gdf], ignore_index=True)
+                    print(f"Added {len(cluster_facilities_gdf)} siting clusters to facilities (total: {len(facilities_gdf)})")
+                
+                return facilities_gdf
+    
+    # If no siting data or facilities parquet doesn't exist, load from Excel
     try:
         facilities_df = pd.read_excel("outputs_processed_data/p1_a_ember_gem_2024_fac_lvl.xlsx", sheet_name=sheet_name)
         country_facilities = facilities_df[facilities_df['Country Code'] == country_iso3].copy()
         
         if country_facilities.empty:
-            return gpd.GeoDataFrame()
+            facilities_gdf = gpd.GeoDataFrame()
+        else:
+            geometry = gpd.points_from_xy(country_facilities['Longitude'], country_facilities['Latitude'])
+            facilities_gdf = gpd.GeoDataFrame(country_facilities, geometry=geometry, crs=COMMON_CRS)
         
-        geometry = gpd.points_from_xy(country_facilities['Longitude'], country_facilities['Latitude'])
-        facilities_gdf = gpd.GeoDataFrame(country_facilities, geometry=geometry, crs=COMMON_CRS)
-        
-        print(f"Loaded {len(facilities_gdf)} facilities for {country_iso3}")
+        print(f"Loaded {len(facilities_gdf)} base facilities for {country_iso3} from Excel")
         return facilities_gdf
         
     except Exception as e:
@@ -514,8 +574,18 @@ def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_
     if not stitch_edges:
         return grid_lines_gdf
 
+    # Create stitches with consistent column naming
+    stitch_data = {
+        'line_type': ['component_stitch'] * len(stitch_edges),
+        'line_id': [f'stitch_{i}' for i in range(len(stitch_edges))]
+    }
+    
+    # Preserve GID_0 if it exists in the input
+    if 'GID_0' in grid_lines_gdf.columns and not grid_lines_gdf.empty:
+        stitch_data['GID_0'] = [grid_lines_gdf['GID_0'].iloc[0]] * len(stitch_edges)
+    
     stitches_gdf = gpd.GeoDataFrame(
-        {'segment_source': ['component_stitch'] * len(stitch_edges)},
+        stitch_data,
         geometry=stitch_edges,
         crs=utm_crs
     ).to_crs(grid_lines_gdf.crs or COMMON_CRS)
@@ -523,12 +593,74 @@ def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_
     print(f"Stitched {len(stitch_edges)} grid connections at {max_distance_km}km threshold")
     return pd.concat([grid_lines_gdf, stitches_gdf], ignore_index=True)
 
-def load_grid_lines(country_bbox, admin_boundaries):
-    """Load and clip grid lines from GridFinder data. Uses parallel processing for very large countries to speed up clipping."""
+def load_siting_networks(scenario, country_iso3):
+    """Load siting networks from parquet if available."""
+    networks_path = Path(f"outputs_per_country/parquet/{scenario}/siting_networks_{country_iso3}.parquet")
+    
+    if not networks_path.exists():
+        return None
+    
+    try:
+        networks_df = pd.read_parquet(networks_path)
+        # Convert to GeoDataFrame if geometry column exists
+        if 'geometry' in networks_df.columns:
+            # Handle WKB geometry bytes - convert to shapely geometries
+            from shapely import wkb
+            if isinstance(networks_df['geometry'].iloc[0], bytes):
+                networks_df['geometry'] = networks_df['geometry'].apply(lambda x: wkb.loads(x) if pd.notna(x) else None)
+            networks_gdf = gpd.GeoDataFrame(networks_df, geometry='geometry', crs=COMMON_CRS)
+        else:
+            print(f"Warning: No geometry column in siting networks parquet")
+            return None
+        
+        print(f"Loaded {len(networks_gdf)} siting network segments from {networks_path}")
+        return networks_gdf
+    except Exception as e:
+        print(f"Warning: Could not load siting networks: {e}")
+        return None
+
+def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=None):
+    """Load and clip grid lines from GridFinder data. Uses parallel processing for very large countries to speed up clipping.
+    If scenario is provided and siting data exists, load existing grid_lines parquet and append siting networks."""
     minx, miny, maxx, maxy = country_bbox
     admin_union = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
     grid_country = None
 
+    # Check if siting data exists - if so, load existing grid_lines parquet instead of raw GridFinder
+    if scenario and country_iso3:
+        siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
+        if siting_summary_path.exists():
+            # Load existing grid_lines parquet file
+            existing_grid_path = Path(f"outputs_per_country/parquet/{scenario}/grid_lines_{country_iso3}.parquet")
+            if existing_grid_path.exists():
+                print(f"Loading existing grid lines from {existing_grid_path}")
+                grid_country = gpd.read_parquet(existing_grid_path)
+                print(f"Loaded {len(grid_country)} existing grid line segments")
+                
+                # Load and append siting networks
+                networks_gdf = load_siting_networks(scenario, country_iso3)
+                
+                if networks_gdf is not None and not networks_gdf.empty:
+                    # Map siting networks to grid lines format
+                    network_lines = pd.DataFrame({
+                        'GID_0': country_iso3,
+                        'line_type': 'siting_networks',
+                        'line_id': 'siting_' + networks_gdf.index.astype(str),
+                        'distance_km': networks_gdf.get('distance_km', 0),
+                        'geometry': networks_gdf.geometry
+                    })
+                    
+                    network_lines_gdf = gpd.GeoDataFrame(network_lines, geometry='geometry', crs=COMMON_CRS)
+                    
+                    # Append siting networks to grid lines
+                    grid_country = pd.concat([grid_country, network_lines_gdf], ignore_index=True)
+                    print(f"Added {len(network_lines_gdf)} siting network segments to grid (total: {len(grid_country)})")
+                
+                # Stitch the combined grid to connect siting networks with existing infrastructure
+                grid_country = stitch_grid_segments(grid_country, admin_boundaries, GRID_STITCH_DISTANCE_KM)
+                return grid_country
+
+    # If no siting data or grid_lines parquet doesn't exist, load from GridFinder
     try:
         if HAS_PYOGRIO:
             try:
@@ -572,7 +704,7 @@ def load_grid_lines(country_bbox, admin_boundaries):
             grid_country = grid_country.set_crs(COMMON_CRS)
 
         grid_country = grid_country.to_crs(COMMON_CRS).reset_index(drop=True)
-        print(f"Loaded {len(grid_country)} grid line segments")
+        print(f"Loaded {len(grid_country)} base grid line segments from GridFinder")
 
         grid_country = stitch_grid_segments(grid_country, admin_boundaries, GRID_STITCH_DISTANCE_KM)
         return grid_country
@@ -1360,18 +1492,40 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     all_geometries = []
     all_attributes = []
     
-    # Add original grid segments
+    # Add original grid segments - preserve existing attributes (including siting networks)
     if not grid_lines_gdf.empty:
         for idx, row in grid_lines_gdf.iterrows():
             geom = row.geometry
-            center = geom.centroid
-            utm = get_utm_crs(center.x, center.y)
-            try:
-                length_km = gpd.GeoSeries([geom], crs=COMMON_CRS).to_crs(utm).iloc[0].length / 1000.0
-            except Exception:
-                length_km = None
+            
+            # Preserve existing attributes if they exist, otherwise use defaults
+            attrs = {}
+            if 'line_type' in row.index:
+                attrs['line_type'] = row['line_type']
+            else:
+                attrs['line_type'] = 'grid_infrastructure'
+            
+            if 'line_id' in row.index:
+                attrs['line_id'] = row['line_id']
+            else:
+                attrs['line_id'] = f'grid_{idx}'
+            
+            if 'distance_km' in row.index and pd.notna(row['distance_km']):
+                attrs['distance_km'] = row['distance_km']
+            else:
+                # Calculate distance if not provided
+                center = geom.centroid
+                utm = get_utm_crs(center.x, center.y)
+                try:
+                    attrs['distance_km'] = gpd.GeoSeries([geom], crs=COMMON_CRS).to_crs(utm).iloc[0].length / 1000.0
+                except Exception:
+                    attrs['distance_km'] = None
+            
+            # Preserve GID_0 if it exists
+            if 'GID_0' in row.index:
+                attrs['GID_0'] = row['GID_0']
+            
             all_geometries.append(geom)
-            all_attributes.append({'line_type': 'grid_infrastructure', 'line_id': f'grid_{idx}', 'distance_km': length_km})
+            all_attributes.append(attrs)
     
     # Add connection edges from graph
     if network_graph is not None:
@@ -1542,6 +1696,19 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
     _CONFIG_PRINTED = False  # Reset to allow banner to print for each scenario
     
     scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
+    
+    # Check if siting data exists (determines workflow approach)
+    scenario = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
+    siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
+    has_siting_data = siting_summary_path.exists()
+    
+    if has_siting_data:
+        print("=" * 60)
+        print("SITING DATA DETECTED - USING ADD_V2 WORKFLOW")
+        print("=" * 60)
+        print("Will load existing facilities and grid, then append siting clusters and networks")
+        print()
+    
     print_configuration_banner(test_mode, scenario_suffix)
     
     print(f"\nProcessing {country_iso3}... (Mode: {'TEST' if test_mode else 'PRODUCTION'})")
@@ -1560,10 +1727,10 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             centroids_gdf = load_population_centroids(country_bbox, admin_boundaries)
         
         with timer("Load facilities"):
-            facilities_gdf = load_energy_facilities(country_iso3, ANALYSIS_YEAR)
+            facilities_gdf = load_energy_facilities(country_iso3, ANALYSIS_YEAR, scenario=scenario)
         
         with timer("Load grid lines"):
-            grid_lines_gdf = load_grid_lines(country_bbox, admin_boundaries)
+            grid_lines_gdf = load_grid_lines(country_bbox, admin_boundaries, scenario=scenario, country_iso3=country_iso3)
         
         print(f"Loaded: {len(centroids_gdf)} centroids, {len(facilities_gdf)} facilities, {len(grid_lines_gdf)} grid lines")
         
@@ -1704,7 +1871,9 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             
             if test_mode:
                 # Test mode: Full GPKG output with scenario suffix in filename
-                output_file = output_path / f"{scenario_suffix}_{country_iso3}.gpkg"
+                # Add _add_v2 suffix if siting data was merged
+                file_suffix = "_add_v2" if has_siting_data else ""
+                output_file = output_path / f"{scenario_suffix}_{country_iso3}{file_suffix}.gpkg"
                 
                 for layer_name, layer_data in layers.items():
                     layer_data.to_file(output_file, layer=layer_name, driver="GPKG")
@@ -1712,7 +1881,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 print(f"Test mode: Full GPKG saved to {output_file}")
                 
                 # Also save Excel summary for test mode (same directory as GPKG)
-                excel_file = output_path / f"{scenario_suffix}_{country_iso3}.xlsx"
+                excel_file = output_path / f"{scenario_suffix}_{country_iso3}{file_suffix}.xlsx"
                 
                 # Create summary statistics DataFrame
                 summary_data = create_summary_statistics(
@@ -1731,19 +1900,26 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 output_result = str(output_file)
             else:
                 # Production mode: Full Parquet files for global analysis (all columns retained)
-                parquet_dir = output_path / "parquet" / scenario_suffix
+                # Use _add_v2 suffix if siting data was merged
+                if has_siting_data:
+                    parquet_dir = output_path / "parquet" / f"{scenario_suffix}_add_v2"
+                    file_suffix = "_add_v2"
+                else:
+                    parquet_dir = output_path / "parquet" / scenario_suffix
+                    file_suffix = ""
+                
                 parquet_dir.mkdir(parents=True, exist_ok=True)
                 
                 output_files = []
                 for layer_name, layer_data in layers.items():
                     if not layer_data.empty:
-                        parquet_file = parquet_dir / f"{layer_name}_{country_iso3}.parquet"
+                        parquet_file = parquet_dir / f"{layer_name}_{country_iso3}{file_suffix}.parquet"
                         layer_data.to_parquet(parquet_file, compression='snappy')
                         output_files.append(str(parquet_file))
                         print(f"  Saved {layer_name}: {len(layer_data)} records, {len(layer_data.columns)} columns → {parquet_file.name}")
                 
                 # Also save Excel summary for production mode (same directory as parquet files)
-                excel_file = parquet_dir / f"{scenario_suffix}_{country_iso3}.xlsx"
+                excel_file = parquet_dir / f"{scenario_suffix}_{country_iso3}{file_suffix}.xlsx"
                 
                 # Create summary statistics DataFrame
                 summary_data = create_summary_statistics(

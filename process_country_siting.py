@@ -48,6 +48,17 @@ def haversine_distance_km(lat1, lon1, lat2, lon2):
     return 2 * R * np.arcsin(np.sqrt(a))
 
 
+def load_admin_boundaries(country_iso3):
+    """Load administrative boundaries for a specific country from the GADM dataset."""
+    admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410-levels.gpkg', layer="ADM_0")
+    country_data = admin_boundaries[admin_boundaries['GID_0'] == country_iso3]
+    
+    if country_data.empty:
+        raise ValueError(f"No boundaries found for country {country_iso3}")
+    
+    return country_data
+
+
 def load_centroids(country_iso3, scenario_suffix, output_dir="outputs_per_country"):
     """Load centroids data from parquet file."""
     parquet_path = Path(output_dir) / "parquet" / scenario_suffix / f"centroids_{country_iso3}.parquet"
@@ -714,6 +725,47 @@ def build_remote_networks(settlements_gdf, cluster_centers_gdf):
     return networks_gdf
 
 
+def clip_networks_to_boundaries(networks_gdf, admin_boundaries):
+    """Clip network edges to country boundaries to prevent extending beyond borders."""
+    if networks_gdf.empty:
+        return networks_gdf
+    
+    print("\nClipping networks to country boundaries...")
+    
+    # Ensure both are in same CRS
+    admin_union = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
+    
+    # Clip networks to boundaries
+    clipped_networks = gpd.clip(networks_gdf, admin_boundaries)
+    
+    # Recalculate distances for clipped edges
+    def get_utm_crs(lon, lat):
+        """Get appropriate UTM CRS for given coordinates."""
+        utm_zone = int((lon + 180) / 6) + 1
+        return f"EPSG:{32600 + utm_zone}" if lat >= 0 else f"EPSG:{32700 + utm_zone}"
+    
+    if not clipped_networks.empty:
+        for idx in clipped_networks.index:
+            geom = clipped_networks.loc[idx, 'geometry']
+            if geom is not None and not geom.is_empty:
+                center = geom.centroid
+                utm_crs = get_utm_crs(center.x, center.y)
+                try:
+                    geom_utm = gpd.GeoSeries([geom], crs=COMMON_CRS).to_crs(utm_crs).iloc[0]
+                    clipped_networks.loc[idx, 'distance_km'] = geom_utm.length / 1000.0
+                except Exception:
+                    pass  # Keep original distance if conversion fails
+    
+    edges_removed = len(networks_gdf) - len(clipped_networks)
+    if edges_removed > 0:
+        print(f"  Removed {edges_removed} edges extending beyond boundaries")
+    
+    print(f"  Final network edges: {len(clipped_networks)}")
+    print(f"  Final network length: {clipped_networks['distance_km'].sum():.2f} km")
+    
+    return clipped_networks
+
+
 def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, 
                 output_dir="outputs_per_country"):
     """Save all outputs to parquet files."""
@@ -785,6 +837,7 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
     scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
     
     try:
+        admin_boundaries = load_admin_boundaries(country_iso3)
         centroids_gdf = load_centroids(country_iso3, scenario_suffix, output_dir)
         grid_lines_gdf = load_grid_lines(country_iso3, scenario_suffix, output_dir)
         facilities_gdf = load_facilities(country_iso3, scenario_suffix, output_dir)
@@ -809,6 +862,9 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
         cluster_centers_gdf = calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type, remaining_by_type)
         cluster_centers_gdf = compute_grid_distances(cluster_centers_gdf, grid_lines_gdf)
         networks_gdf = build_remote_networks(settlements_gdf, cluster_centers_gdf)
+        
+        # Clip networks to country boundaries
+        networks_gdf = clip_networks_to_boundaries(networks_gdf, admin_boundaries)
         
         save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, output_dir)
         
