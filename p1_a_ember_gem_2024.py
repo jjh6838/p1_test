@@ -616,25 +616,40 @@ print(f"Facilities in 2024 baseline: {len(grouped_facilities_df)}")
 print(f"Facilities remaining in 2030: {len(grouped_facilities_df_2030)}")
 print(f"Facilities remaining in 2050: {len(grouped_facilities_df_2050)}")
 
-# Function to merge facilities with same Grouped_Type, Latitude, Longitude
+# Function to merge facilities within spatial grid cells (300 arcsec ~= 10km resolution)
 def merge_facilities_by_location(df):
     """
-    Merge facilities that have the same Grouped_Type, Latitude, and Longitude.
-    Sum the Adjusted_Capacity_MW and use the first GEM unit/phase ID.
-    This reduces the number of points for mapping/plotting.
+    Merge facilities that have the same Grouped_Type and fall within the same 300 arcsecond grid cell.
+    300 arcseconds is approximately 9-10km at the equator, providing spatial clustering of nearby facilities.
+    Sum the Adjusted_Capacity_MW and use the centroid location of the cluster.
+    This reduces the number of points for mapping/plotting while spatially clustering nearby facilities.
     """
+    # Define grid resolution (300 arcseconds = 1/12 degree = 0.0833 degrees ~= 9.26km at equator)
+    GRID_SIZE_DEG = 300 / 3600  # 300 arcseconds = 0.0833... degrees
+    
+    # Create grid cell identifiers by rounding coordinates to nearest grid cell
+    df = df.copy()
+    df['grid_lat'] = (df['Latitude'] / GRID_SIZE_DEG).round() * GRID_SIZE_DEG
+    df['grid_lon'] = (df['Longitude'] / GRID_SIZE_DEG).round() * GRID_SIZE_DEG
+    
     def merge_group(group):
         first_row = group.iloc[0].copy()
+        # Use centroid of actual facility locations within the grid cell
+        first_row['Latitude'] = group['Latitude'].mean()
+        first_row['Longitude'] = group['Longitude'].mean()
         first_row['Adjusted_Capacity_MW'] = group['Adjusted_Capacity_MW'].sum()
-        first_row['Capacity (MW)'] = group['Capacity (MW)'].sum()  # Also sum original capacity
-        first_row['total_mwh'] = group['total_mwh'].sum()  # Also sum total_mwh
+        first_row['Capacity (MW)'] = group['Capacity (MW)'].sum()
+        first_row['total_mwh'] = group['total_mwh'].sum()
         first_row['Num_of_Merged_Units'] = len(group)
+        # Keep only the first GEM ID for simplicity (merged facilities treated as single unit)
+        first_row['GEM unit/phase ID'] = str(group['GEM unit/phase ID'].iloc[0])
         return first_row
     
-    # Group by the specified columns and apply the merge function (fix deprecation warning)
-    merged_df = df.groupby(['Grouped_Type', 'Latitude', 'Longitude'], as_index=False).apply(merge_group, include_groups=False)
+    # Group by energy type and grid cell
+    merged_df = df.groupby(['Grouped_Type', 'grid_lat', 'grid_lon'], as_index=False).apply(merge_group, include_groups=False)
     
-    # Reset index to clean up the dataframe
+    # Drop the temporary grid columns
+    merged_df = merged_df.drop(columns=['grid_lat', 'grid_lon'])
     merged_df = merged_df.reset_index(drop=True)
     
     return merged_df

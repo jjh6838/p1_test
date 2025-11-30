@@ -435,6 +435,14 @@ def load_energy_facilities(country_iso3, year=2024, scenario=None):
                 clusters_df = load_siting_clusters(scenario, country_iso3)
                 
                 if clusters_df is not None and not clusters_df.empty:
+                    # Verify required columns exist
+                    required_cols = ['cluster_id', 'Grouped_Type', 'center_lat', 'center_lon', 'remaining_mwh']
+                    missing_cols = [col for col in required_cols if col not in clusters_df.columns]
+                    if missing_cols:
+                        print(f"Warning: Siting clusters missing required columns: {missing_cols}")
+                        print(f"Available columns: {list(clusters_df.columns)}")
+                        return facilities_gdf
+                    
                     # Map siting clusters to facility format
                     cluster_facilities = pd.DataFrame({
                         'GID_0': country_iso3,
