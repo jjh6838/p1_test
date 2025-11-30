@@ -616,6 +616,114 @@ print(f"Facilities in 2024 baseline: {len(grouped_facilities_df)}")
 print(f"Facilities remaining in 2030: {len(grouped_facilities_df_2030)}")
 print(f"Facilities remaining in 2050: {len(grouped_facilities_df_2050)}")
 
+# Function to filter facilities to country boundaries
+def filter_facilities_to_boundaries(df):
+    """
+    Remove facilities that are outside their country's territorial boundaries.
+    This handles data errors where facilities have incorrect coordinates.
+    Uses GADM land boundaries AND EEZ maritime boundaries to validate facility locations.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Point
+    
+    print("\nValidating facility locations against country boundaries (land + maritime)...")
+    
+    # Load GADM land boundaries
+    try:
+        admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410-levels.gpkg', layer="ADM_0")
+        print("  Loaded GADM land boundaries")
+    except Exception as e:
+        print(f"Warning: Could not load GADM boundaries: {e}")
+        return df
+    
+    # Load EEZ maritime boundaries 
+    # (https://www.marineregions.org/downloads.php - downloaded on 2023-10-25)
+    # World EEZ V12 (2023-10-25, 122MB) - GeoPackage format
+    try:
+        eez_boundaries = gpd.read_file('bigdata_eez/eez_v12.gpkg')
+        print("  Loaded EEZ maritime boundaries")
+        has_eez = True
+    except Exception as e:
+        print(f"  Warning: Could not load EEZ boundaries: {e}")
+        print("  Will use land boundaries only")
+        has_eez = False
+    
+    # Create geometry for facilities
+    geometry = [Point(xy) for xy in zip(df['Longitude'], df['Latitude'])]
+    facilities_gdf = gpd.GeoDataFrame(df, geometry=geometry, crs='EPSG:4326')
+    
+    # Track which facilities to keep
+    valid_facilities = []
+    invalid_count = 0
+    
+    # Check each country's facilities
+    for country_code in df['Country Code'].unique():
+        country_facilities = facilities_gdf[facilities_gdf['Country Code'] == country_code].copy()
+        
+        # Get land boundary
+        country_land = admin_boundaries[admin_boundaries['GID_0'] == country_code]
+        
+        if country_land.empty:
+            print(f"  Warning: No land boundary found for {country_code}, keeping all facilities")
+            valid_facilities.append(country_facilities)
+            continue
+        
+        # Start with land boundary
+        country_union = country_land.geometry.union_all()
+        
+        # Add EEZ maritime boundary if available
+        if has_eez:
+            # EEZ uses ISO_TER1, ISO_TER2, ISO_TER3 for country codes
+            # Try to match with the country code
+            country_eez = eez_boundaries[
+                (eez_boundaries['ISO_TER1'] == country_code) |
+                (eez_boundaries['ISO_TER2'] == country_code) |
+                (eez_boundaries['ISO_TER3'] == country_code)
+            ]
+            
+            if not country_eez.empty:
+                eez_union = country_eez.geometry.union_all()
+                # Combine land and maritime boundaries
+                country_union = country_union.union(eez_union)
+        
+        # Check which facilities are within the combined boundary
+        within_boundary = country_facilities.geometry.within(country_union)
+        
+        invalid_in_country = (~within_boundary).sum()
+        if invalid_in_country > 0:
+            print(f"  {country_code}: Removed {invalid_in_country} facilities outside boundaries")
+            invalid_count += invalid_in_country
+        
+        valid_facilities.append(country_facilities[within_boundary])
+        if invalid_in_country > 0:
+            print(f"  {country_code}: Removed {invalid_in_country} facilities outside boundaries")
+            invalid_count += invalid_in_country
+        
+        valid_facilities.append(country_facilities[within_boundary])
+    
+    # Combine all valid facilities
+    if valid_facilities:
+        filtered_gdf = pd.concat(valid_facilities, ignore_index=True)
+        # Drop geometry column to return regular DataFrame
+        filtered_df = pd.DataFrame(filtered_gdf.drop(columns='geometry'))
+        
+        print(f"Total facilities removed: {invalid_count} ({invalid_count/len(df)*100:.1f}%)")
+        print(f"Facilities retained: {len(filtered_df)}")
+        
+        return filtered_df
+    else:
+        return df
+
+# Apply boundary filtering to all facility dataframes
+print("\nFiltering 2024 facilities...")
+grouped_facilities_df = filter_facilities_to_boundaries(grouped_facilities_df)
+
+print("\nFiltering 2030 facilities...")
+grouped_facilities_df_2030 = filter_facilities_to_boundaries(grouped_facilities_df_2030)
+
+print("\nFiltering 2050 facilities...")
+grouped_facilities_df_2050 = filter_facilities_to_boundaries(grouped_facilities_df_2050)
+
 # Function to merge facilities within spatial grid cells (300 arcsec ~= 10km resolution)
 def merge_facilities_by_location(df):
     """

@@ -2,7 +2,7 @@
 bigdata_gadm/
 bigdata_gridfinder/
 bigdata_jrc_pop/
-bigdata_jrc_pop2030/
+bigdata_eez/
 
 # Python cache
 __pycache__/

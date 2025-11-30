@@ -766,6 +766,43 @@ def clip_networks_to_boundaries(networks_gdf, admin_boundaries):
     return clipped_networks
 
 
+def clip_clusters_to_boundaries(cluster_centers_gdf, admin_boundaries):
+    """Ensure cluster centers are within country boundaries."""
+    if cluster_centers_gdf.empty:
+        return cluster_centers_gdf
+    
+    print("\nValidating cluster centers within country boundaries...")
+    
+    # Ensure both are in same CRS
+    admin_union = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
+    
+    # Check which clusters are outside boundaries
+    within_boundary = cluster_centers_gdf.geometry.within(admin_union)
+    outside_count = (~within_boundary).sum()
+    
+    if outside_count > 0:
+        print(f"  Warning: {outside_count} clusters found outside boundaries")
+        
+        # For clusters outside, find nearest point on boundary
+        from shapely.ops import nearest_points
+        
+        for idx in cluster_centers_gdf[~within_boundary].index:
+            cluster_point = cluster_centers_gdf.loc[idx, 'geometry']
+            # Find nearest point on boundary
+            nearest_pt = nearest_points(cluster_point, admin_union.boundary)[1]
+            
+            # Update geometry and coordinates
+            cluster_centers_gdf.loc[idx, 'geometry'] = nearest_pt
+            cluster_centers_gdf.loc[idx, 'center_lon'] = nearest_pt.x
+            cluster_centers_gdf.loc[idx, 'center_lat'] = nearest_pt.y
+        
+        print(f"  Moved {outside_count} clusters to nearest boundary point")
+    else:
+        print(f"  All {len(cluster_centers_gdf)} clusters within boundaries ✓")
+    
+    return cluster_centers_gdf
+
+
 def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, 
                 output_dir="outputs_per_country"):
     """Save all outputs to parquet files."""
@@ -860,6 +897,10 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
         
         # Match each cluster to a specific facility considering demand gap + energy type + remaining capacity
         cluster_centers_gdf = calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type, remaining_by_type)
+        
+        # Ensure clusters are within country boundaries
+        cluster_centers_gdf = clip_clusters_to_boundaries(cluster_centers_gdf, admin_boundaries)
+        
         cluster_centers_gdf = compute_grid_distances(cluster_centers_gdf, grid_lines_gdf)
         networks_gdf = build_remote_networks(settlements_gdf, cluster_centers_gdf)
         
