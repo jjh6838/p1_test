@@ -148,7 +148,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check culster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 56, "time": "48:00:00", "partition": "Interactive"},  # CHN, USA - one country per script
+        "t1": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN, USA - one country per script
         "t2": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},     # IND, CAN, MEX - one country per script
         "t3": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # RUS, BRA, AUS, etc. - one country per script
         "t4": {"max_countries_per_script": 2, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script

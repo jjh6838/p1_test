@@ -12,6 +12,7 @@ __pycache__/
 # Output files
 outputs_global/
 outputs_per_country/
+outputs_processed_fig/
 
 # OS files
 .DS_Store

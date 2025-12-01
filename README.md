@@ -6,6 +6,87 @@ Process all countries via 40 parallel SLURM jobs (cluster) or locally with autom
 - **Cluster**: 40 parallel SLURM scripts with tiered batching (1/2/4/8 countries per job)
 - **Local**: Automatic core detection (8/16/72 cores), per-country execution
 - **Internal parallelization**: Grid processing, facility distance calculations utilize all available cores
+- **NEW**: Siting analysis for remote settlement electrification
+- **NEW**: ADD_V2 workflow for merging siting results with supply analysis
+
+---
+
+## Recent Major Updates (November 2025)
+
+### 🆕 **Siting Analysis Module** (`process_country_siting.py`)
+Identifies underserved remote settlements and designs optimal electrification solutions:
+- **Filtering**: Identifies settlements with unfilled demand (after supply analysis)
+- **Clustering**: Groups settlements using capacity-driven K-means based on available facility capacity
+- **Facility Matching**: Matches clusters to facilities considering demand, energy type, and remaining capacity
+- **Network Design**: Creates Steiner tree networks for remote clusters beyond grid reach
+- **Spatial Validation**: Clips clusters and networks to country boundaries (land + maritime EEZ)
+
+```bash
+# Run siting analysis after supply analysis
+python process_country_siting.py KEN
+```
+
+### 🆕 **ADD_V2 Workflow** (Siting Integration)
+Automatically merges siting results into supply analysis when available:
+- **Detection**: Checks for `siting_summary_{ISO3}.xlsx` to trigger ADD_V2 mode
+- **Data Reuse**: Loads existing facilities and grid from base supply analysis
+- **Cluster Integration**: Appends siting clusters as new facilities with summed capacity
+- **Network Integration**: Appends siting networks to grid infrastructure
+- **Stitching**: Connects siting networks to existing grid (10km MST threshold)
+- **Output Naming**: Uses `_add_v2` suffix (e.g., `2030_supply_100%_add_v2/`)
+
+```bash
+# After running siting analysis, supply analysis automatically detects and merges
+python process_country_supply.py KEN  # Creates 2030_supply_100%_add_v2/ outputs
+```
+
+### 🔧 **Facility Data Processing** (`p1_a_ember_gem_2024.py`)
+Enhanced spatial clustering and boundary validation:
+- **300 arcsec Grid Merging**: Facilities within ~10km × 10km cells are spatially clustered by type
+- **Boundary Validation**: Filters out facilities with invalid coordinates using GADM + EEZ data
+- **Maritime Support**: Includes offshore facilities in territorial waters (uses Marine Regions EEZ v12)
+- **Capacity Aggregation**: Sums capacity for co-located facilities, preserving spatial distribution
+
+### 🔧 **Network Improvements**
+- **Geometry Handling**: Fixed WKB deserialization for siting network geometries
+- **Line Type Preservation**: Maintains `line_type` attributes (grid_infrastructure, siting_networks, component_stitch)
+- **Consistent Stitching**: Uses `line_type` instead of `segment_source` for all edge types
+- **Boundary Clipping**: Networks clipped to country boundaries to prevent cross-border extensions
+
+---
+
+## Required Data Files
+
+### **Core Datasets**
+All large datasets should be placed in the project root directory:
+
+1. **GADM Boundaries** (Land territories)
+   - Path: `bigdata_gadm/gadm_410-levels.gpkg`
+   - Source: [GADM v4.1.0](https://gadm.org/download_world.html)
+   - Usage: Country land boundaries for spatial validation and clipping
+
+2. **EEZ Maritime Boundaries** (Ocean territories)
+   - Path: `bigdata_eez/eez_v12.gpkg`
+   - Source: [Marine Regions EEZ v12](https://marineregions.org/downloads.php)
+   - Usage: Maritime territorial waters for offshore facility validation
+   - Note: Combined with GADM land boundaries for comprehensive coverage
+
+3. **GridFinder Infrastructure**
+   - Path: `bigdata_gridfinder/grid.gpkg`
+   - Source: [GridFinder](https://gridfinder.rdrn.me/)
+   - Usage: Existing grid infrastructure networks
+
+4. **JRC Population**
+   - Path: `bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif`
+   - Source: [JRC Global Human Settlement](https://ghsl.jrc.ec.europa.eu/)
+   - Usage: Population distribution for settlement electrification
+
+### **Input Energy Data**
+- `ember_energy_data/`: Ember electricity generation data
+- `iea_energy_projections/`: IEA World Energy Outlook projections
+- `re_data/`: Global Energy Monitor facility database
+- `un_pop/`: UN population projections
+- `wb_country_class/`: World Bank country classifications
 
 ---
 
@@ -157,6 +238,113 @@ else:
 
 ---
 
+## Workflow Details
+
+### **Supply Analysis** (`process_country_supply.py`)
+Main electricity supply chain analysis pipeline:
+
+1. **Facility Processing** (`p1_a_ember_gem_2024.py`)
+   - Loads Global Energy Monitor (GEM) facility data
+   - **Spatial Clustering**: Groups facilities within 300 arcsecond (~10km) grid cells by energy type
+   - **Boundary Validation**: Filters out erroneous coordinates using GADM (land) + EEZ (maritime)
+   - **Capacity Aggregation**: Sums capacity for clustered facilities
+   - Merges with Ember data for generation statistics
+
+2. **Grid Infrastructure Loading**
+   - Loads GridFinder infrastructure or existing processed grid (ADD_V2 mode)
+   - Preserves line attributes: `line_type`, `line_id`, `distance_km`
+   - Supports multiple line types: grid_infrastructure, siting_networks, component_stitch
+
+3. **Demand Allocation**
+   - Projects population and energy demand (IEA scenarios)
+   - Allocates demand to population centroids
+   - Creates demand layer with unfilled_demand tracking
+
+4. **Network Analysis**
+   - Builds graph from grid lines
+   - Calculates shortest paths from facilities to centroids
+   - Considers grid connectivity constraints
+   - **Component Stitching**: Connects isolated grid components using MST (max 10km threshold)
+
+5. **Output Generation**
+   - Facilities layer: Point geometries with capacity and generation data
+   - Grid lines layer: LineString geometries with distances and line types
+   - Centroid demand layer: Population centers with supply/demand matching
+   - Summary statistics: Excel report with supply-demand balance
+
+**Outputs:**
+- GeoPackage: `outputs_per_country/p1_{ISO3}.gpkg`
+- Parquet (per layer): `outputs_per_country/parquet/{scenario}/{layer}_{ISO3}.parquet`
+
+### **Siting Analysis** (`process_country_siting.py`)
+Remote settlement electrification planning:
+
+1. **Settlement Filtering**
+   - Identifies centroids with `unfilled_demand > 0` after supply analysis
+   - Filters for remote settlements beyond feasible grid extension
+
+2. **Capacity-Driven Clustering**
+   - Computes available facility capacity (Total - Matched demand)
+   - Uses K-means clustering weighted by settlement demand
+   - Number of clusters = Available capacity / Average cluster demand
+   - **Boundary Validation**: Clips cluster centers to country boundaries (GADM + EEZ)
+
+3. **Facility Matching**
+   - Matches clusters to facilities by energy type and capacity
+   - Considers remaining facility capacity and cluster demand
+   - Updates facility capacities after matching
+
+4. **Network Design**
+   - For clusters beyond grid reach: Designs Steiner tree networks
+   - Euclidean MST for connecting settlements within cluster
+   - **Boundary Clipping**: Clips network edges to country boundaries, recalculates distances
+
+5. **Output Generation**
+   - Siting clusters: Aggregated settlement groups with capacity requirements
+   - Siting networks: LineString geometries for remote connections
+   - Summary: Excel report with cluster assignments and network costs
+
+**Outputs:**
+- Parquet: `outputs_per_country/parquet/{scenario}/siting_clusters_{ISO3}.parquet`
+- Parquet: `outputs_per_country/parquet/{scenario}/siting_networks_{ISO3}.parquet`
+- Summary: `outputs_per_country/parquet/{scenario}/siting_summary_{ISO3}.xlsx`
+
+### **ADD_V2 Workflow** (Automatic Siting Integration)
+When siting analysis completes, the supply analysis can automatically merge results:
+
+**Detection:**
+- Checks for `siting_summary_{ISO3}.xlsx` in parquet directory
+- If found, triggers ADD_V2 mode with modified processing
+
+**Modified Processing:**
+1. Loads existing facilities/grid from base supply analysis parquets (instead of raw data)
+2. Loads siting clusters and appends as new facilities with summed capacity
+3. Loads siting networks and appends to grid_lines layer
+4. Runs component stitching to connect siting networks to main grid
+5. Outputs to `{scenario}_add_v2/` directory with `_add_v2` suffix
+
+**Output Naming:**
+- Test mode: `p1_{ISO3}_add_v2.gpkg`
+- Production mode: `{scenario}_add_v2/` directory for parquet files
+- Layers: `facilities_{ISO3}_add_v2.parquet`, `grid_lines_{ISO3}_add_v2.parquet`, etc.
+
+**Example:**
+```bash
+# Step 1: Base supply analysis
+python process_country_supply.py KEN
+# Outputs: 2030_supply_100%/facilities_KEN.parquet, grid_lines_KEN.parquet
+
+# Step 2: Siting analysis
+python process_country_siting.py KEN
+# Outputs: 2030_supply_100%/siting_clusters_KEN.parquet, siting_networks_KEN.parquet
+
+# Step 3: Integrated analysis (automatic detection)
+python process_country_supply.py KEN
+# Outputs: 2030_supply_100%_add_v2/facilities_KEN_add_v2.parquet, grid_lines_KEN_add_v2.parquet
+```
+
+---
+
 ## Multi-threading Configuration
 
 ### **Environment Variables** (set automatically)
@@ -235,11 +423,50 @@ tail -f outputs_global/logs/parallel_01.out | grep "Using parallel processing"
 
 ## Troubleshooting
 
+### **Spatial Validation Issues**
+**Facilities outside country boundaries:**
+- Cause: Coordinate errors in GEM database
+- Solution: Automatic filtering using GADM + EEZ boundaries
+- Check: `filter_facilities_to_boundaries()` logs show removed facilities per country
+
+**Networks extending beyond borders:**
+- Cause: MST algorithm creates straight-line connections
+- Solution: Automatic clipping with `gpd.clip()`, distance recalculation
+- Check: Verify `line_type` includes `siting_networks` after clipping
+
+**Clusters in ocean or wrong territory:**
+- Cause: Weighted centroid calculation can place centers outside polygons
+- Solution: Boundary validation moves clusters to nearest valid point
+- Check: Siting summary shows cluster repositioning statistics
+
+**Missing offshore facilities:**
+- Cause: Using only GADM land boundaries
+- Solution: EEZ maritime boundaries included for offshore platforms
+- Check: Verify `bigdata_eez/eez_v12.gpkg` exists and loads correctly
+
+### **ADD_V2 Workflow Issues**
+**Siting data not detected:**
+- Check: `siting_summary_{ISO3}.xlsx` exists in parquet directory
+- Verify: File naming matches exactly (case-sensitive)
+- Debug: Look for "Siting data detected" message in logs
+
+**Line types not preserved:**
+- Check: `line_type` column exists in input parquets
+- Verify: Values include 'siting_networks', 'grid_infrastructure', 'component_stitch'
+- Debug: Use `gpd.read_parquet().columns` to inspect available attributes
+
+**Duplicate facilities after merging:**
+- Cause: Facilities at grid cell boundaries may cluster incorrectly
+- Solution: 300 arcsecond grid ensures consistent snapping
+- Check: Verify `Num_of_Merged_Units` in facilities output
+
 ### **Fixed Issues ✅**
 - Environment conflicts resolved in `environment.yml`
 - Conda activation fixed in all 40 parallel scripts
 - Unicode encoding fixed for Windows/Linux compatibility
 - Geographic CRS warnings fixed with proper UTM projections
+- WKB geometry deserialization fixed for siting networks
+- Spatial clipping implemented for all geometric features
 - Internal parallelization implemented (grid processing, facility distances)
 - Automatic core detection for cluster/laptop execution
 
