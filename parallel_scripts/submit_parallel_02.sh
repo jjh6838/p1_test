@@ -1,8 +1,8 @@
 #!/bin/bash --login
 #SBATCH --job-name=p02_t1
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --partition=Interactive
+#SBATCH --time=168:00:00
+#SBATCH --mem=200G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=56
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 2/40 (T1) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: BRA"
-echo "[INFO] Tier: T1 | Memory: 100G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Processing 1 countries in this batch: USA"
+echo "[INFO] Tier: T1 | Memory: 200G | CPUs: 56 | Time: 168:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,24 +32,14 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing BRA (T1)..."
-$PY process_country_supply.py BRA --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing USA (T1)..."
+$PY process_country_supply.py USA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BRA completed"
+    echo "[SUCCESS] USA completed"
 else
-    echo "[ERROR] BRA failed"
+    echo "[ERROR] USA failed"
 fi
 
 echo "[INFO] Batch 2/40 (T1) completed at $(date)"

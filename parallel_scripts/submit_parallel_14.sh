@@ -1,8 +1,8 @@
 #!/bin/bash --login
 #SBATCH --job-name=p14_t3
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
+#SBATCH --mem=28G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 14/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: AFG, AGO, BFA, BOL"
-echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 1 countries in this batch: SAU"
+echo "[INFO] Tier: T3 | Memory: 28G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,48 +32,14 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing AFG (T3)..."
-$PY process_country_supply.py AFG --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing SAU (T3)..."
+$PY process_country_supply.py SAU --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] AFG completed"
+    echo "[SUCCESS] SAU completed"
 else
-    echo "[ERROR] AFG failed"
-fi
-
-echo "[INFO] Processing AGO (T3)..."
-$PY process_country_supply.py AGO --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] AGO completed"
-else
-    echo "[ERROR] AGO failed"
-fi
-
-echo "[INFO] Processing BFA (T3)..."
-$PY process_country_supply.py BFA --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BFA completed"
-else
-    echo "[ERROR] BFA failed"
-fi
-
-echo "[INFO] Processing BOL (T3)..."
-$PY process_country_supply.py BOL --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] BOL completed"
-else
-    echo "[ERROR] BOL failed"
+    echo "[ERROR] SAU failed"
 fi
 
 echo "[INFO] Batch 14/40 (T3) completed at $(date)"

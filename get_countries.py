@@ -141,18 +141,18 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
     # The goal is to pack jobs efficiently onto nodes based on computational requirements.
-    # Memory allocation: Tier 1 uses 200GB (high-memory nodes), others use 90GB
-    # Partition strategy: Interactive (48h) for Tier 1, Medium (48h) for Tier 2, Short (12h) for Tiers 3-5
+    # Memory allocation: Tier 1 uses 200GB (high-memory nodes), Tier 2/4 use 90GB, Tier 3/5 use 30GB
+    # Partition strategy: Interactive (168h) for Tier 1, Medium (48h) for Tier 2-3, Short (12h) for Tiers 4-5
     # CPU count: Tier 1 uses 56 CPUs, others use 40 CPUs
-    # Cluster Spec as of 11/26/2025: Long nodes 40CPUs/100G, Medium nodes 40CPUs/100G, Short nodes 40CPUs/100GB or 56CPUs/480G
-    # Check culster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
+    # Cluster Spec as of 12/01/2025: Interactive nodes 56CPUs/480G, Medium nodes 40CPUs/100G, Short nodes 40CPUs/100GB
+    # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN, USA - one country per script
-        "t2": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},     # IND, CAN, MEX - one country per script
-        "t3": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # RUS, BRA, AUS, etc. - one country per script
-        "t4": {"max_countries_per_script": 2, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
-        "t5": {"max_countries_per_script": 11, "mem": "90G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
+        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 56, "time": "168:00:00", "partition": "Interactive"},  # CHN, USA - one country per script
+        "t2": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},     # IND, CAN, MEX - one country per script
+        "t3": {"max_countries_per_script": 1, "mem": "28G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # RUS, BRA, AUS, etc. - one country per script
+        "t4": {"max_countries_per_script": 2, "mem": "98G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
+        "t5": {"max_countries_per_script": 11, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
     }
     
     
@@ -374,11 +374,11 @@ echo "Check completion:"
 echo "  find outputs_per_country/parquet -name '*.parquet' | wc -l"
 echo ""
 echo "Resource allocation summary (tiered partition strategy):"
-echo "  Tier 1 (CHN, USA):              1 country/script  | Interactive partition (48h) | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
-echo "  Tier 2 (IND, CAN, MEX):         1 country/script  | Medium partition (48h)      | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"
-echo "  Tier 3 (RUS, BRA, AUS, etc.):   1 country/script  | Short partition (12h)       | {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
-echo "  Tier 4 (TUR, NGA, COL, etc.):   2 countries/script | Short partition (12h)       | {TIER_CONFIG['t4']['mem']}, {TIER_CONFIG['t4']['cpus']} CPUs"
-echo "  Tier 5 (all others):           11 countries/script | Short partition (12h)       | {TIER_CONFIG['t5']['mem']}, {TIER_CONFIG['t5']['cpus']} CPUs"
+echo "  Tier 1 (CHN, USA):              1 country/script  | Interactive partition (168h) | {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs"
+echo "  Tier 2 (IND, CAN, MEX):         1 country/script  | Medium partition (48h)       | {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs"
+echo "  Tier 3 (RUS, BRA, AUS, etc.):   1 country/script  | Medium partition (48h)       | {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs"
+echo "  Tier 4 (TUR, NGA, COL, etc.):   2 countries/script | Short partition (12h)        | {TIER_CONFIG['t4']['mem']}, {TIER_CONFIG['t4']['cpus']} CPUs"
+echo "  Tier 5 (all others):           11 countries/script | Short partition (12h)        | {TIER_CONFIG['t5']['mem']}, {TIER_CONFIG['t5']['cpus']} CPUs"
 """
     
     master_file = Path("submit_all_parallel.sh")
@@ -495,6 +495,279 @@ echo "  watch -n 60 'squeue -u \\$USER'"
     
     return True
 
+def create_parallel_siting_scripts(num_scripts=40, countries=None):
+    """
+    Creates parallel scripts for siting analysis (process_country_siting.py).
+    Uses simplified tiering since siting analysis is less resource-intensive.
+    """
+    from pathlib import Path
+    
+    if countries is None:
+        countries = get_country_list()
+    
+    if not countries:
+        print("No countries to process!")
+        return False
+    
+    print(f"Creating {num_scripts} parallel siting scripts for {len(countries)} countries")
+    
+    # Simplified tier config for siting (less resource intensive)
+    SITING_TIER_CONFIG = {
+        "t1": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},   # CHN, USA
+        "t2": {"max_countries_per_script": 2, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # IND, CAN, MEX, etc.
+        "t3": {"max_countries_per_script": 11, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"}    # All others
+    }
+    
+    TIER_1 = {"CHN", "USA"}
+    TIER_2 = {"IND", "CAN", "MEX", "RUS", "BRA", "AUS", "ARG", "KAZ", "SAU", "IDN"}
+    
+    def get_tier(country):
+        if country in TIER_1:
+            return "t1"
+        elif country in TIER_2:
+            return "t2"
+        else:
+            return "t3"
+    
+    # Sort countries by tier
+    countries_by_tier = {
+        "t1": [c for c in countries if get_tier(c) == "t1"],
+        "t2": [c for c in countries if get_tier(c) == "t2"],
+        "t3": [c for c in countries if get_tier(c) == "t3"]
+    }
+    
+    print("Countries by tier (siting):")
+    for tier, tier_countries in countries_by_tier.items():
+        config = SITING_TIER_CONFIG[tier]
+        print(f"  {tier.upper()}: {len(tier_countries)} countries (max {config['max_countries_per_script']} per script)")
+        if tier_countries:
+            print(f"    Examples: {', '.join(tier_countries[:3])}")
+    
+    # Create directories
+    scripts_dir = Path("parallel_scripts_siting")
+    scripts_dir.mkdir(exist_ok=True)
+    
+    # Create batches
+    all_batches = []
+    script_counter = 1
+    
+    for tier in ["t1", "t2", "t3"]:
+        tier_countries = countries_by_tier[tier]
+        if not tier_countries:
+            continue
+            
+        config = SITING_TIER_CONFIG[tier]
+        max_per_script = config["max_countries_per_script"]
+        
+        # For Tier 3, distribute evenly
+        if tier == "t3" and len(tier_countries) > max_per_script:
+            scripts_available = num_scripts - script_counter + 1
+            num_batches = min(scripts_available, (len(tier_countries) + max_per_script - 1) // max_per_script)
+            
+            if num_batches > 0:
+                countries_per_batch = len(tier_countries) // num_batches
+                extra_countries = len(tier_countries) % num_batches
+                
+                tier_countries_copy = tier_countries.copy()
+                for batch_idx in range(num_batches):
+                    batch_size = countries_per_batch + (1 if batch_idx < extra_countries else 0)
+                    batch = tier_countries_copy[:batch_size]
+                    tier_countries_copy = tier_countries_copy[batch_size:]
+                    
+                    batch_info = {
+                        "countries": batch,
+                        "tier": tier,
+                        "config": config,
+                        "script_num": script_counter
+                    }
+                    all_batches.append(batch_info)
+                    script_counter += 1
+                    
+                    if script_counter > num_scripts:
+                        break
+        else:
+            for i in range(0, len(tier_countries), max_per_script):
+                batch = tier_countries[i:i + max_per_script]
+                batch_info = {
+                    "countries": batch,
+                    "tier": tier,
+                    "config": config,
+                    "script_num": script_counter
+                }
+                all_batches.append(batch_info)
+                script_counter += 1
+                
+                if script_counter > num_scripts:
+                    remaining_countries = tier_countries[i + max_per_script:]
+                    if remaining_countries:
+                        all_batches[-1]["countries"].extend(remaining_countries)
+                    break
+        
+        if script_counter > num_scripts:
+            break
+    
+    all_batches = all_batches[:num_scripts]
+    
+    print(f"\nCreated {len(all_batches)} siting script batches:")
+    
+    # Create shell scripts
+    for i, batch_info in enumerate(all_batches, 1):
+        batch = batch_info["countries"]
+        tier = batch_info["tier"]
+        config = batch_info["config"]
+        
+        script_content = f"""#!/bin/bash --login
+#SBATCH --job-name=siting_{i:02d}_{tier}
+#SBATCH --partition={config["partition"]}
+#SBATCH --time={config["time"]}
+#SBATCH --mem={config["mem"]}
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task={config["cpus"]}
+#SBATCH --output=outputs_global/logs/siting_{i:02d}_%j.out
+#SBATCH --error=outputs_global/logs/siting_{i:02d}_%j.err
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+cd "$SLURM_SUBMIT_DIR"
+
+echo "[INFO] Starting siting analysis script {i}/{len(all_batches)} ({tier.upper()}) at $(date)"
+echo "[INFO] Processing {len(batch)} countries in this batch: {', '.join(batch)}"
+echo "[INFO] Tier: {tier.upper()} | Memory: {config['mem']} | CPUs: {config['cpus']} | Time: {config['time']}"
+
+# --- directories ---
+mkdir -p outputs_per_country outputs_global outputs_global/logs
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+conda activate p1_etl || true
+
+# Use the env's absolute python path
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: $PY"
+$PY -c 'import sys; print(sys.executable)'
+
+# Process countries in this batch
+"""
+        
+        for country in batch:
+            script_content += f"""
+echo "[INFO] Processing siting analysis for {country} ({get_tier(country).upper()})..."
+$PY process_country_siting.py {country}
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] {country} siting analysis completed"
+else
+    echo "[ERROR] {country} siting analysis failed"
+fi
+"""
+        
+        script_content += f"""
+echo "[INFO] Siting batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
+"""
+        
+        script_file = scripts_dir / f"submit_parallel_siting_{i:02d}.sh"
+        script_file.write_text(script_content, encoding='utf-8')
+        script_file.chmod(0o755)
+        
+        print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
+    
+    # Create master submission script
+    master_script = f"""#!/bin/bash
+# Submit all parallel siting analysis jobs
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda activate p1_etl
+
+echo "[INFO] Submitting {len(all_batches)} parallel siting analysis jobs..."
+echo "[INFO] SLURM will automatically queue and manage job execution"
+echo ""
+
+# Submit all jobs
+for i in {{01..{len(all_batches):02d}}}; do
+    echo "[$(date +%H:%M:%S)] Submitting siting job $i..."
+    sbatch parallel_scripts_siting/submit_parallel_siting_${{i}}.sh
+    sleep 1
+done
+
+echo ""
+echo "[INFO] All {len(all_batches)} siting jobs submitted!"
+echo ""
+echo "Monitor with:"
+echo "  squeue -u \\$USER"
+echo "  watch -n 60 'squeue -u \\$USER'"
+echo ""
+echo "Check completion:"
+echo "  find outputs_per_country/parquet -name 'siting_*.parquet' | wc -l"
+echo ""
+echo "Resource allocation summary (siting analysis):"
+echo "  Tier 1 (CHN, USA):              1 country/script  | Medium partition (48h) | {SITING_TIER_CONFIG['t1']['mem']}, {SITING_TIER_CONFIG['t1']['cpus']} CPUs"
+echo "  Tier 2 (IND, CAN, etc.):        2 countries/script | Medium partition (24h) | {SITING_TIER_CONFIG['t2']['mem']}, {SITING_TIER_CONFIG['t2']['cpus']} CPUs"
+echo "  Tier 3 (all others):           11 countries/script | Short partition (12h)  | {SITING_TIER_CONFIG['t3']['mem']}, {SITING_TIER_CONFIG['t3']['cpus']} CPUs"
+"""
+    
+    master_file = Path("submit_all_parallel_siting.sh")
+    master_file.write_text(master_script, encoding='utf-8')
+    master_file.chmod(0o755)
+    
+    print(f"\nCreated {master_file} to submit all parallel siting jobs")
+    
+    # Create single script runner
+    single_script = """#!/bin/bash
+# Run a single parallel siting script by number
+# Usage: ./submit_one_siting.sh <script_number>
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <script_number>"
+    echo "Example: $0 06"
+    echo ""
+    echo "Available scripts:"
+    ls -1 parallel_scripts_siting/submit_parallel_siting_*.sh | sed 's/.*submit_parallel_siting_/  /' | sed 's/.sh//'
+    exit 1
+fi
+
+SCRIPT_NUM=$(printf "%02d" $1)
+SCRIPT_FILE="parallel_scripts_siting/submit_parallel_siting_${SCRIPT_NUM}.sh"
+
+if [ ! -f "$SCRIPT_FILE" ]; then
+    echo "Error: Script not found: $SCRIPT_FILE"
+    echo ""
+    echo "Available scripts:"
+    ls -1 parallel_scripts_siting/submit_parallel_siting_*.sh | sed 's/.*submit_parallel_siting_/  /' | sed 's/.sh//'
+    exit 1
+fi
+
+echo "[INFO] Submitting siting script ${SCRIPT_NUM}..."
+sbatch "$SCRIPT_FILE"
+
+echo ""
+echo "Monitor with:"
+echo "  squeue -u \\$USER"
+echo "  watch -n 60 'squeue -u \\$USER'"
+"""
+    
+    single_file = Path("submit_one_siting.sh")
+    single_file.write_text(single_script, encoding='utf-8')
+    single_file.chmod(0o755)
+    
+    print(f"Created {single_file} for submitting individual siting scripts")
+    
+    # Calculate total resources
+    total_mem = sum(int(batch_info["config"]["mem"].replace("G", "")) for batch_info in all_batches)
+    total_cpus = sum(batch_info["config"]["cpus"] for batch_info in all_batches)
+    
+    print(f"\nTotal resource allocation (siting):")
+    print(f"  Total Memory: {total_mem}GB")
+    print(f"  Total CPUs: {total_cpus}")
+    print(f"  Scripts: {len(all_batches)}")
+    
+    return True
+
 if __name__ == "__main__":
     import sys
     # Allows running from the command line with '--create-parallel' to generate the scripts.
@@ -503,6 +776,13 @@ if __name__ == "__main__":
         countries = get_country_list()
         if countries:
             create_parallel_scripts(countries=countries)
+        else:
+            print("No countries found!")
+    elif len(sys.argv) > 1 and sys.argv[1] == "--create-parallel-siting":
+        # Create parallel siting scripts
+        countries = get_country_list()
+        if countries:
+            create_parallel_siting_scripts(countries=countries)
         else:
             print("No countries found!")
     else:

@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p18_t3
+#SBATCH --job-name=p18_t4
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --mem=98G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 18/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: GAB, GBR, GIN, IRQ"
-echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 18/40 (T4) at $(date)"
+echo "[INFO] Processing 2 countries in this batch: FRA, IRQ"
+echo "[INFO] Tier: T4 | Memory: 98G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,48 +32,22 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing GAB (T3)..."
-$PY process_country_supply.py GAB --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing FRA (T4)..."
+$PY process_country_supply.py FRA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GAB completed"
+    echo "[SUCCESS] FRA completed"
 else
-    echo "[ERROR] GAB failed"
+    echo "[ERROR] FRA failed"
 fi
 
-echo "[INFO] Processing GBR (T3)..."
-$PY process_country_supply.py GBR --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GBR completed"
-else
-    echo "[ERROR] GBR failed"
-fi
-
-echo "[INFO] Processing GIN (T3)..."
-$PY process_country_supply.py GIN --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GIN completed"
-else
-    echo "[ERROR] GIN failed"
-fi
-
-echo "[INFO] Processing IRQ (T3)..."
-$PY process_country_supply.py IRQ --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing IRQ (T4)..."
+$PY process_country_supply.py IRQ --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] IRQ completed"
 else
     echo "[ERROR] IRQ failed"
 fi
 
-echo "[INFO] Batch 18/40 (T3) completed at $(date)"
+echo "[INFO] Batch 18/40 (T4) completed at $(date)"

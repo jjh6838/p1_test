@@ -1,0 +1,117 @@
+#!/bin/bash --login
+#SBATCH --job-name=siting_15_t3
+#SBATCH --partition=Short
+#SBATCH --time=12:00:00
+#SBATCH --mem=28G
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=40
+#SBATCH --output=outputs_global/logs/siting_15_%j.out
+#SBATCH --error=outputs_global/logs/siting_15_%j.err
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+cd "$SLURM_SUBMIT_DIR"
+
+echo "[INFO] Starting siting analysis script 15/24 (T3) at $(date)"
+echo "[INFO] Processing 10 countries in this batch: ISR, ITA, JAM, JOR, JPN, KEN, KGZ, KHM, KIR, KNA"
+echo "[INFO] Tier: T3 | Memory: 28G | CPUs: 40 | Time: 12:00:00"
+
+# --- directories ---
+mkdir -p outputs_per_country outputs_global outputs_global/logs
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+conda activate p1_etl || true
+
+# Use the env's absolute python path
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: $PY"
+$PY -c 'import sys; print(sys.executable)'
+
+# Process countries in this batch
+
+echo "[INFO] Processing siting analysis for ISR (T3)..."
+$PY process_country_siting.py ISR
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ISR siting analysis completed"
+else
+    echo "[ERROR] ISR siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for ITA (T3)..."
+$PY process_country_siting.py ITA
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ITA siting analysis completed"
+else
+    echo "[ERROR] ITA siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for JAM (T3)..."
+$PY process_country_siting.py JAM
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] JAM siting analysis completed"
+else
+    echo "[ERROR] JAM siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for JOR (T3)..."
+$PY process_country_siting.py JOR
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] JOR siting analysis completed"
+else
+    echo "[ERROR] JOR siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for JPN (T3)..."
+$PY process_country_siting.py JPN
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] JPN siting analysis completed"
+else
+    echo "[ERROR] JPN siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for KEN (T3)..."
+$PY process_country_siting.py KEN
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] KEN siting analysis completed"
+else
+    echo "[ERROR] KEN siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for KGZ (T3)..."
+$PY process_country_siting.py KGZ
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] KGZ siting analysis completed"
+else
+    echo "[ERROR] KGZ siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for KHM (T3)..."
+$PY process_country_siting.py KHM
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] KHM siting analysis completed"
+else
+    echo "[ERROR] KHM siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for KIR (T3)..."
+$PY process_country_siting.py KIR
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] KIR siting analysis completed"
+else
+    echo "[ERROR] KIR siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for KNA (T3)..."
+$PY process_country_siting.py KNA
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] KNA siting analysis completed"
+else
+    echo "[ERROR] KNA siting analysis failed"
+fi
+
+echo "[INFO] Siting batch 15/24 (T3) completed at $(date)"

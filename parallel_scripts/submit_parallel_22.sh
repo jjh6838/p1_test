@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p22_t3
+#SBATCH --job-name=p22_t4
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --mem=98G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 22/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: NOR, NZL, OMN, PAK"
-echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 22/40 (T4) at $(date)"
+echo "[INFO] Processing 2 countries in this batch: PER, PHL"
+echo "[INFO] Tier: T4 | Memory: 98G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,48 +32,22 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing NOR (T3)..."
-$PY process_country_supply.py NOR --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing PER (T4)..."
+$PY process_country_supply.py PER --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] NOR completed"
+    echo "[SUCCESS] PER completed"
 else
-    echo "[ERROR] NOR failed"
+    echo "[ERROR] PER failed"
 fi
 
-echo "[INFO] Processing NZL (T3)..."
-$PY process_country_supply.py NZL --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing PHL (T4)..."
+$PY process_country_supply.py PHL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] NZL completed"
+    echo "[SUCCESS] PHL completed"
 else
-    echo "[ERROR] NZL failed"
+    echo "[ERROR] PHL failed"
 fi
 
-echo "[INFO] Processing OMN (T3)..."
-$PY process_country_supply.py OMN --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] OMN completed"
-else
-    echo "[ERROR] OMN failed"
-fi
-
-echo "[INFO] Processing PAK (T3)..."
-$PY process_country_supply.py PAK --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] PAK completed"
-else
-    echo "[ERROR] PAK failed"
-fi
-
-echo "[INFO] Batch 22/40 (T3) completed at $(date)"
+echo "[INFO] Batch 22/40 (T4) completed at $(date)"

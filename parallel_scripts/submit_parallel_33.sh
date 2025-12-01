@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p33_other
+#SBATCH --job-name=p33_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --mem=28G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 33/40 (OTHER) at $(date)"
-echo "[INFO] Processing 8 countries in this batch: GHA, GMB, GNB, GNQ, GRC, GRL, GTM, GUM"
-echo "[INFO] Tier: OTHER | Memory: 100G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 33/40 (T5) at $(date)"
+echo "[INFO] Processing 10 countries in this batch: KHM, KIR, KNA, KOR, KWT, LAO, LBN, LBR, LBY, LCA"
+echo "[INFO] Tier: T5 | Memory: 28G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,80 +32,86 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing GHA (OTHER)..."
-$PY process_country_supply.py GHA --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing KHM (T5)..."
+$PY process_country_supply.py KHM --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GHA completed"
+    echo "[SUCCESS] KHM completed"
 else
-    echo "[ERROR] GHA failed"
+    echo "[ERROR] KHM failed"
 fi
 
-echo "[INFO] Processing GMB (OTHER)..."
-$PY process_country_supply.py GMB --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing KIR (T5)..."
+$PY process_country_supply.py KIR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GMB completed"
+    echo "[SUCCESS] KIR completed"
 else
-    echo "[ERROR] GMB failed"
+    echo "[ERROR] KIR failed"
 fi
 
-echo "[INFO] Processing GNB (OTHER)..."
-$PY process_country_supply.py GNB --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing KNA (T5)..."
+$PY process_country_supply.py KNA --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GNB completed"
+    echo "[SUCCESS] KNA completed"
 else
-    echo "[ERROR] GNB failed"
+    echo "[ERROR] KNA failed"
 fi
 
-echo "[INFO] Processing GNQ (OTHER)..."
-$PY process_country_supply.py GNQ --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing KOR (T5)..."
+$PY process_country_supply.py KOR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GNQ completed"
+    echo "[SUCCESS] KOR completed"
 else
-    echo "[ERROR] GNQ failed"
+    echo "[ERROR] KOR failed"
 fi
 
-echo "[INFO] Processing GRC (OTHER)..."
-$PY process_country_supply.py GRC --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing KWT (T5)..."
+$PY process_country_supply.py KWT --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GRC completed"
+    echo "[SUCCESS] KWT completed"
 else
-    echo "[ERROR] GRC failed"
+    echo "[ERROR] KWT failed"
 fi
 
-echo "[INFO] Processing GRL (OTHER)..."
-$PY process_country_supply.py GRL --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing LAO (T5)..."
+$PY process_country_supply.py LAO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GRL completed"
+    echo "[SUCCESS] LAO completed"
 else
-    echo "[ERROR] GRL failed"
+    echo "[ERROR] LAO failed"
 fi
 
-echo "[INFO] Processing GTM (OTHER)..."
-$PY process_country_supply.py GTM --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing LBN (T5)..."
+$PY process_country_supply.py LBN --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GTM completed"
+    echo "[SUCCESS] LBN completed"
 else
-    echo "[ERROR] GTM failed"
+    echo "[ERROR] LBN failed"
 fi
 
-echo "[INFO] Processing GUM (OTHER)..."
-$PY process_country_supply.py GUM --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing LBR (T5)..."
+$PY process_country_supply.py LBR --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] GUM completed"
+    echo "[SUCCESS] LBR completed"
 else
-    echo "[ERROR] GUM failed"
+    echo "[ERROR] LBR failed"
 fi
 
-echo "[INFO] Batch 33/40 (OTHER) completed at $(date)"
+echo "[INFO] Processing LBY (T5)..."
+$PY process_country_supply.py LBY --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] LBY completed"
+else
+    echo "[ERROR] LBY failed"
+fi
+
+echo "[INFO] Processing LCA (T5)..."
+$PY process_country_supply.py LCA --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] LCA completed"
+else
+    echo "[ERROR] LCA failed"
+fi
+
+echo "[INFO] Batch 33/40 (T5) completed at $(date)"

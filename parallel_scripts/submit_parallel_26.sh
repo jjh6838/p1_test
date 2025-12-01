@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p26_t3
+#SBATCH --job-name=p26_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --mem=28G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 26/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: UKR, UZB, YEM, ZAF"
-echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 26/40 (T5) at $(date)"
+echo "[INFO] Processing 11 countries in this batch: ABW, AFG, AGO, ALB, ARE, ARM, ASM, ATG, AUT, AZE, BDI"
+echo "[INFO] Tier: T5 | Memory: 28G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,48 +32,94 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing UKR (T3)..."
-$PY process_country_supply.py UKR --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing ABW (T5)..."
+$PY process_country_supply.py ABW --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] UKR completed"
+    echo "[SUCCESS] ABW completed"
 else
-    echo "[ERROR] UKR failed"
+    echo "[ERROR] ABW failed"
 fi
 
-echo "[INFO] Processing UZB (T3)..."
-$PY process_country_supply.py UZB --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing AFG (T5)..."
+$PY process_country_supply.py AFG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] UZB completed"
+    echo "[SUCCESS] AFG completed"
 else
-    echo "[ERROR] UZB failed"
+    echo "[ERROR] AFG failed"
 fi
 
-echo "[INFO] Processing YEM (T3)..."
-$PY process_country_supply.py YEM --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing AGO (T5)..."
+$PY process_country_supply.py AGO --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] YEM completed"
+    echo "[SUCCESS] AGO completed"
 else
-    echo "[ERROR] YEM failed"
+    echo "[ERROR] AGO failed"
 fi
 
-echo "[INFO] Processing ZAF (T3)..."
-$PY process_country_supply.py ZAF --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing ALB (T5)..."
+$PY process_country_supply.py ALB --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ZAF completed"
+    echo "[SUCCESS] ALB completed"
 else
-    echo "[ERROR] ZAF failed"
+    echo "[ERROR] ALB failed"
 fi
 
-echo "[INFO] Batch 26/40 (T3) completed at $(date)"
+echo "[INFO] Processing ARE (T5)..."
+$PY process_country_supply.py ARE --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ARE completed"
+else
+    echo "[ERROR] ARE failed"
+fi
+
+echo "[INFO] Processing ARM (T5)..."
+$PY process_country_supply.py ARM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ARM completed"
+else
+    echo "[ERROR] ARM failed"
+fi
+
+echo "[INFO] Processing ASM (T5)..."
+$PY process_country_supply.py ASM --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ASM completed"
+else
+    echo "[ERROR] ASM failed"
+fi
+
+echo "[INFO] Processing ATG (T5)..."
+$PY process_country_supply.py ATG --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] ATG completed"
+else
+    echo "[ERROR] ATG failed"
+fi
+
+echo "[INFO] Processing AUT (T5)..."
+$PY process_country_supply.py AUT --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] AUT completed"
+else
+    echo "[ERROR] AUT failed"
+fi
+
+echo "[INFO] Processing AZE (T5)..."
+$PY process_country_supply.py AZE --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] AZE completed"
+else
+    echo "[ERROR] AZE failed"
+fi
+
+echo "[INFO] Processing BDI (T5)..."
+$PY process_country_supply.py BDI --output-dir outputs_per_country
+if [ $? -eq 0 ]; then
+    echo "[SUCCESS] BDI completed"
+else
+    echo "[ERROR] BDI failed"
+fi
+
+echo "[INFO] Batch 26/40 (T5) completed at $(date)"

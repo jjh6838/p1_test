@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p16_t3
+#SBATCH --job-name=p16_t4
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --mem=98G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 16/40 (T3) at $(date)"
-echo "[INFO] Processing 4 countries in this batch: CMR, COL, DEU, ECU"
-echo "[INFO] Tier: T3 | Memory: 100G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 16/40 (T4) at $(date)"
+echo "[INFO] Processing 2 countries in this batch: COL, DEU"
+echo "[INFO] Tier: T4 | Memory: 98G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,48 +32,22 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing CMR (T3)..."
-$PY process_country_supply.py CMR --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] CMR completed"
-else
-    echo "[ERROR] CMR failed"
-fi
-
-echo "[INFO] Processing COL (T3)..."
-$PY process_country_supply.py COL --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing COL (T4)..."
+$PY process_country_supply.py COL --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] COL completed"
 else
     echo "[ERROR] COL failed"
 fi
 
-echo "[INFO] Processing DEU (T3)..."
-$PY process_country_supply.py DEU --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing DEU (T4)..."
+$PY process_country_supply.py DEU --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] DEU completed"
 else
     echo "[ERROR] DEU failed"
 fi
 
-echo "[INFO] Processing ECU (T3)..."
-$PY process_country_supply.py ECU --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] ECU completed"
-else
-    echo "[ERROR] ECU failed"
-fi
-
-echo "[INFO] Batch 16/40 (T3) completed at $(date)"
+echo "[INFO] Batch 16/40 (T4) completed at $(date)"

@@ -1,16 +1,5 @@
 #!/bin/bash
 # Submit all parallel jobs immediately (SLURM will queue them automatically)
-# Usage: ./submit_all_parallel.sh [--run-all-scenarios]
-
-# Check for --run-all-scenarios flag
-RUN_ALL_SCENARIOS=""
-if [ "$1" == "--run-all-scenarios" ]; then
-    RUN_ALL_SCENARIOS="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario only"
-fi
-echo ""
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -25,11 +14,7 @@ echo ""
 # Submit all jobs
 for i in {01..40}; do
     echo "[$(date +%H:%M:%S)] Submitting job $i..."
-    if [ -n "$RUN_ALL_SCENARIOS" ]; then
-        sbatch --export=ALL,RUN_ALL_SCENARIOS=1 parallel_scripts/submit_parallel_${i}.sh
-    else
-        sbatch parallel_scripts/submit_parallel_${i}.sh
-    fi
+    sbatch parallel_scripts/submit_parallel_${i}.sh
     sleep 1  # Small delay to avoid overwhelming scheduler
 done
 
@@ -43,8 +28,9 @@ echo ""
 echo "Check completion:"
 echo "  find outputs_per_country/parquet -name '*.parquet' | wc -l"
 echo ""
-echo "Resource allocation summary (tiered partition strategy - smallest first):"
-echo "  Other (smallest):  8 countries/script | Short partition (12h)      | 100G, 40 CPUs"
-echo "  Tier 3 (medium):   4 countries/script | Short partition (12h)      | 100G, 40 CPUs"
-echo "  Tier 2 (large):    2 countries/script | Medium partition (48h/2d)  | 100G, 40 CPUs"  
-echo "  Tier 1 (largest):  1 country/script  | Medium partition (48h/2d)  | 100G, 56 CPUs"
+echo "Resource allocation summary (tiered partition strategy):"
+echo "  Tier 1 (CHN, USA):              1 country/script  | Interactive partition (168h) | 200G, 56 CPUs"
+echo "  Tier 2 (IND, CAN, MEX):         1 country/script  | Medium partition (48h)       | 98G, 40 CPUs"
+echo "  Tier 3 (RUS, BRA, AUS, etc.):   1 country/script  | Medium partition (48h)       | 28G, 40 CPUs"
+echo "  Tier 4 (TUR, NGA, COL, etc.):   2 countries/script | Short partition (12h)        | 98G, 40 CPUs"
+echo "  Tier 5 (all others):           11 countries/script | Short partition (12h)        | 28G, 40 CPUs"

@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p12_t2
+#SBATCH --job-name=p12_t3
 #SBATCH --partition=Medium
 #SBATCH --time=48:00:00
-#SBATCH --mem=100G
+#SBATCH --mem=28G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 12/40 (T2) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: MNG, SAU"
-echo "[INFO] Tier: T2 | Memory: 100G | CPUs: 40 | Time: 48:00:00"
+echo "[INFO] Starting parallel script 12/40 (T3) at $(date)"
+echo "[INFO] Processing 1 countries in this batch: KAZ"
+echo "[INFO] Tier: T3 | Memory: 28G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,32 +32,14 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing MNG (T2)..."
-$PY process_country_supply.py MNG --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing KAZ (T3)..."
+$PY process_country_supply.py KAZ --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] MNG completed"
+    echo "[SUCCESS] KAZ completed"
 else
-    echo "[ERROR] MNG failed"
+    echo "[ERROR] KAZ failed"
 fi
 
-echo "[INFO] Processing SAU (T2)..."
-$PY process_country_supply.py SAU --output-dir outputs_per_country $SCENARIO_FLAG
-if [ $? -eq 0 ]; then
-    echo "[SUCCESS] SAU completed"
-else
-    echo "[ERROR] SAU failed"
-fi
-
-echo "[INFO] Batch 12/40 (T2) completed at $(date)"
+echo "[INFO] Batch 12/40 (T3) completed at $(date)"

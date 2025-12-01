@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p06_t1
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=100G
+#SBATCH --job-name=p06_t3
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
+#SBATCH --mem=28G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_global/logs/parallel_06_%j.out
 #SBATCH --error=outputs_global/logs/parallel_06_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 6/40 (T1) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: RUS"
-echo "[INFO] Tier: T1 | Memory: 100G | CPUs: 56 | Time: 12:00:00"
+echo "[INFO] Starting parallel script 6/40 (T3) at $(date)"
+echo "[INFO] Processing 1 countries in this batch: ARG"
+echo "[INFO] Tier: T3 | Memory: 28G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -32,24 +32,14 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check for scenario flag
-SCENARIO_FLAG=""
-if [ "${RUN_ALL_SCENARIOS:-0}" == "1" ]; then
-    SCENARIO_FLAG="--run-all-scenarios"
-    echo "[INFO] Running all supply scenarios: 100%, 90%, 80%, 70%, 60%"
-else
-    echo "[INFO] Running default 100% supply scenario"
-fi
-echo ""
-
 # Process countries in this batch
 
-echo "[INFO] Processing RUS (T1)..."
-$PY process_country_supply.py RUS --output-dir outputs_per_country $SCENARIO_FLAG
+echo "[INFO] Processing ARG (T3)..."
+$PY process_country_supply.py ARG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] RUS completed"
+    echo "[SUCCESS] ARG completed"
 else
-    echo "[ERROR] RUS failed"
+    echo "[ERROR] ARG failed"
 fi
 
-echo "[INFO] Batch 6/40 (T1) completed at $(date)"
+echo "[INFO] Batch 6/40 (T3) completed at $(date)"
