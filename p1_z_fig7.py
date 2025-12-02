@@ -36,7 +36,7 @@ print(f"Aggregated to {len(data_aggregated):,} rows (summed across hazard types)
 
 # Create figure with 3 rows × 6 columns + space for colorbar
 # Size: 180mm width × 60mm height = 7.087 inches × 2.362 inches
-fig = plt.figure(figsize=(7.087, 2.362))
+fig = plt.figure(figsize=(20, 10))
 gs = fig.add_gridspec(3, 7, hspace=0.3, wspace=0.3, width_ratios=[1, 1, 1, 1, 1, 1, 0.15])
 
 # Color schemes (Oxford colors)
