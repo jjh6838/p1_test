@@ -81,7 +81,7 @@ except ImportError:
 
 # Constants
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
-ANALYSIS_YEAR = 2030  # Year for supply-demand analysis: 2024, 2030, or 2050
+ANALYSIS_YEAR = 2050  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
 POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: Distance threshold (in km) for stitching raw grid segments

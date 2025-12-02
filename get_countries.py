@@ -148,7 +148,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 56, "time": "168:00:00", "partition": "Interactive"},  # CHN, USA - one country per script
+        "t1": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN, USA - one country per script
         "t2": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},     # IND, CAN, MEX - one country per script
         "t3": {"max_countries_per_script": 1, "mem": "28G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # RUS, BRA, AUS, etc. - one country per script
         "t4": {"max_countries_per_script": 2, "mem": "98G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
@@ -513,7 +513,7 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
     
     # Simplified tier config for siting (less resource intensive)
     SITING_TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "90G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},   # CHN, USA
+        "t1": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},   # CHN, USA
         "t2": {"max_countries_per_script": 2, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # IND, CAN, MEX, etc.
         "t3": {"max_countries_per_script": 11, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"}    # All others
     }
