@@ -2,7 +2,7 @@
 #SBATCH --job-name=siting_05_t2
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=28G
+#SBATCH --mem=98G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting siting analysis script 5/24 (T2) at $(date)"
 echo "[INFO] Processing 2 countries in this batch: IDN, IND"
-echo "[INFO] Tier: T2 | Memory: 28G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Tier: T2 | Memory: 98G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

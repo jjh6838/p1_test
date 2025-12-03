@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH --job-name=p04_t2
-#SBATCH --partition=Medium
-#SBATCH --time=48:00:00
-#SBATCH --mem=98G
+#SBATCH --job-name=p04_t3
+#SBATCH --partition=Short
+#SBATCH --time=12:00:00
+#SBATCH --mem=28G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 4/40 (T2) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: IND"
-echo "[INFO] Tier: T2 | Memory: 98G | CPUs: 40 | Time: 48:00:00"
+echo "[INFO] Starting parallel script 4/40 (T3) at $(date)"
+echo "[INFO] Processing 1 countries in this batch: ARG"
+echo "[INFO] Tier: T3 | Memory: 28G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,12 +34,12 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing IND (T2)..."
-$PY process_country_supply.py IND --output-dir outputs_per_country
+echo "[INFO] Processing ARG (T3)..."
+$PY process_country_supply.py ARG --output-dir outputs_per_country
 if [ $? -eq 0 ]; then
-    echo "[SUCCESS] IND completed"
+    echo "[SUCCESS] ARG completed"
 else
-    echo "[ERROR] IND failed"
+    echo "[ERROR] ARG failed"
 fi
 
-echo "[INFO] Batch 4/40 (T2) completed at $(date)"
+echo "[INFO] Batch 4/40 (T3) completed at $(date)"

@@ -18,6 +18,9 @@ hazard_types = ['flooding', 'cyclones', 'wildfires', 'landslides', 'droughts', '
 np.random.seed(42)  # For reproducibility
 
 # Define custom ranges for each energy type
+# NOTE: These percentages represent the TOTAL exposure across ALL hazards when summed
+# Since we have 6 hazard types, each individual hazard should be roughly 1/6 of these ranges
+# to ensure the sum doesn't exceed 100%
 ranges_exp = {
     "hydro": (12, 19),
     "solar": (25, 45),
@@ -37,6 +40,9 @@ ranges_risk_avoid = {
     "fossil": (0.5, 4),
 }
 
+# Number of hazard types (used to divide percentages so sum doesn't exceed total)
+num_hazards = len(hazard_types)
+
 # Generate random percentages with proportional relationships
 # - As supply decreases (100% -> 60%), exposure decreases proportionally
 # - As buffer increases (0km -> 40km), exposure increases proportionally
@@ -50,8 +56,9 @@ buffer_values = [0, 10, 20, 30, 40]  # Numeric values for calculation
 for energy_type in energy_types:
     for year in years:
         # Get base percentage at 100% supply, 0km buffer
-        base_exp = np.random.uniform(*ranges_exp[energy_type])
-        base_risk = np.random.uniform(*ranges_risk_avoid[energy_type])
+        # Divide by num_hazards so that when summed across all hazards, it equals the target range
+        base_exp = np.random.uniform(*ranges_exp[energy_type]) / num_hazards
+        base_risk = np.random.uniform(*ranges_risk_avoid[energy_type]) / num_hazards
         
         for hazard_type in hazard_types:
             # Each hazard type has slightly different exposure levels (±10% variation)

@@ -132,8 +132,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Define tiers based on country size/complexity. This is determined empirically based on
     # the computational intensity (number of centroids, grid lines) of each country.
     TIER_1 = {"CHN", "USA"}  # Largest countries, require maximum resources.
-    TIER_2 = {"IND", "CAN", "MEX"}  # Large countries.
-    TIER_3 = {"RUS", "BRA", "AUS", "ARG", "KAZ", "SAU", "IDN", "IRN", "ZAF", "EGY"}  # Medium-large countries.
+    TIER_2 = {"IND"}  # Large countries.
+    TIER_3 = {"CAN", "MEX", "RUS", "BRA", "AUS", "ARG", "KAZ", "SAU", "IDN", "IRN", "ZAF", "EGY"}  # Medium-large countries.
     TIER_4 = {
         "TUR", "NGA", "COL", "PAK", "PER", "DZA", "VEN", "UKR", "ETH", "PHL", "MLI", "TCD", "SDN", "FRA",
         "SWE", "NOR", "DEU", "IRQ", "MMR", "JPN"
@@ -148,9 +148,9 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN, USA - one country per script
+        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 36, "time": "168:00:00", "partition": "Interactive"},  # CHN, USA - one country per script
         "t2": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},     # IND, CAN, MEX - one country per script
-        "t3": {"max_countries_per_script": 1, "mem": "28G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # RUS, BRA, AUS, etc. - one country per script
+        "t3": {"max_countries_per_script": 1, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # RUS, BRA, AUS, etc. - one country per script
         "t4": {"max_countries_per_script": 2, "mem": "98G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
         "t5": {"max_countries_per_script": 11, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
     }
@@ -513,8 +513,8 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
     
     # Simplified tier config for siting (less resource intensive)
     SITING_TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},   # CHN, USA
-        "t2": {"max_countries_per_script": 2, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # IND, CAN, MEX, etc.
+        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 56, "time": "168:00:00", "partition": "Interactive"},   # CHN, USA
+        "t2": {"max_countries_per_script": 2, "mem": "98G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # IND, CAN, MEX, etc.
         "t3": {"max_countries_per_script": 11, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"}    # All others
     }
     

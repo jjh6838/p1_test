@@ -6,8 +6,30 @@ import numpy as np
 # Oxford color scheme
 plt.rcParams['font.family'] = 'Arial'
 
+# Load the total generation data from p1_b_ember_2024_30_50.xlsx
+print("Loading total generation data from p1_b_ember_2024_30_50.xlsx...")
+total_gen_df = pd.read_excel('outputs_processed_data/p1_b_ember_2024_30_50.xlsx')
+
+# Calculate total generation for each energy type and year (sum across all countries)
+total_generation = {}
+for energy_type in ['Solar', 'Wind', 'Hydro']:
+    total_generation[energy_type] = {}
+    for year in [2024, 2030, 2050]:
+        col_name = f'{energy_type}_{year}_MWh'
+        if col_name in total_gen_df.columns:
+            # Convert to TWh (divide by 1e6)
+            total_generation[energy_type][year] = total_gen_df[col_name].sum() / 1e6
+        else:
+            total_generation[energy_type][year] = 0
+
+print("\nTotal generation by energy type and year (TWh):")
+for energy_type in ['Solar', 'Wind', 'Hydro']:
+    print(f"  {energy_type}:")
+    for year in [2024, 2030, 2050]:
+        print(f"    {year}: {total_generation[energy_type][year]:.1f} TWh")
+
 # Load the processed data
-print("Loading data from p1_y_results_data_etl.xlsx...")
+print("\nLoading exposure data from p1_y_results_data_etl.xlsx...")
 data = pd.read_excel('outputs_processed_data/p1_y_results_data_etl.xlsx')
 
 print(f"Loaded {len(data):,} rows")
@@ -21,18 +43,39 @@ data_filtered = data[data['energy_type'].isin(energy_types)].copy()
 
 print(f"\nFiltered to {len(data_filtered):,} rows for Solar, Wind, Hydro")
 
-# Aggregate across all hazard types (sum exposure across all hazards)
-print("Aggregating across all hazard types...")
+# Take MAX across hazard types to avoid double-counting facilities exposed to multiple hazards
+print("Aggregating across all hazard types (taking MAX to avoid double-counting)...")
 data_aggregated = data_filtered.groupby(
     ['ISO3_code', 'energy_type', 'year', 'supply_scenario', 'hazard_buffer']
 ).agg({
-    'exp_MWh': 'sum',
-    'exp_USD': 'sum',
-    'exp_risk_avoid_MWh': 'sum',
-    'exp_risk_avoid_USD': 'sum'
+    'exp_MWh': 'max',
+    'exp_USD': 'max',
+    'exp_risk_avoid_MWh': 'max',
+    'exp_risk_avoid_USD': 'max'
 }).reset_index()
 
-print(f"Aggregated to {len(data_aggregated):,} rows (summed across hazard types)")
+print(f"Aggregated to {len(data_aggregated):,} rows (max across hazard types)")
+
+# Verify exposure for baseline scenario (100% supply, 0km buffer)
+print("\nVerifying exposure vs total supply for 100% supply, 0km buffer:")
+for energy_type in energy_types:
+    for year in [2030, 2050]:
+        year_data = data_aggregated[
+            (data_aggregated['energy_type'] == energy_type) & 
+            (data_aggregated['year'] == year) &
+            (data_aggregated['supply_scenario'] == '100%') &
+            (data_aggregated['hazard_buffer'] == '0km')
+        ]
+        exp_total = year_data['exp_MWh'].sum() / 1e6
+        supply_total = total_generation[energy_type][year]
+        ratio = (exp_total / supply_total * 100) if supply_total > 0 else 0
+        print(f"  {energy_type} {year}: Exposure={exp_total:.1f} TWh, Supply={supply_total:.1f} TWh ({ratio:.1f}%)")
+        
+        # Show detail of what's being summed
+        if exp_total > supply_total:
+            print(f"    WARNING: Exposure exceeds supply!")
+            print(f"    Countries in baseline: {len(year_data)}")
+            print(f"    Sample countries: {year_data['ISO3_code'].head(5).tolist()}")
 
 # Create figure with 3 rows × 6 columns + space for colorbar
 # Size: 180mm width × 60mm height = 7.087 inches × 2.362 inches
@@ -88,6 +131,9 @@ for row_idx, energy_type in enumerate(energy_types):
     total_risk = bar_data['exp_risk_avoid_MWh'].sum() / 1e6  # Convert to TWh
     total_avoided = (total_exp - total_risk)  # Avoided exposure
     
+    # Get total projected generation from p1_b file for reference
+    total_gen = total_generation[energy_type][2030]
+    
     # Define third color for avoided (green)
     avoided_color = '#2A9D8F'  # Teal/green for avoided exposure
     bar_colors_all = [bar_colors[0], bar_colors[1], avoided_color]
@@ -97,19 +143,21 @@ for row_idx, energy_type in enumerate(energy_types):
                            color=bar_colors_all, alpha=0.85, edgecolor='black', linewidth=0.5)
     ax_bar_2030.set_ylabel('')
     ax_bar_2030.set_xlabel('')
-    ax_bar_2030.set_title(f'{energy_type} {year}\n100% Supply, 0km Buffer', 
-                          fontsize=7, fontweight='bold')
+    ax_bar_2030.set_title(f'{energy_type} {year}\n100% Supply, 0km Buffer\n(Planned: {total_gen:.1f} TWh)', 
+                          fontsize=6.5, fontweight='bold')
     ax_bar_2030.grid(axis='y', alpha=0.3, linestyle='--')
     ax_bar_2030.set_ylim(0, max_values['2030'] * 1.2)
     ax_bar_2030.tick_params(axis='y', which='both', left=False, labelleft=False)
     ax_bar_2030.tick_params(axis='x', which='both', bottom=False, labelsize=6)
     
-    # Add value labels on bars
-    for bar in bars:
+    # Add value labels on bars with TWh and percentage relative to exposed baseline
+    values = [total_exp, total_risk, total_avoided]
+    for bar, value in zip(bars, values):
         height = bar.get_height()
+        pct = (value / total_exp * 100) if total_exp > 0 else 0
         ax_bar_2030.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.1f}',
-                        ha='center', va='bottom', fontsize=6, fontweight='bold')
+                        f'{height:.1f} TWh\n({pct:.1f}%)',
+                        ha='center', va='bottom', fontsize=5.5, fontweight='bold')
     ax_bar_2030.tick_params(axis='x', which='both', bottom=False, labelsize=6)
     
     # COLUMN 1: Heatmap for exp_MWh (2030) - Normalized as %
@@ -191,6 +239,9 @@ for row_idx, energy_type in enumerate(energy_types):
     total_risk = bar_data['exp_risk_avoid_MWh'].sum() / 1e6  # Convert to TWh
     total_avoided = (total_exp - total_risk)  # Avoided exposure
     
+    # Get total projected generation from p1_b file for reference
+    total_gen = total_generation[energy_type][2050]
+    
     # Define third color for avoided (green)
     avoided_color = '#2A9D8F'  # Teal/green for avoided exposure
     bar_colors_all = [bar_colors[0], bar_colors[1], avoided_color]
@@ -200,19 +251,21 @@ for row_idx, energy_type in enumerate(energy_types):
                            color=bar_colors_all, alpha=0.85, edgecolor='black', linewidth=0.5)
     ax_bar_2050.set_ylabel('')
     ax_bar_2050.set_xlabel('')
-    ax_bar_2050.set_title(f'{energy_type} {year}\n100% Supply, 0km Buffer',
-                          fontsize=7, fontweight='bold')
+    ax_bar_2050.set_title(f'{energy_type} {year}\n100% Supply, 0km Buffer\n(Planned: {total_gen:.1f} TWh)',
+                          fontsize=6.5, fontweight='bold')
     ax_bar_2050.grid(axis='y', alpha=0.3, linestyle='--')
     ax_bar_2050.set_ylim(0, max_values['2050'] * 1.2)
     ax_bar_2050.tick_params(axis='y', which='both', left=False, labelleft=False)
     ax_bar_2050.tick_params(axis='x', which='both', bottom=False, labelsize=6)
     
-    # Add value labels on bars
-    for bar in bars:
+    # Add value labels on bars with TWh and percentage relative to exposed baseline
+    values = [total_exp, total_risk, total_avoided]
+    for bar, value in zip(bars, values):
         height = bar.get_height()
+        pct = (value / total_exp * 100) if total_exp > 0 else 0
         ax_bar_2050.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.1f}',
-                        ha='center', va='bottom', fontsize=6, fontweight='bold')
+                        f'{height:.1f} TWh\n({pct:.1f}%)',
+                        ha='center', va='bottom', fontsize=5.5, fontweight='bold')
     ax_bar_2050.tick_params(axis='x', which='both', bottom=False, labelsize=6)
     
     # COLUMN 4: Heatmap for exp_MWh (2050) - Normalized as %
