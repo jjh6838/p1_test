@@ -14,16 +14,45 @@ Process all countries via 40 parallel SLURM jobs (cluster) or locally with autom
 ## Recent Major Updates (November 2025)
 
 ### 🆕 **Siting Analysis Module** (`process_country_siting.py`)
+**⚠️ MUST run AFTER supply analysis completes** - requires existing facility/grid/centroid data
+
 Identifies underserved remote settlements and designs optimal electrification solutions:
-- **Filtering**: Identifies settlements with unfilled demand (after supply analysis)
-- **Clustering**: Groups settlements using capacity-driven K-means based on available facility capacity
-- **Facility Matching**: Matches clusters to facilities considering demand, energy type, and remaining capacity
-- **Network Design**: Creates Steiner tree networks for remote clusters beyond grid reach
-- **Spatial Validation**: Clips clusters and networks to country boundaries (land + maritime EEZ)
+1. **Settlement Filtering**: 
+   - Loads centroids with 'Partially Filled' or 'Not Filled' supply_status
+   - Removes settlements with population < 100
+   
+2. **Capacity-Driven Clustering**: 
+   - Calculates number of clusters based on remaining facility capacity by energy type
+   - Uses weighted K-means clustering (weight = demand_gap_mwh)
+   - Ensures cluster count doesn't exceed available settlements
+
+3. **Facility Matching**: 
+   - Matches clusters to facilities based on energy type and remaining capacity
+   - Allocates cluster demand_gap_mwh to match facility remaining_mwh
+   
+4. **Grid Distance Calculation**: 
+   - Computes distance from cluster centers to nearest grid lines
+   - Identifies remote clusters (>50km from grid) vs grid-accessible clusters
+
+5. **Network Design**: 
+   - For remote clusters: Creates minimum spanning tree networks connecting settlements
+   - Clips networks to country boundaries (GADM + EEZ)
+   - Recalculates distances after clipping
+
+6. **Output Generation**:
+   - `siting_clusters_{ISO3}.parquet` - Cluster centers with demand and facility assignments
+   - `siting_networks_{ISO3}.parquet` - Network geometries for remote connections
+   - `siting_summary_{ISO3}.xlsx` - Summary statistics
 
 ```bash
-# Run siting analysis after supply analysis
+# Step 1: REQUIRED - Run supply analysis first
+python process_country_supply.py KEN
+
+# Step 2: Run siting analysis (uses outputs from step 1)
 python process_country_siting.py KEN
+
+# Optional: Run all supply scenarios (100%, 90%, 80%, 70%, 60%)
+python process_country_siting.py KEN --run-all-scenarios
 ```
 
 ### 🆕 **ADD_V2 Workflow** (Siting Integration)
@@ -92,8 +121,9 @@ All large datasets should be placed in the project root directory:
 
 ## Quick Start: Cluster Execution (Recommended for All Countries)
 
+### **Supply Analysis (Primary Step)**
 ```bash
-# 1) Generate 40 parallel scripts
+# 1) Generate 40 parallel scripts for supply analysis
 python get_countries.py --create-parallel
 
 # 2) Fix line endings & make executable (Linux/cluster)
@@ -111,18 +141,91 @@ tail -f outputs_global/logs/parallel_*.out
 sbatch submit_workflow.sh
 ```
 
+### **Siting Analysis (Secondary Step - Run After Supply)**
+⚠️ **Prerequisites**: Supply analysis must complete first
+
+**What siting generates**: Siting analysis creates **additional** parquet files for remote settlements, not the same files as supply analysis:
+- `siting_clusters_{ISO3}.parquet` - Remote settlement cluster centers
+- `siting_networks_{ISO3}.parquet` - Network lines for remote areas
+- `siting_summary_{ISO3}.xlsx` - Summary statistics
+
+**Note**: Siting does NOT regenerate facilities/grid/centroids - those remain from supply analysis.
+
+```bash
+# 1) Generate 24 parallel siting scripts (3-tier system)
+python get_countries.py --create-parallel-siting
+
+# 2) Fix line endings & make executable (Linux/cluster)
+sed -i 's/\r$//' submit_all_parallel_siting.sh submit_one_siting.sh parallel_scripts_siting/*.sh
+chmod +x submit_all_parallel_siting.sh submit_one_siting.sh parallel_scripts_siting/*.sh
+
+# 3) Submit all 24 siting jobs
+./submit_all_parallel_siting.sh
+
+# 4) Monitor siting progress
+squeue -u $USER
+tail -f outputs_global/logs/siting_*.out
+
+# 5) Check completion (should be ~189 countries × 2 files = ~378 siting parquets)
+# ⚠️ Note: Only countries with unfilled settlements generate siting outputs
+#    Countries with 100% supply coverage skip siting (expected behavior)
+find outputs_per_country/parquet -name 'siting_clusters_*.parquet' | wc -l
+find outputs_per_country/parquet -name 'siting_networks_*.parquet' | wc -l
+find outputs_per_country -name 'siting_summary_*.xlsx' | wc -l
+```
+
+**What siting generates**: Only for countries with unfilled/partially filled settlements:
+- `siting_clusters_{ISO3}.parquet` - Remote settlement cluster centers
+- `siting_networks_{ISO3}.parquet` - Network lines for remote areas  
+- `siting_summary_{ISO3}.xlsx` - Summary statistics
+
+**Expected behavior**: Siting outputs are **conditional** - only generated when settlements have `supply_status` of "Partially Filled" or "Not Filled". Countries where supply analysis shows 100% coverage (all settlements "Filled") correctly skip siting analysis with no output files generated. Typical range: 20-80 countries need siting depending on scenario assumptions.
+
+### **ADD_V2 Integration (Tertiary Step - Optional)**
+⚠️ **Run AFTER both supply AND siting complete** to merge siting results into supply
+
+After siting completes, re-run supply analysis to automatically generate `_add_v2` parquets that integrate siting clusters and networks:
+
+```bash
+# Re-run supply analysis (detects siting_summary_*.xlsx files)
+# This generates NEW _add_v2 parquet files with integrated siting data
+python get_countries.py --create-parallel  # Regenerate supply scripts
+./submit_all_parallel.sh  # Re-submit all supply jobs
+
+# Monitor ADD_V2 generation
+tail -f outputs_global/logs/parallel_*.out | grep "Siting data detected"
+
+# Check completion (should be ~189 countries with _add_v2 suffix)
+find outputs_per_country/parquet -name '*_add_v2.parquet' | wc -l
+```
+
+**What ADD_V2 generates**:
+- All original supply layers with `_add_v2` suffix
+- Siting clusters merged into facilities layer
+- Siting networks merged into grid_lines layer
+- Output directory: `{scenario}_add_v2/` (e.g., `2030_supply_100%_add_v2/`)
+
+
 **Key Files:**
-- `submit_all_parallel.sh` - Submits all 40 jobs immediately (SLURM manages queue)
-- `submit_one.sh` - Submit a single script for re-running or testing (e.g., `./submit_one.sh 06`)
-- `parallel_scripts/submit_parallel_01.sh` through `submit_parallel_40.sh` - Individual job scripts
-- `submit_workflow.sh` - Combination step (runs after parallel jobs complete)
+- **Supply Analysis (40 scripts)** - Generates facilities, grid, centroids parquets:
+  - `submit_all_parallel.sh` - Submits all 40 supply jobs
+  - `submit_one.sh` - Submit single supply script (e.g., `./submit_one.sh 06`)
+  - `parallel_scripts/submit_parallel_01.sh` through `submit_parallel_40.sh`
+  
+- **Siting Analysis (24 scripts)** - Generates siting_clusters, siting_networks parquets:
+  - `submit_all_parallel_siting.sh` - Submits all 24 siting jobs
+  - `submit_one_siting.sh` - Submit single siting script (e.g., `./submit_one_siting.sh 03`)
+  - `parallel_scripts_siting/submit_parallel_siting_01.sh` through `submit_parallel_siting_24.sh`
+
+- **ADD_V2 Integration** - Re-run supply scripts to generate _add_v2 parquets merging siting into supply
 
 **Tips:**
+- **Three-step workflow**: 1) Supply → 2) Siting → 3) Re-run Supply for ADD_V2
+- Siting creates 2 new parquet types per country, not all supply parquets
+- ADD_V2 is optional but recommended for integrated analysis
 - Use `./script.sh` on Linux/macOS when executing from current directory
 - Run `sed -i 's/\r$//'` on cluster if files prepared on Windows
-- Each job automatically uses 64 CPUs via internal parallelization
-- **Wave-based submission**: Script waits when 8 jobs running, submits next when slots open
-- **Respects cluster limits**: Prevents queue congestion, better cluster etiquette
+- Each job automatically uses allocated CPUs via internal parallelization
 
 ---
 
@@ -136,8 +239,12 @@ python process_country_supply.py KOR
 # Multiple countries (serial)
 python process_country_supply.py USA CHN IND
 
-# Combine results
+# Combine all results into global GPKG
 python combine_global_results.py --input-dir outputs_per_country
+
+# Or combine single country into GPKG for visualization
+python combine_one_results.py KEN
+python combine_one_results.py USA --scenario 2050_supply_100%
 ```
 
 **Performance (automatic scaling):**
@@ -149,21 +256,36 @@ python combine_global_results.py --input-dir outputs_per_country
 
 ## Shell Scripts Overview
 
-### **Master Submission Script**
-- **`submit_all_parallel.sh`** - Submits all 40 jobs immediately
+### **Supply Analysis Scripts (40 scripts)**
+- **`submit_all_parallel.sh`** - Submits all 40 supply jobs immediately
   - Submits all jobs at once (returns to prompt in ~1 minute)
   - SLURM automatically manages queue (max 8 jobs run simultaneously based on cluster limits)
   - No active monitoring or wave management needed
   - Script exits after submission, jobs continue running on cluster
 
-### **Individual Script Submission**
-- **`submit_one.sh`** - Submit a single parallel script by number
-  - Usage: `./submit_one.sh 06` (submits script 06)
+- **`submit_one.sh`** - Submit a single supply script by number
+  - Usage: `./submit_one.sh 06` (submits supply script 06)
   - Useful for re-running failed jobs or testing specific country batches
   - Lists available scripts if run without arguments
   - Example: `./submit_one.sh 12` submits `parallel_scripts/submit_parallel_12.sh`
 
-### **Individual Job Scripts** (`parallel_scripts/submit_parallel_*.sh`)
+### **Siting Analysis Scripts (24 scripts)**
+⚠️ **Run after supply analysis completes**
+
+- **`submit_all_parallel_siting.sh`** - Submits all 24 siting jobs immediately
+  - Lighter-weight than supply analysis (3-tier system)
+  - SLURM automatically manages queue
+  - Processes remote settlement electrification for all countries
+
+- **`submit_one_siting.sh`** - Submit a single siting script by number
+  - Usage: `./submit_one_siting.sh 03` (submits siting script 03)
+  - Useful for re-running failed siting jobs
+  - Lists available scripts if run without arguments
+  - Example: `./submit_one_siting.sh 08` submits `parallel_scripts_siting/submit_parallel_siting_08.sh`
+
+### **Individual Job Scripts**
+
+**Supply Analysis** (`parallel_scripts/submit_parallel_*.sh`)
 40 scripts with tiered country allocation (smallest first):
 
 | Script Range | Countries/Job | Country Tier | Execution Order | Examples |
@@ -173,7 +295,16 @@ python combine_global_results.py --input-dir outputs_per_country
 | `19-XX` | 4 | Tier 3 (Medium) | 3rd | KOR+FRA+DEU+JPN, GBR+ESP+THA+VNM, etc. |
 | `XX-40` | 8 | Other (Smallest) | Last | Island nations, small countries |
 
-**Each script:**
+**Siting Analysis** (`parallel_scripts_siting/submit_parallel_siting_*.sh`)
+24 scripts with simplified 3-tier allocation:
+
+| Script Range | Countries/Job | Country Tier | Examples |
+|--------------|---------------|--------------|----------|
+| `01-02` | 1 | Tier 1 (Largest) | CHN, USA |
+| `03-12` | 2 | Tier 2 (Large) | IND+CAN, MEX+RUS, BRA+AUS, etc. |
+| `13-24` | 11 | Tier 3 (Others) | Small/medium countries |
+
+**Each supply script:**
 - CPUs: **Tier 1** uses 56 CPUs (high-memory Short nodes); **Tier 2/3/Other** use 40 CPUs
 - Memory: 100GB for all tiers
 - Partition assignment by tier:
@@ -184,6 +315,15 @@ python combine_global_results.py --input-dir outputs_per_country
 - Processes assigned countries: `python process_country_supply.py {ISO3}`
 - Outputs to: `outputs_per_country/parquet/{scenario}/{layer}_{ISO3}.parquet`
   - Example: `outputs_per_country/parquet/2050_supply_100%/centroids_KOR.parquet`
+
+**Each siting script:**
+- CPUs: **Tier 1** uses 56 CPUs; **Tier 2/3** use 40 CPUs
+- Memory: **Tier 1** 200GB, **Tier 2** 98GB, **Tier 3** 28GB
+- Partition: **Tier 1** Interactive (168h), **Tier 2** Short (12h), **Tier 3** Short (12h)
+- Activates conda environment: `conda activate p1_etl`
+- Processes assigned countries: `python process_country_siting.py {ISO3}`
+- Outputs to: `outputs_per_country/parquet/{scenario}/siting_{layer}_{ISO3}.parquet`
+  - Example: `outputs_per_country/parquet/2030_supply_100%/siting_clusters_KEN.parquet`
 
 ### **Combination Script**
 - **`submit_workflow.sh`** - Combines all country results into global outputs
@@ -277,37 +417,62 @@ Main electricity supply chain analysis pipeline:
 - Parquet (per layer): `outputs_per_country/parquet/{scenario}/{layer}_{ISO3}.parquet`
 
 ### **Siting Analysis** (`process_country_siting.py`)
-Remote settlement electrification planning:
+**Prerequisites**: Supply analysis must be completed first - siting loads existing facilities/grid/centroids
+
+Remote settlement electrification planning workflow:
 
 1. **Settlement Filtering**
-   - Identifies centroids with `unfilled_demand > 0` after supply analysis
-   - Filters for remote settlements beyond feasible grid extension
+   - Loads centroids from supply analysis output parquet files
+   - Filters for 'Partially Filled' or 'Not Filled' supply_status
+   - Removes settlements with population < 100
+   - Reports breakdown by status
 
 2. **Capacity-Driven Clustering**
-   - Computes available facility capacity (Total - Matched demand)
-   - Uses K-means clustering weighted by settlement demand
-   - Number of clusters = Available capacity / Average cluster demand
-   - **Boundary Validation**: Clips cluster centers to country boundaries (GADM + EEZ)
+   - Calculates remaining facility capacity by energy type (Total - Matched demand)
+   - Determines number of clusters = Total remaining capacity / Average cluster demand
+   - Uses weighted K-means clustering (weight = demand_gap_mwh per settlement)
+   - Ensures cluster count ≤ number of settlements
 
-3. **Facility Matching**
-   - Matches clusters to facilities by energy type and capacity
-   - Considers remaining facility capacity and cluster demand
+3. **Facility-Cluster Matching**
+   - Assigns each cluster to a specific facility based on:
+     - Energy type (Solar, Wind, Hydro, etc.)
+     - Remaining facility capacity (remaining_mwh)
+     - Cluster demand gap (demand_gap_mwh)
    - Updates facility capacities after matching
 
-4. **Network Design**
-   - For clusters beyond grid reach: Designs Steiner tree networks
-   - Euclidean MST for connecting settlements within cluster
-   - **Boundary Clipping**: Clips network edges to country boundaries, recalculates distances
+4. **Grid Distance Analysis**
+   - Computes distance from cluster centers to nearest existing grid lines
+   - Classifies clusters:
+     - Grid-accessible: ≤50km from grid
+     - Remote: >50km from grid (requires new network)
 
-5. **Output Generation**
+5. **Network Design for Remote Clusters**
+   - Creates minimum spanning tree (MST) networks within each remote cluster
+   - Connects all settlements in cluster with minimum total line length
+   - Clips network edges to country boundaries (GADM + EEZ)
+   - Recalculates distances after boundary clipping
+
+6. **Output Generation**
    - Siting clusters: Aggregated settlement groups with capacity requirements
    - Siting networks: LineString geometries for remote connections
-   - Summary: Excel report with cluster assignments and network costs
+   - Summary: Excel report with cluster assignments and network statistics
 
 **Outputs:**
 - Parquet: `outputs_per_country/parquet/{scenario}/siting_clusters_{ISO3}.parquet`
 - Parquet: `outputs_per_country/parquet/{scenario}/siting_networks_{ISO3}.parquet`
 - Summary: `outputs_per_country/parquet/{scenario}/siting_summary_{ISO3}.xlsx`
+
+**Command-line Usage:**
+```bash
+# Single scenario (100% supply)
+python process_country_siting.py KEN
+
+# All scenarios (100%, 90%, 80%, 70%, 60%)
+python process_country_siting.py KEN --run-all-scenarios
+
+# Custom output directory
+python process_country_siting.py KEN --output-dir custom_outputs
+```
 
 ### **ADD_V2 Workflow** (Automatic Siting Integration)
 When siting analysis completes, the supply analysis can automatically merge results:
@@ -328,17 +493,17 @@ When siting analysis completes, the supply analysis can automatically merge resu
 - Production mode: `{scenario}_add_v2/` directory for parquet files
 - Layers: `facilities_{ISO3}_add_v2.parquet`, `grid_lines_{ISO3}_add_v2.parquet`, etc.
 
-**Example:**
+**Example Workflow:**
 ```bash
-# Step 1: Base supply analysis
+# Step 1: Base supply analysis (REQUIRED FIRST)
 python process_country_supply.py KEN
-# Outputs: 2030_supply_100%/facilities_KEN.parquet, grid_lines_KEN.parquet
+# Outputs: 2030_supply_100%/facilities_KEN.parquet, grid_lines_KEN.parquet, centroids_KEN.parquet
 
-# Step 2: Siting analysis
+# Step 2: Siting analysis (loads outputs from Step 1)
 python process_country_siting.py KEN
 # Outputs: 2030_supply_100%/siting_clusters_KEN.parquet, siting_networks_KEN.parquet
 
-# Step 3: Integrated analysis (automatic detection)
+# Step 3: Integrated analysis (automatic detection, optional)
 python process_country_supply.py KEN
 # Outputs: 2030_supply_100%_add_v2/facilities_KEN_add_v2.parquet, grid_lines_KEN_add_v2.parquet
 ```
@@ -555,39 +720,90 @@ conda activate p1_etl
 # ═══════════════════════════════════════════════════════════
 # STEP 2: Generate parallel scripts
 # ═══════════════════════════════════════════════════════════
+# Supply analysis (40 scripts)
 python get_countries.py --create-parallel
-# Creates: parallel_scripts/submit_parallel_01.sh through 40.sh
-#          submit_all_parallel.sh (master script)
-#          submit_one.sh (test or fix script)
+
+# Siting analysis (24 scripts)
+python get_countries.py --create-parallel-siting
 
 # ═══════════════════════════════════════════════════════════
 # STEP 3: Transfer to cluster & fix line endings
 # ═══════════════════════════════════════════════════════════
-# On cluster:
+# On cluster - Supply scripts:
 sed -i 's/\r$//' submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
 chmod +x submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
 
+# On cluster - Siting scripts:
+sed -i 's/\r$//' submit_all_parallel_siting.sh submit_one_siting.sh parallel_scripts_siting/*.sh
+chmod +x submit_all_parallel_siting.sh submit_one_siting.sh parallel_scripts_siting/*.sh
+
 # ═══════════════════════════════════════════════════════════
-# STEP 4: Submit all parallel jobs (40 jobs, ~8-12 hours)
+# STEP 4: Submit supply analysis jobs (40 jobs, ~8-12 hours)
 # ═══════════════════════════════════════════════════════════
 ./submit_all_parallel.sh
-./submit_one.sh 06 #In order to excute "parallel_scripts/submit_parallel_06.sh"
+# Or test single script:
+./submit_one.sh 06
 
 # Monitor:
 squeue -u $USER
 watch -n 60 'squeue -u $USER | wc -l'  # Count running jobs
 
 # ═══════════════════════════════════════════════════════════
-# STEP 5: Check completion
+# STEP 5: Check supply completion
 # ═══════════════════════════════════════════════════════════
-# Count completed countries (should be 211):
-find outputs_per_country -name "*.parquet" -type f | wc -l
+# Count completed countries (should be ~196):
+find outputs_per_country/parquet -name "facilities_*.parquet" -type f | wc -l
+find outputs_per_country/parquet -name "centroids_*.parquet" -type f | wc -l
 
 # Check for errors:
 grep -i "error\|failed" outputs_global/logs/parallel_*.out
 
 # ═══════════════════════════════════════════════════════════
-# STEP 6: Combine results (after all jobs complete)
+# STEP 6: Submit siting analysis jobs (24 jobs, ~4-6 hours)
+# ═══════════════════════════════════════════════════════════
+# ⚠️ Only after supply analysis completes!
+./submit_all_parallel_siting.sh
+# Or test single script:
+./submit_one_siting.sh 03
+
+# Monitor siting:
+squeue -u $USER
+tail -f outputs_global/logs/siting_*.out
+
+# ═══════════════════════════════════════════════════════════
+# STEP 7: Check siting completion
+# ═══════════════════════════════════════════════════════════
+# Count completed siting files (should be ~189 × 2 = 378):
+find outputs_per_country/parquet -name 'siting_clusters_*.parquet' | wc -l
+find outputs_per_country/parquet -name 'siting_networks_*.parquet' | wc -l
+
+# Check for siting errors:
+grep -i "error\|failed" outputs_global/logs/siting_*.out
+
+# ═══════════════════════════════════════════════════════════
+# STEP 8: Generate ADD_V2 integrated parquets (OPTIONAL)
+# ═══════════════════════════════════════════════════════════
+# ⚠️ Only after BOTH supply AND siting complete!
+# Re-run supply analysis to merge siting results
+python get_countries.py --create-parallel  # Regenerate scripts
+./submit_all_parallel.sh  # Re-submit supply jobs
+
+# Monitor ADD_V2 generation:
+squeue -u $USER
+tail -f outputs_global/logs/parallel_*.out | grep "Siting data detected"
+
+# ═══════════════════════════════════════════════════════════
+# STEP 9: Check ADD_V2 completion (if running ADD_V2)
+# ═══════════════════════════════════════════════════════════
+# Count _add_v2 parquets (should be ~189 countries × multiple layers):
+find outputs_per_country/parquet -name '*_add_v2.parquet' | wc -l
+find outputs_per_country/parquet -name 'facilities_*_add_v2.parquet' | wc -l
+
+# Check for ADD_V2 errors:
+grep -i "error\|failed" outputs_global/logs/parallel_*.out
+
+# ═══════════════════════════════════════════════════════════
+# STEP 10: Combine results (after desired analysis completes)
 # ═══════════════════════════════════════════════════════════
 sbatch submit_workflow.sh
 
@@ -596,18 +812,22 @@ squeue -u $USER
 tail -f outputs_global/logs/test_*.out
 
 # ═══════════════════════════════════════════════════════════
-# STEP 7: Verify outputs
+# STEP 11: Verify outputs
 # ═══════════════════════════════════════════════════════════
 ls -lh outputs_global/*_global.gpkg
 # Should show one GPKG per scenario, e.g.:
 #   2030_supply_100%_global.gpkg
 #   2050_supply_100%_global.gpkg
+#   2030_supply_100%_add_v2_global.gpkg (if ADD_V2 run)
 ```
 
 ### **Expected Timeline**
-- **Parallel processing**: 8-12 hours (40 simultaneous jobs)
+- **Supply analysis**: 8-12 hours (40 simultaneous jobs) - ~189 countries
+- **Siting analysis**: 4-6 hours (24 simultaneous jobs, lighter workload) - ~189 countries
+- **ADD_V2 integration** (optional): 8-12 hours (40 simultaneous jobs, re-run supply) - ~189 countries
 - **Combination**: 1-2 hours
-- **Total**: ~10-14 hours for all 211 countries
+- **Total without ADD_V2**: ~13-20 hours
+- **Total with ADD_V2**: ~21-32 hours
 
 ---
 
@@ -640,6 +860,72 @@ grep "Using parallel processing" outputs_global/logs/parallel_*.out
 
 ---
 
+## Data Combination Scripts
+
+### **`combine_global_results.py` - Merge All Countries**
+Combines parquet files from all countries into single global GeoPackage per scenario.
+
+**Usage:**
+```bash
+# Auto-detect scenarios in outputs_per_country/parquet/
+python combine_global_results.py --input-dir outputs_per_country
+
+# Specify scenario explicitly
+python combine_global_results.py --input-dir outputs_per_country --scenario 2030_supply_100%
+
+# Combine only specific countries
+python combine_global_results.py --input-dir outputs_per_country --countries USA CHN IND
+```
+
+**Features:**
+- Scans `outputs_per_country/parquet/` for scenario subfolders
+- Combines all 4 layers: facilities, grid_lines, centroids, polylines
+- Outputs to: `outputs_global/{scenario}_global.gpkg`
+- Logs to: `outputs_global/logs/combine_results.log`
+- Shows progress bar for each layer
+
+**When to use:**
+- After all parallel supply jobs complete
+- To create global analysis dataset
+- Called automatically by `submit_workflow.sh` on cluster
+
+### **`combine_one_results.py` - Single Country GPKG**
+Converts parquet files for a single country into a GeoPackage for local analysis/visualization.
+
+**Usage:**
+```bash
+# Basic usage (default scenario: 2030_supply_100%)
+python combine_one_results.py KEN
+
+# Specify scenario
+python combine_one_results.py KEN --scenario 2050_supply_100%
+
+# Custom base directory
+python combine_one_results.py KEN --base-dir outputs_per_country --scenario 2030_supply_100%
+```
+
+**Output files:**
+- Basic supply: `outputs_per_country/{scenario}_{ISO3}.gpkg`
+  - 4 layers: centroids, polylines, grid_lines, facilities
+
+- With siting: `outputs_per_country/{scenario}_{ISO3}_add.gpkg`
+  - 7 layers: core 4 + siting_clusters, siting_settlements, siting_networks
+
+- Integrated (ADD_V2): `outputs_per_country/{scenario}_{ISO3}_add_v2.gpkg`
+  - 4 layers: integrated centroids, polylines, grid_lines, facilities with siting merged
+
+**Features:**
+- Automatically detects siting outputs and creates appropriate GPKG variant
+- Removes old GPKG before writing (prevents mixed layers)
+- Handles `_add_v2` suffix in scenario names correctly
+
+**When to use:**
+- Quick visualization of single country results in QGIS
+- Local testing/validation without cluster
+- Creating shareable country-specific datasets
+
+---
+
 ## Data Schema
 
 Each country output contains:
@@ -658,10 +944,14 @@ Each country output contains:
 
 ```
 ├── process_country_supply.py          # Main processing script (internal parallelization)
+├── process_country_siting.py          # Siting analysis for remote settlements
 ├── get_countries.py                   # Generates parallel scripts
-├── combine_global_results.py          # Combines outputs
-├── submit_all_parallel.sh             # Master SLURM submission
-├── submit_one.sh                      # Submit single script (e.g., ./submit_one.sh 06)
+├── combine_global_results.py          # Combines all countries into global GPKG
+├── combine_one_results.py             # Converts single country parquets to GPKG
+├── submit_all_parallel.sh             # Master SLURM submission (supply)
+├── submit_all_parallel_siting.sh      # Master SLURM submission (siting)
+├── submit_one.sh                      # Submit single supply script (e.g., ./submit_one.sh 06)
+├── submit_one_siting.sh               # Submit single siting script (e.g., ./submit_one_siting.sh 03)
 ├── submit_workflow.sh                 # Combination step submission
 ├── Snakefile                          # Optional Snakemake workflow (combination only)
 ├── parallel_scripts/

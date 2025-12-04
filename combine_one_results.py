@@ -42,6 +42,16 @@ def parquet_to_gpkg(base_dir, scenario, iso3):
     # Check if any additional layers exist
     has_additional = any(fp.exists() for fp in additional_files.values())
     
+    # Debug output
+    print(f"\n[DEBUG] Checking files for {iso3} in scenario: {scenario}")
+    print(f"  has_add_v2: {has_add_v2}")
+    print(f"  has_additional (siting): {has_additional}")
+    if has_additional:
+        print(f"  Found siting layers:")
+        for name, fp in additional_files.items():
+            if fp.exists():
+                print(f"    - {name}: {fp.name}")
+    
     # Determine output filename and files to process
     if has_add_v2:
         # If scenario already ends with _add_v2, strip it and re-add after iso3

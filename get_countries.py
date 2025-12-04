@@ -549,11 +549,11 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
     
     # Simplified tier config for siting (less resource intensive)
     SITING_TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "200G", "cpus": 56, "time": "168:00:00", "partition": "Interactive"},   # CHN, USA
+        "t1": {"max_countries_per_script": 1, "mem": "98G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # CHN, USA
         "t2": {"max_countries_per_script": 2, "mem": "98G", "cpus": 40, "time": "12:00:00", "partition": "Short"},   # IND, CAN, MEX, etc.
         "t3": {"max_countries_per_script": 11, "mem": "28G", "cpus": 40, "time": "12:00:00", "partition": "Short"}    # All others
     }
-    
+        
     TIER_1 = {"CHN", "USA"}
     TIER_2 = {"IND", "CAN", "MEX", "RUS", "BRA", "AUS", "ARG", "KAZ", "SAU", "IDN"}
     
@@ -682,7 +682,7 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
         config = batch_info["config"]
         
         script_content = f"""#!/bin/bash --login
-#SBATCH --job-name=siting_{i:02d}_{tier}
+#SBATCH --job-name=p{i:02d}s_{tier}
 #SBATCH --partition={config["partition"]}
 #SBATCH --time={config["time"]}
 #SBATCH --mem={config["mem"]}

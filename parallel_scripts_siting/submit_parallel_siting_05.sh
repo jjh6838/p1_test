@@ -1,5 +1,5 @@
 #!/bin/bash --login
-#SBATCH --job-name=siting_05_t2
+#SBATCH --job-name=p05s_t2
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
 #SBATCH --mem=98G
