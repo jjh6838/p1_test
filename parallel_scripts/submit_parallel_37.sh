@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing PRK (T5)..."
-$PY process_country_supply.py PRK --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py PRK --output-dir outputs_per_country; then
     echo "[SUCCESS] PRK completed"
 else
     echo "[ERROR] PRK failed"
 fi
 
 echo "[INFO] Processing PRT (T5)..."
-$PY process_country_supply.py PRT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py PRT --output-dir outputs_per_country; then
     echo "[SUCCESS] PRT completed"
 else
     echo "[ERROR] PRT failed"
 fi
 
 echo "[INFO] Processing PRY (T5)..."
-$PY process_country_supply.py PRY --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py PRY --output-dir outputs_per_country; then
     echo "[SUCCESS] PRY completed"
 else
     echo "[ERROR] PRY failed"
 fi
 
 echo "[INFO] Processing PSE (T5)..."
-$PY process_country_supply.py PSE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py PSE --output-dir outputs_per_country; then
     echo "[SUCCESS] PSE completed"
 else
     echo "[ERROR] PSE failed"
 fi
 
 echo "[INFO] Processing QAT (T5)..."
-$PY process_country_supply.py QAT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py QAT --output-dir outputs_per_country; then
     echo "[SUCCESS] QAT completed"
 else
     echo "[ERROR] QAT failed"
 fi
 
 echo "[INFO] Processing ROU (T5)..."
-$PY process_country_supply.py ROU --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ROU --output-dir outputs_per_country; then
     echo "[SUCCESS] ROU completed"
 else
     echo "[ERROR] ROU failed"
 fi
 
 echo "[INFO] Processing RWA (T5)..."
-$PY process_country_supply.py RWA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py RWA --output-dir outputs_per_country; then
     echo "[SUCCESS] RWA completed"
 else
     echo "[ERROR] RWA failed"
 fi
 
 echo "[INFO] Processing SEN (T5)..."
-$PY process_country_supply.py SEN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SEN --output-dir outputs_per_country; then
     echo "[SUCCESS] SEN completed"
 else
     echo "[ERROR] SEN failed"
 fi
 
 echo "[INFO] Processing SGP (T5)..."
-$PY process_country_supply.py SGP --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SGP --output-dir outputs_per_country; then
     echo "[SUCCESS] SGP completed"
 else
     echo "[ERROR] SGP failed"
 fi
 
 echo "[INFO] Processing SLE (T5)..."
-$PY process_country_supply.py SLE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SLE --output-dir outputs_per_country; then
     echo "[SUCCESS] SLE completed"
 else
     echo "[ERROR] SLE failed"

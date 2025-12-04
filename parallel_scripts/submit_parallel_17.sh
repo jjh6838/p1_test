@@ -35,16 +35,14 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing DZA (T4)..."
-$PY process_country_supply.py DZA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py DZA --output-dir outputs_per_country; then
     echo "[SUCCESS] DZA completed"
 else
     echo "[ERROR] DZA failed"
 fi
 
 echo "[INFO] Processing ETH (T4)..."
-$PY process_country_supply.py ETH --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ETH --output-dir outputs_per_country; then
     echo "[SUCCESS] ETH completed"
 else
     echo "[ERROR] ETH failed"

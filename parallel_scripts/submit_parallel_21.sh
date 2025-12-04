@@ -35,16 +35,14 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing NOR (T4)..."
-$PY process_country_supply.py NOR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py NOR --output-dir outputs_per_country; then
     echo "[SUCCESS] NOR completed"
 else
     echo "[ERROR] NOR failed"
 fi
 
 echo "[INFO] Processing PAK (T4)..."
-$PY process_country_supply.py PAK --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py PAK --output-dir outputs_per_country; then
     echo "[SUCCESS] PAK completed"
 else
     echo "[ERROR] PAK failed"

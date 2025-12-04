@@ -35,88 +35,77 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing BEL (T5)..."
-$PY process_country_supply.py BEL --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BEL --output-dir outputs_per_country; then
     echo "[SUCCESS] BEL completed"
 else
     echo "[ERROR] BEL failed"
 fi
 
 echo "[INFO] Processing BEN (T5)..."
-$PY process_country_supply.py BEN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BEN --output-dir outputs_per_country; then
     echo "[SUCCESS] BEN completed"
 else
     echo "[ERROR] BEN failed"
 fi
 
 echo "[INFO] Processing BFA (T5)..."
-$PY process_country_supply.py BFA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BFA --output-dir outputs_per_country; then
     echo "[SUCCESS] BFA completed"
 else
     echo "[ERROR] BFA failed"
 fi
 
 echo "[INFO] Processing BGD (T5)..."
-$PY process_country_supply.py BGD --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BGD --output-dir outputs_per_country; then
     echo "[SUCCESS] BGD completed"
 else
     echo "[ERROR] BGD failed"
 fi
 
 echo "[INFO] Processing BGR (T5)..."
-$PY process_country_supply.py BGR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BGR --output-dir outputs_per_country; then
     echo "[SUCCESS] BGR completed"
 else
     echo "[ERROR] BGR failed"
 fi
 
 echo "[INFO] Processing BHR (T5)..."
-$PY process_country_supply.py BHR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BHR --output-dir outputs_per_country; then
     echo "[SUCCESS] BHR completed"
 else
     echo "[ERROR] BHR failed"
 fi
 
 echo "[INFO] Processing BHS (T5)..."
-$PY process_country_supply.py BHS --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BHS --output-dir outputs_per_country; then
     echo "[SUCCESS] BHS completed"
 else
     echo "[ERROR] BHS failed"
 fi
 
 echo "[INFO] Processing BIH (T5)..."
-$PY process_country_supply.py BIH --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BIH --output-dir outputs_per_country; then
     echo "[SUCCESS] BIH completed"
 else
     echo "[ERROR] BIH failed"
 fi
 
 echo "[INFO] Processing BLR (T5)..."
-$PY process_country_supply.py BLR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BLR --output-dir outputs_per_country; then
     echo "[SUCCESS] BLR completed"
 else
     echo "[ERROR] BLR failed"
 fi
 
 echo "[INFO] Processing BLZ (T5)..."
-$PY process_country_supply.py BLZ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BLZ --output-dir outputs_per_country; then
     echo "[SUCCESS] BLZ completed"
 else
     echo "[ERROR] BLZ failed"
 fi
 
 echo "[INFO] Processing BMU (T5)..."
-$PY process_country_supply.py BMU --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py BMU --output-dir outputs_per_country; then
     echo "[SUCCESS] BMU completed"
 else
     echo "[ERROR] BMU failed"

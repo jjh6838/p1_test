@@ -35,8 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing siting analysis for CHN (T1)..."
-$PY process_country_siting.py CHN
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py CHN; then
     echo "[SUCCESS] CHN siting analysis completed"
 else
     echo "[ERROR] CHN siting analysis failed"

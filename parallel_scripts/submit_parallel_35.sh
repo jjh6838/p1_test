@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing MLT (T5)..."
-$PY process_country_supply.py MLT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MLT --output-dir outputs_per_country; then
     echo "[SUCCESS] MLT completed"
 else
     echo "[ERROR] MLT failed"
 fi
 
 echo "[INFO] Processing MNE (T5)..."
-$PY process_country_supply.py MNE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MNE --output-dir outputs_per_country; then
     echo "[SUCCESS] MNE completed"
 else
     echo "[ERROR] MNE failed"
 fi
 
 echo "[INFO] Processing MNG (T5)..."
-$PY process_country_supply.py MNG --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MNG --output-dir outputs_per_country; then
     echo "[SUCCESS] MNG completed"
 else
     echo "[ERROR] MNG failed"
 fi
 
 echo "[INFO] Processing MOZ (T5)..."
-$PY process_country_supply.py MOZ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MOZ --output-dir outputs_per_country; then
     echo "[SUCCESS] MOZ completed"
 else
     echo "[ERROR] MOZ failed"
 fi
 
 echo "[INFO] Processing MRT (T5)..."
-$PY process_country_supply.py MRT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MRT --output-dir outputs_per_country; then
     echo "[SUCCESS] MRT completed"
 else
     echo "[ERROR] MRT failed"
 fi
 
 echo "[INFO] Processing MUS (T5)..."
-$PY process_country_supply.py MUS --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MUS --output-dir outputs_per_country; then
     echo "[SUCCESS] MUS completed"
 else
     echo "[ERROR] MUS failed"
 fi
 
 echo "[INFO] Processing MWI (T5)..."
-$PY process_country_supply.py MWI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MWI --output-dir outputs_per_country; then
     echo "[SUCCESS] MWI completed"
 else
     echo "[ERROR] MWI failed"
 fi
 
 echo "[INFO] Processing MYS (T5)..."
-$PY process_country_supply.py MYS --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MYS --output-dir outputs_per_country; then
     echo "[SUCCESS] MYS completed"
 else
     echo "[ERROR] MYS failed"
 fi
 
 echo "[INFO] Processing NAM (T5)..."
-$PY process_country_supply.py NAM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py NAM --output-dir outputs_per_country; then
     echo "[SUCCESS] NAM completed"
 else
     echo "[ERROR] NAM failed"
 fi
 
 echo "[INFO] Processing NCL (T5)..."
-$PY process_country_supply.py NCL --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py NCL --output-dir outputs_per_country; then
     echo "[SUCCESS] NCL completed"
 else
     echo "[ERROR] NCL failed"

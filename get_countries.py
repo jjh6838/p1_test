@@ -196,6 +196,9 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     all_batches = []
     script_counter = 1
     
+    # Track which countries have been assigned
+    assigned_countries = set()
+    
     # Process each tier - start with largest countries first
     for tier in ["t1", "t2", "t3", "t4", "t5"]:
         tier_countries = countries_by_tier[tier]
@@ -230,6 +233,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
                         "script_num": script_counter
                     }
                     all_batches.append(batch_info)
+                    assigned_countries.update(batch)
                     script_counter += 1
                     
                     if script_counter > num_scripts:
@@ -245,6 +249,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
                     "script_num": script_counter
                 }
                 all_batches.append(batch_info)
+                assigned_countries.update(batch)
                 script_counter += 1
                 
                 # Stop if we reach the max number of scripts
@@ -253,22 +258,36 @@ def create_parallel_scripts(num_scripts=40, countries=None):
                     remaining_countries = tier_countries[i + max_per_script:]
                     if remaining_countries:
                         all_batches[-1]["countries"].extend(remaining_countries)
+                        assigned_countries.update(remaining_countries)
                     break
         
         if script_counter > num_scripts:
             break
     
-    # If we have more tiers but reached script limit, add remaining countries to existing scripts
-    if script_counter <= num_scripts:
-        for tier in ["t1", "t2", "t3", "t4", "t5"]:
-            tier_countries = countries_by_tier[tier]
-            if tier_countries and not any(batch["tier"] == tier for batch in all_batches):
-                # Add remaining countries to the last batch
-                if all_batches:
-                    all_batches[-1]["countries"].extend(tier_countries)
-    
-    # Limit to requested number of scripts
-    all_batches = all_batches[:num_scripts]
+    # Check if any countries were not assigned
+    unassigned_countries = set(countries) - assigned_countries
+    if unassigned_countries:
+        print(f"\n⚠️  {len(unassigned_countries)} countries not assigned in first {num_scripts} scripts")
+        print(f"   Creating additional scripts ({num_scripts+1}, {num_scripts+2}, ...) for unassigned countries")
+        print(f"   Unassigned countries: {', '.join(sorted(list(unassigned_countries))[:20])}")
+        if len(unassigned_countries) > 20:
+            print(f"   ... and {len(unassigned_countries) - 20} more")
+        
+        # Create additional scripts for unassigned countries (using Tier 5 config)
+        config = TIER_CONFIG["t5"]
+        max_per_script = config["max_countries_per_script"]
+        unassigned_list = sorted(unassigned_countries)
+        
+        for i in range(0, len(unassigned_list), max_per_script):
+            batch = unassigned_list[i:i + max_per_script]
+            batch_info = {
+                "countries": batch,
+                "tier": "t5",
+                "config": config,
+                "script_num": script_counter
+            }
+            all_batches.append(batch_info)
+            script_counter += 1
     
     print(f"\nCreated {len(all_batches)} script batches:")
     
@@ -322,8 +341,7 @@ $PY -c 'import sys; print(sys.executable)'
         for country in batch:
             script_content += f"""
 echo "[INFO] Processing {country} ({get_tier(country).upper()})..."
-$PY process_country_supply.py {country} --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py {country} --output-dir outputs_per_country; then
     echo "[SUCCESS] {country} completed"
 else
     echo "[ERROR] {country} failed"
@@ -493,6 +511,24 @@ echo "  watch -n 60 'squeue -u \\$USER'"
     print(f"  Total CPUs: {total_cpus}")
     print(f"  Scripts: {len(all_batches)}")
     
+    # Verify all countries are covered
+    total_countries_in_batches = sum(len(batch["countries"]) for batch in all_batches)
+    unique_countries_in_batches = set()
+    for batch in all_batches:
+        unique_countries_in_batches.update(batch["countries"])
+    
+    print(f"\n📊 Coverage verification:")
+    print(f"  Total countries to process: {len(countries)}")
+    print(f"  Countries in batches: {total_countries_in_batches}")
+    print(f"  Unique countries in batches: {len(unique_countries_in_batches)}")
+    
+    if len(unique_countries_in_batches) == len(countries):
+        print(f"  ✅ All countries covered!")
+    else:
+        missing = set(countries) - unique_countries_in_batches
+        print(f"  ⚠️  WARNING: {len(missing)} countries NOT covered!")
+        print(f"     Missing: {', '.join(sorted(list(missing))[:10])}")
+    
     return True
 
 def create_parallel_siting_scripts(num_scripts=40, countries=None):
@@ -551,6 +587,9 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
     all_batches = []
     script_counter = 1
     
+    # Track which countries have been assigned
+    assigned_countries = set()
+    
     for tier in ["t1", "t2", "t3"]:
         tier_countries = countries_by_tier[tier]
         if not tier_countries:
@@ -581,6 +620,7 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
                         "script_num": script_counter
                     }
                     all_batches.append(batch_info)
+                    assigned_countries.update(batch)
                     script_counter += 1
                     
                     if script_counter > num_scripts:
@@ -595,18 +635,43 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
                     "script_num": script_counter
                 }
                 all_batches.append(batch_info)
+                assigned_countries.update(batch)
                 script_counter += 1
                 
                 if script_counter > num_scripts:
                     remaining_countries = tier_countries[i + max_per_script:]
                     if remaining_countries:
                         all_batches[-1]["countries"].extend(remaining_countries)
+                        assigned_countries.update(remaining_countries)
                     break
         
         if script_counter > num_scripts:
             break
     
-    all_batches = all_batches[:num_scripts]
+    # Check if any countries were not assigned
+    unassigned_countries = set(countries) - assigned_countries
+    if unassigned_countries:
+        print(f"\n⚠️  {len(unassigned_countries)} countries not assigned in first {num_scripts} scripts")
+        print(f"   Creating additional scripts ({num_scripts+1}, {num_scripts+2}, ...) for unassigned countries")
+        print(f"   Unassigned countries: {', '.join(sorted(list(unassigned_countries))[:20])}")
+        if len(unassigned_countries) > 20:
+            print(f"   ... and {len(unassigned_countries) - 20} more")
+        
+        # Create additional scripts for unassigned countries (using Tier 3 config)
+        config = SITING_TIER_CONFIG["t3"]
+        max_per_script = config["max_countries_per_script"]
+        unassigned_list = sorted(unassigned_countries)
+        
+        for i in range(0, len(unassigned_list), max_per_script):
+            batch = unassigned_list[i:i + max_per_script]
+            batch_info = {
+                "countries": batch,
+                "tier": "t3",
+                "config": config,
+                "script_num": script_counter
+            }
+            all_batches.append(batch_info)
+            script_counter += 1
     
     print(f"\nCreated {len(all_batches)} siting script batches:")
     
@@ -656,8 +721,7 @@ $PY -c 'import sys; print(sys.executable)'
         for country in batch:
             script_content += f"""
 echo "[INFO] Processing siting analysis for {country} ({get_tier(country).upper()})..."
-$PY process_country_siting.py {country}
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py {country}; then
     echo "[SUCCESS] {country} siting analysis completed"
 else
     echo "[ERROR] {country} siting analysis failed"
@@ -765,6 +829,24 @@ echo "  watch -n 60 'squeue -u \\$USER'"
     print(f"  Total Memory: {total_mem}GB")
     print(f"  Total CPUs: {total_cpus}")
     print(f"  Scripts: {len(all_batches)}")
+    
+    # Verify all countries are covered
+    total_countries_in_batches = sum(len(batch["countries"]) for batch in all_batches)
+    unique_countries_in_batches = set()
+    for batch in all_batches:
+        unique_countries_in_batches.update(batch["countries"])
+    
+    print(f"\n📊 Coverage verification (siting):")
+    print(f"  Total countries to process: {len(countries)}")
+    print(f"  Countries in batches: {total_countries_in_batches}")
+    print(f"  Unique countries in batches: {len(unique_countries_in_batches)}")
+    
+    if len(unique_countries_in_batches) == len(countries):
+        print(f"  ✅ All countries covered!")
+    else:
+        missing = set(countries) - unique_countries_in_batches
+        print(f"  ⚠️  WARNING: {len(missing)} countries NOT covered!")
+        print(f"     Missing: {', '.join(sorted(list(missing))[:10])}")
     
     return True
 

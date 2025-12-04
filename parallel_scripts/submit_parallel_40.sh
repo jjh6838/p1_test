@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing UGA (T5)..."
-$PY process_country_supply.py UGA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py UGA --output-dir outputs_per_country; then
     echo "[SUCCESS] UGA completed"
 else
     echo "[ERROR] UGA failed"
 fi
 
 echo "[INFO] Processing URY (T5)..."
-$PY process_country_supply.py URY --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py URY --output-dir outputs_per_country; then
     echo "[SUCCESS] URY completed"
 else
     echo "[ERROR] URY failed"
 fi
 
 echo "[INFO] Processing UZB (T5)..."
-$PY process_country_supply.py UZB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py UZB --output-dir outputs_per_country; then
     echo "[SUCCESS] UZB completed"
 else
     echo "[ERROR] UZB failed"
 fi
 
 echo "[INFO] Processing VIR (T5)..."
-$PY process_country_supply.py VIR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py VIR --output-dir outputs_per_country; then
     echo "[SUCCESS] VIR completed"
 else
     echo "[ERROR] VIR failed"
 fi
 
 echo "[INFO] Processing VNM (T5)..."
-$PY process_country_supply.py VNM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py VNM --output-dir outputs_per_country; then
     echo "[SUCCESS] VNM completed"
 else
     echo "[ERROR] VNM failed"
 fi
 
 echo "[INFO] Processing VUT (T5)..."
-$PY process_country_supply.py VUT --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py VUT --output-dir outputs_per_country; then
     echo "[SUCCESS] VUT completed"
 else
     echo "[ERROR] VUT failed"
 fi
 
 echo "[INFO] Processing WSM (T5)..."
-$PY process_country_supply.py WSM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py WSM --output-dir outputs_per_country; then
     echo "[SUCCESS] WSM completed"
 else
     echo "[ERROR] WSM failed"
 fi
 
 echo "[INFO] Processing YEM (T5)..."
-$PY process_country_supply.py YEM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py YEM --output-dir outputs_per_country; then
     echo "[SUCCESS] YEM completed"
 else
     echo "[ERROR] YEM failed"
 fi
 
 echo "[INFO] Processing ZMB (T5)..."
-$PY process_country_supply.py ZMB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ZMB --output-dir outputs_per_country; then
     echo "[SUCCESS] ZMB completed"
 else
     echo "[ERROR] ZMB failed"
 fi
 
 echo "[INFO] Processing ZWE (T5)..."
-$PY process_country_supply.py ZWE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ZWE --output-dir outputs_per_country; then
     echo "[SUCCESS] ZWE completed"
 else
     echo "[ERROR] ZWE failed"

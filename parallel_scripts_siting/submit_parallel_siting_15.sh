@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing siting analysis for ISR (T3)..."
-$PY process_country_siting.py ISR
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py ISR; then
     echo "[SUCCESS] ISR siting analysis completed"
 else
     echo "[ERROR] ISR siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for ITA (T3)..."
-$PY process_country_siting.py ITA
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py ITA; then
     echo "[SUCCESS] ITA siting analysis completed"
 else
     echo "[ERROR] ITA siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for JAM (T3)..."
-$PY process_country_siting.py JAM
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py JAM; then
     echo "[SUCCESS] JAM siting analysis completed"
 else
     echo "[ERROR] JAM siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for JOR (T3)..."
-$PY process_country_siting.py JOR
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py JOR; then
     echo "[SUCCESS] JOR siting analysis completed"
 else
     echo "[ERROR] JOR siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for JPN (T3)..."
-$PY process_country_siting.py JPN
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py JPN; then
     echo "[SUCCESS] JPN siting analysis completed"
 else
     echo "[ERROR] JPN siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for KEN (T3)..."
-$PY process_country_siting.py KEN
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py KEN; then
     echo "[SUCCESS] KEN siting analysis completed"
 else
     echo "[ERROR] KEN siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for KGZ (T3)..."
-$PY process_country_siting.py KGZ
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py KGZ; then
     echo "[SUCCESS] KGZ siting analysis completed"
 else
     echo "[ERROR] KGZ siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for KHM (T3)..."
-$PY process_country_siting.py KHM
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py KHM; then
     echo "[SUCCESS] KHM siting analysis completed"
 else
     echo "[ERROR] KHM siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for KIR (T3)..."
-$PY process_country_siting.py KIR
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py KIR; then
     echo "[SUCCESS] KIR siting analysis completed"
 else
     echo "[ERROR] KIR siting analysis failed"
 fi
 
 echo "[INFO] Processing siting analysis for KNA (T3)..."
-$PY process_country_siting.py KNA
-if [ $? -eq 0 ]; then
+if $PY process_country_siting.py KNA; then
     echo "[SUCCESS] KNA siting analysis completed"
 else
     echo "[ERROR] KNA siting analysis failed"

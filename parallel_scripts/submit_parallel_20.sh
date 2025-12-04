@@ -35,16 +35,14 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing MMR (T4)..."
-$PY process_country_supply.py MMR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py MMR --output-dir outputs_per_country; then
     echo "[SUCCESS] MMR completed"
 else
     echo "[ERROR] MMR failed"
 fi
 
 echo "[INFO] Processing NGA (T4)..."
-$PY process_country_supply.py NGA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py NGA --output-dir outputs_per_country; then
     echo "[SUCCESS] NGA completed"
 else
     echo "[ERROR] NGA failed"

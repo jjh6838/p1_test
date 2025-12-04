@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing SLV (T5)..."
-$PY process_country_supply.py SLV --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SLV --output-dir outputs_per_country; then
     echo "[SUCCESS] SLV completed"
 else
     echo "[ERROR] SLV failed"
 fi
 
 echo "[INFO] Processing SOM (T5)..."
-$PY process_country_supply.py SOM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SOM --output-dir outputs_per_country; then
     echo "[SUCCESS] SOM completed"
 else
     echo "[ERROR] SOM failed"
 fi
 
 echo "[INFO] Processing SRB (T5)..."
-$PY process_country_supply.py SRB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SRB --output-dir outputs_per_country; then
     echo "[SUCCESS] SRB completed"
 else
     echo "[ERROR] SRB failed"
 fi
 
 echo "[INFO] Processing SSD (T5)..."
-$PY process_country_supply.py SSD --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SSD --output-dir outputs_per_country; then
     echo "[SUCCESS] SSD completed"
 else
     echo "[ERROR] SSD failed"
 fi
 
 echo "[INFO] Processing SUR (T5)..."
-$PY process_country_supply.py SUR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SUR --output-dir outputs_per_country; then
     echo "[SUCCESS] SUR completed"
 else
     echo "[ERROR] SUR failed"
 fi
 
 echo "[INFO] Processing SVK (T5)..."
-$PY process_country_supply.py SVK --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SVK --output-dir outputs_per_country; then
     echo "[SUCCESS] SVK completed"
 else
     echo "[ERROR] SVK failed"
 fi
 
 echo "[INFO] Processing SVN (T5)..."
-$PY process_country_supply.py SVN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SVN --output-dir outputs_per_country; then
     echo "[SUCCESS] SVN completed"
 else
     echo "[ERROR] SVN failed"
 fi
 
 echo "[INFO] Processing SWZ (T5)..."
-$PY process_country_supply.py SWZ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SWZ --output-dir outputs_per_country; then
     echo "[SUCCESS] SWZ completed"
 else
     echo "[ERROR] SWZ failed"
 fi
 
 echo "[INFO] Processing SYC (T5)..."
-$PY process_country_supply.py SYC --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SYC --output-dir outputs_per_country; then
     echo "[SUCCESS] SYC completed"
 else
     echo "[ERROR] SYC failed"
 fi
 
 echo "[INFO] Processing SYR (T5)..."
-$PY process_country_supply.py SYR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SYR --output-dir outputs_per_country; then
     echo "[SUCCESS] SYR completed"
 else
     echo "[ERROR] SYR failed"

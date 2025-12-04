@@ -35,88 +35,77 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing COG (T5)..."
-$PY process_country_supply.py COG --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py COG --output-dir outputs_per_country; then
     echo "[SUCCESS] COG completed"
 else
     echo "[ERROR] COG failed"
 fi
 
 echo "[INFO] Processing COM (T5)..."
-$PY process_country_supply.py COM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py COM --output-dir outputs_per_country; then
     echo "[SUCCESS] COM completed"
 else
     echo "[ERROR] COM failed"
 fi
 
 echo "[INFO] Processing CPV (T5)..."
-$PY process_country_supply.py CPV --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py CPV --output-dir outputs_per_country; then
     echo "[SUCCESS] CPV completed"
 else
     echo "[ERROR] CPV failed"
 fi
 
 echo "[INFO] Processing CRI (T5)..."
-$PY process_country_supply.py CRI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py CRI --output-dir outputs_per_country; then
     echo "[SUCCESS] CRI completed"
 else
     echo "[ERROR] CRI failed"
 fi
 
 echo "[INFO] Processing CUB (T5)..."
-$PY process_country_supply.py CUB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py CUB --output-dir outputs_per_country; then
     echo "[SUCCESS] CUB completed"
 else
     echo "[ERROR] CUB failed"
 fi
 
 echo "[INFO] Processing CYM (T5)..."
-$PY process_country_supply.py CYM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py CYM --output-dir outputs_per_country; then
     echo "[SUCCESS] CYM completed"
 else
     echo "[ERROR] CYM failed"
 fi
 
 echo "[INFO] Processing CYP (T5)..."
-$PY process_country_supply.py CYP --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py CYP --output-dir outputs_per_country; then
     echo "[SUCCESS] CYP completed"
 else
     echo "[ERROR] CYP failed"
 fi
 
 echo "[INFO] Processing CZE (T5)..."
-$PY process_country_supply.py CZE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py CZE --output-dir outputs_per_country; then
     echo "[SUCCESS] CZE completed"
 else
     echo "[ERROR] CZE failed"
 fi
 
 echo "[INFO] Processing DJI (T5)..."
-$PY process_country_supply.py DJI --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py DJI --output-dir outputs_per_country; then
     echo "[SUCCESS] DJI completed"
 else
     echo "[ERROR] DJI failed"
 fi
 
 echo "[INFO] Processing DNK (T5)..."
-$PY process_country_supply.py DNK --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py DNK --output-dir outputs_per_country; then
     echo "[SUCCESS] DNK completed"
 else
     echo "[ERROR] DNK failed"
 fi
 
 echo "[INFO] Processing DOM (T5)..."
-$PY process_country_supply.py DOM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py DOM --output-dir outputs_per_country; then
     echo "[SUCCESS] DOM completed"
 else
     echo "[ERROR] DOM failed"

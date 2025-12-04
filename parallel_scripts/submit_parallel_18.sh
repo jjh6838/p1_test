@@ -35,16 +35,14 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing FRA (T4)..."
-$PY process_country_supply.py FRA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py FRA --output-dir outputs_per_country; then
     echo "[SUCCESS] FRA completed"
 else
     echo "[ERROR] FRA failed"
 fi
 
 echo "[INFO] Processing IRQ (T4)..."
-$PY process_country_supply.py IRQ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py IRQ --output-dir outputs_per_country; then
     echo "[SUCCESS] IRQ completed"
 else
     echo "[ERROR] IRQ failed"

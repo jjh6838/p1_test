@@ -35,16 +35,14 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing SDN (T4)..."
-$PY process_country_supply.py SDN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SDN --output-dir outputs_per_country; then
     echo "[SUCCESS] SDN completed"
 else
     echo "[ERROR] SDN failed"
 fi
 
 echo "[INFO] Processing SWE (T4)..."
-$PY process_country_supply.py SWE --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py SWE --output-dir outputs_per_country; then
     echo "[SUCCESS] SWE completed"
 else
     echo "[ERROR] SWE failed"

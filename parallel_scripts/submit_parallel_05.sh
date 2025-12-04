@@ -35,8 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing AUS (T3)..."
-$PY process_country_supply.py AUS --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py AUS --output-dir outputs_per_country; then
     echo "[SUCCESS] AUS completed"
 else
     echo "[ERROR] AUS failed"

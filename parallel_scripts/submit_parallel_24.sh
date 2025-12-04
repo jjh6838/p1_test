@@ -35,16 +35,14 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing TCD (T4)..."
-$PY process_country_supply.py TCD --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py TCD --output-dir outputs_per_country; then
     echo "[SUCCESS] TCD completed"
 else
     echo "[ERROR] TCD failed"
 fi
 
 echo "[INFO] Processing TUR (T4)..."
-$PY process_country_supply.py TUR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py TUR --output-dir outputs_per_country; then
     echo "[SUCCESS] TUR completed"
 else
     echo "[ERROR] TUR failed"

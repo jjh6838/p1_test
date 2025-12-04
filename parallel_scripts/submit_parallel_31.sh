@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing GIN (T5)..."
-$PY process_country_supply.py GIN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GIN --output-dir outputs_per_country; then
     echo "[SUCCESS] GIN completed"
 else
     echo "[ERROR] GIN failed"
 fi
 
 echo "[INFO] Processing GMB (T5)..."
-$PY process_country_supply.py GMB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GMB --output-dir outputs_per_country; then
     echo "[SUCCESS] GMB completed"
 else
     echo "[ERROR] GMB failed"
 fi
 
 echo "[INFO] Processing GNB (T5)..."
-$PY process_country_supply.py GNB --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GNB --output-dir outputs_per_country; then
     echo "[SUCCESS] GNB completed"
 else
     echo "[ERROR] GNB failed"
 fi
 
 echo "[INFO] Processing GNQ (T5)..."
-$PY process_country_supply.py GNQ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GNQ --output-dir outputs_per_country; then
     echo "[SUCCESS] GNQ completed"
 else
     echo "[ERROR] GNQ failed"
 fi
 
 echo "[INFO] Processing GRC (T5)..."
-$PY process_country_supply.py GRC --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GRC --output-dir outputs_per_country; then
     echo "[SUCCESS] GRC completed"
 else
     echo "[ERROR] GRC failed"
 fi
 
 echo "[INFO] Processing GRL (T5)..."
-$PY process_country_supply.py GRL --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GRL --output-dir outputs_per_country; then
     echo "[SUCCESS] GRL completed"
 else
     echo "[ERROR] GRL failed"
 fi
 
 echo "[INFO] Processing GTM (T5)..."
-$PY process_country_supply.py GTM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GTM --output-dir outputs_per_country; then
     echo "[SUCCESS] GTM completed"
 else
     echo "[ERROR] GTM failed"
 fi
 
 echo "[INFO] Processing GUM (T5)..."
-$PY process_country_supply.py GUM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GUM --output-dir outputs_per_country; then
     echo "[SUCCESS] GUM completed"
 else
     echo "[ERROR] GUM failed"
 fi
 
 echo "[INFO] Processing GUY (T5)..."
-$PY process_country_supply.py GUY --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py GUY --output-dir outputs_per_country; then
     echo "[SUCCESS] GUY completed"
 else
     echo "[ERROR] GUY failed"
 fi
 
 echo "[INFO] Processing HND (T5)..."
-$PY process_country_supply.py HND --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py HND --output-dir outputs_per_country; then
     echo "[SUCCESS] HND completed"
 else
     echo "[ERROR] HND failed"

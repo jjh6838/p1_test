@@ -35,8 +35,7 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing ARG (T3)..."
-$PY process_country_supply.py ARG --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ARG --output-dir outputs_per_country; then
     echo "[SUCCESS] ARG completed"
 else
     echo "[ERROR] ARG failed"

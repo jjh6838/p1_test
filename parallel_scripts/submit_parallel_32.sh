@@ -35,80 +35,70 @@ $PY -c 'import sys; print(sys.executable)'
 # Process countries in this batch
 
 echo "[INFO] Processing HRV (T5)..."
-$PY process_country_supply.py HRV --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py HRV --output-dir outputs_per_country; then
     echo "[SUCCESS] HRV completed"
 else
     echo "[ERROR] HRV failed"
 fi
 
 echo "[INFO] Processing HUN (T5)..."
-$PY process_country_supply.py HUN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py HUN --output-dir outputs_per_country; then
     echo "[SUCCESS] HUN completed"
 else
     echo "[ERROR] HUN failed"
 fi
 
 echo "[INFO] Processing IRL (T5)..."
-$PY process_country_supply.py IRL --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py IRL --output-dir outputs_per_country; then
     echo "[SUCCESS] IRL completed"
 else
     echo "[ERROR] IRL failed"
 fi
 
 echo "[INFO] Processing ISL (T5)..."
-$PY process_country_supply.py ISL --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ISL --output-dir outputs_per_country; then
     echo "[SUCCESS] ISL completed"
 else
     echo "[ERROR] ISL failed"
 fi
 
 echo "[INFO] Processing ISR (T5)..."
-$PY process_country_supply.py ISR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ISR --output-dir outputs_per_country; then
     echo "[SUCCESS] ISR completed"
 else
     echo "[ERROR] ISR failed"
 fi
 
 echo "[INFO] Processing ITA (T5)..."
-$PY process_country_supply.py ITA --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py ITA --output-dir outputs_per_country; then
     echo "[SUCCESS] ITA completed"
 else
     echo "[ERROR] ITA failed"
 fi
 
 echo "[INFO] Processing JAM (T5)..."
-$PY process_country_supply.py JAM --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py JAM --output-dir outputs_per_country; then
     echo "[SUCCESS] JAM completed"
 else
     echo "[ERROR] JAM failed"
 fi
 
 echo "[INFO] Processing JOR (T5)..."
-$PY process_country_supply.py JOR --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py JOR --output-dir outputs_per_country; then
     echo "[SUCCESS] JOR completed"
 else
     echo "[ERROR] JOR failed"
 fi
 
 echo "[INFO] Processing KEN (T5)..."
-$PY process_country_supply.py KEN --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py KEN --output-dir outputs_per_country; then
     echo "[SUCCESS] KEN completed"
 else
     echo "[ERROR] KEN failed"
 fi
 
 echo "[INFO] Processing KGZ (T5)..."
-$PY process_country_supply.py KGZ --output-dir outputs_per_country
-if [ $? -eq 0 ]; then
+if $PY process_country_supply.py KGZ --output-dir outputs_per_country; then
     echo "[SUCCESS] KGZ completed"
 else
     echo "[ERROR] KGZ failed"
