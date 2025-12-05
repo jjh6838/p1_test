@@ -426,10 +426,11 @@ def load_energy_facilities(country_iso3, year=2024, scenario=None):
                 print(f"Loading existing facilities from {existing_facilities_path}")
                 facilities_gdf = gpd.read_parquet(existing_facilities_path)
                 
-                # Reset supplied_mwh and remaining_mwh for existing facilities
+                # Preserve remaining_mwh from first run (0 if fully used, >0 if still has capacity)
+                # Only reset supplied_mwh since we're doing a fresh allocation
                 facilities_gdf['supplied_mwh'] = 0.0
-                facilities_gdf['remaining_mwh'] = 0.0
-                print(f"Loaded {len(facilities_gdf)} existing facilities and reset supplied/remaining MWh")
+                # remaining_mwh stays as-is from first run
+                print(f"Loaded {len(facilities_gdf)} existing facilities (preserving remaining_mwh from first run)")
                 
                 # Load and append siting clusters
                 clusters_df = load_siting_clusters(scenario, country_iso3)
@@ -455,7 +456,7 @@ def load_energy_facilities(country_iso3, year=2024, scenario=None):
                         'total_mwh': clusters_df['remaining_mwh'],
                         'available_total_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR,
                         'supplied_mwh': 0.0,
-                        'remaining_mwh': 0.0
+                        'remaining_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR  # Initialize with capacity, not 0!
                     })
                     
                     # Create geometry for cluster facilities
@@ -582,15 +583,24 @@ def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_
     if not stitch_edges:
         return grid_lines_gdf
 
-    # Create stitches with consistent column naming
+    # Create stitches with consistent column naming, matching all columns from input
     stitch_data = {
         'line_type': ['component_stitch'] * len(stitch_edges),
         'line_id': [f'stitch_{i}' for i in range(len(stitch_edges))]
     }
     
-    # Preserve GID_0 if it exists in the input
-    if 'GID_0' in grid_lines_gdf.columns and not grid_lines_gdf.empty:
-        stitch_data['GID_0'] = [grid_lines_gdf['GID_0'].iloc[0]] * len(stitch_edges)
+    # Preserve or initialize all columns from input grid to avoid nulls in concatenation
+    if not grid_lines_gdf.empty:
+        for col in grid_lines_gdf.columns:
+            if col not in stitch_data and col != 'geometry':
+                if col == 'GID_0' and 'GID_0' in grid_lines_gdf.columns:
+                    stitch_data['GID_0'] = [grid_lines_gdf['GID_0'].iloc[0]] * len(stitch_edges)
+                elif col == 'distance_km':
+                    # Calculate actual distances for stitches
+                    stitch_data['distance_km'] = [edge.length / 1000.0 for edge in stitch_edges]
+                else:
+                    # Default null for other columns
+                    stitch_data[col] = [None] * len(stitch_edges)
     
     stitches_gdf = gpd.GeoDataFrame(
         stitch_data,
@@ -645,24 +655,43 @@ def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=
                 grid_country = gpd.read_parquet(existing_grid_path)
                 print(f"Loaded {len(grid_country)} existing grid line segments")
                 
+                # Ensure existing grid has proper line_type (handle legacy data)
+                if 'line_type' not in grid_country.columns:
+                    grid_country['line_type'] = 'grid_infrastructure'
+                else:
+                    # Fill any null/missing line_type values with grid_infrastructure
+                    grid_country['line_type'] = grid_country['line_type'].fillna('grid_infrastructure')
+                
                 # Load and append siting networks
                 networks_gdf = load_siting_networks(scenario, country_iso3)
                 
                 if networks_gdf is not None and not networks_gdf.empty:
-                    # Map siting networks to grid lines format
-                    network_lines = pd.DataFrame({
+                    # Map siting networks to grid lines format, matching existing columns
+                    network_lines_data = {
                         'GID_0': country_iso3,
                         'line_type': 'siting_networks',
                         'line_id': 'siting_' + networks_gdf.index.astype(str),
                         'distance_km': networks_gdf.get('distance_km', 0),
                         'geometry': networks_gdf.geometry
-                    })
+                    }
                     
-                    network_lines_gdf = gpd.GeoDataFrame(network_lines, geometry='geometry', crs=COMMON_CRS)
+                    # Add any other columns from existing grid with default values
+                    for col in grid_country.columns:
+                        if col not in network_lines_data and col != 'geometry':
+                            network_lines_data[col] = None  # Will be filled appropriately
+                    
+                    network_lines_gdf = gpd.GeoDataFrame(network_lines_data, geometry='geometry', crs=COMMON_CRS)
+                    
+                    # Ensure column order matches existing grid
+                    common_cols = [c for c in grid_country.columns if c in network_lines_gdf.columns]
+                    network_lines_gdf = network_lines_gdf[common_cols]
                     
                     # Append siting networks to grid lines
                     grid_country = pd.concat([grid_country, network_lines_gdf], ignore_index=True)
                     print(f"Added {len(network_lines_gdf)} siting network segments to grid (total: {len(grid_country)})")
+                    
+                    # Fill any remaining nulls in line_type
+                    grid_country['line_type'] = grid_country['line_type'].fillna('grid_infrastructure')
                 
                 # Stitch the combined grid to connect siting networks with existing infrastructure
                 grid_country = stitch_grid_segments(grid_country, admin_boundaries, GRID_STITCH_DISTANCE_KM)
@@ -1008,13 +1037,12 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     # Add facility nodes
     facility_nodes = []
     facility_node_set = set()
+    # Add facility nodes - allow multiple facilities at same location by using facility index
+    facility_nodes = []
     for idx, point in zip(facilities_gdf.index, facilities_utm.geometry):
-        node_coord = (point.x, point.y)
-        if node_coord in facility_node_set:
-            continue
-        facility_node_set.add(node_coord)
+        node_coord = (point.x, point.y, f'fac_{idx}')  # Add facility index to make unique
         facility_nodes.append(node_coord)
-        G.add_node(node_coord, type='facility', facility_idx=idx)
+        G.add_node(node_coord, type='facility', facility_idx=idx, coord=(point.x, point.y))
     
     # Add centroid nodes
     centroid_nodes = []
@@ -1052,23 +1080,23 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     print(f"Connecting {len(facilities_utm)} facilities to nearest grid nodes...")
     connect_start = time.time()
     
-
     # threshold for connecting facilities/centroids to grid
     max_distance = MAX_CONNECTION_DISTANCE_M
     
     # Process facilities
     if facility_nodes:
-        facility_coords = np.array(facility_nodes)
+        # Extract (x, y) coordinates for KDTree query (facility_nodes are now tuples with facility ID)
+        facility_coords = np.array([G.nodes[node]['coord'] for node in facility_nodes])
         
         # Find nearest grid node for each facility using KDTree
         distances, indices = grid_tree.query(facility_coords, k=1)
         
         # Add edges for facilities within threshold
-        for coord, dist, idx in zip(facility_nodes, distances, indices):
+        for node, coord_2d, dist, idx in zip(facility_nodes, facility_coords, distances, indices):
             if dist <= max_distance:
                 nearest_grid = grid_node_list[idx]
-                connector = LineString([coord, nearest_grid])
-                G.add_edge(coord, nearest_grid, weight=dist, weight_cached=dist, edge_type='grid_to_facility', geometry=connector)
+                connector = LineString([coord_2d, nearest_grid])
+                G.add_edge(node, nearest_grid, weight=dist, weight_cached=dist, edge_type='grid_to_facility', geometry=connector)
     
     print(f"  Facilities connected in {time.time() - connect_start:.2f}s")
     

@@ -17,6 +17,33 @@ Process all countries via 40 parallel SLURM jobs (cluster) or locally with autom
 **⚠️ MUST run AFTER supply analysis completes** - requires existing facility/grid/centroid data
 
 Identifies underserved remote settlements and designs optimal electrification solutions:
+
+#### **Geographic Component Detection** (50km threshold)
+- Uses DBSCAN clustering with 50km threshold to identify isolated island groups/territories
+- Each geographic component represents settlements that cannot easily share grid infrastructure
+- Components with ≥5 settlements are considered viable for facility placement
+- Components with <5 settlements are left as off-grid (too small for infrastructure investment)
+
+#### **Synthetic Facility Creation Strategy**
+**Goal**: Country-level energy diversity (all 5 types if non-zero demand), but not all types in every component
+
+**Algorithm**:
+1. **Sort energy types by total capacity** (smallest to largest): Other Renewables → Wind → Solar → Hydro → Fossil
+2. **One facility per component**: Assign smallest unassigned energy type to each viable component
+3. **Facility capacity = component's total demand** (not proportional to energy mix)
+4. **Fallback**: Remaining energy types go to largest component
+
+**Example** (TLS with 2 components):
+- Component 0 (79 settlements, 282,582 MWh) gets: Other Renewables (2,145 MWh capacity set to 282,582 MWh)
+- Component 1 (9 settlements, 39,037 MWh) gets: Wind (13,397 MWh capacity set to 39,037 MWh)
+- Remaining types (Solar, Hydro, Fossil) → Component 0 (largest, as fallback)
+
+**Rationale**:
+- 50km threshold creates truly isolated components (e.g., Timor-Leste mainland vs Oecusse enclave)
+- Each component gets dedicated facility with capacity matching its demand
+- Smallest energy types distributed first to maximize component coverage
+- Geographic suitability can be refined later (e.g., wind for coastal, hydro for mountains)
+
 1. **Settlement Filtering**: 
    - Loads centroids with 'Partially Filled' or 'Not Filled' supply_status
    - Removes settlements with population < 100
@@ -28,7 +55,9 @@ Identifies underserved remote settlements and designs optimal electrification so
 
 3. **Facility Matching**: 
    - Matches clusters to facilities based on energy type and remaining capacity
-   - Allocates cluster demand_gap_mwh to match facility remaining_mwh
+   - Component-aware matching: facilities only serve settlements in same geographic component
+   - Dynamic target allocation: prevents monopolization by early facilities
+   - Preserves `geo_component` in cluster output for verification
    
 4. **Grid Distance Calculation**: 
    - Computes distance from cluster centers to nearest grid lines
@@ -40,7 +69,7 @@ Identifies underserved remote settlements and designs optimal electrification so
    - Recalculates distances after clipping
 
 6. **Output Generation**:
-   - `siting_clusters_{ISO3}.parquet` - Cluster centers with demand and facility assignments
+   - `siting_clusters_{ISO3}.parquet` - Cluster centers with demand, facility assignments, and geo_component
    - `siting_networks_{ISO3}.parquet` - Network geometries for remote connections
    - `siting_summary_{ISO3}.xlsx` - Summary statistics
 
@@ -56,17 +85,54 @@ python process_country_siting.py KEN --run-all-scenarios
 ```
 
 ### 🆕 **ADD_V2 Workflow** (Siting Integration)
-Automatically merges siting results into supply analysis when available:
-- **Detection**: Checks for `siting_summary_{ISO3}.xlsx` to trigger ADD_V2 mode
-- **Data Reuse**: Loads existing facilities and grid from base supply analysis
-- **Cluster Integration**: Appends siting clusters as new facilities with summed capacity
-- **Network Integration**: Appends siting networks to grid infrastructure
-- **Stitching**: Connects siting networks to existing grid (10km MST threshold)
-- **Output Naming**: Uses `_add_v2` suffix (e.g., `2030_supply_100%_add_v2/`)
+After siting analysis completes, **re-run supply analysis** to automatically merge siting results:
+
+**How it works:**
+1. **First supply run**: `process_country_supply.py` generates base facilities/grid/centroids
+2. **Siting run**: `process_country_siting.py` generates cluster centers and networks for remote settlements
+3. **Second supply run**: `process_country_supply.py` detects siting outputs and creates integrated `_add_v2` files
+
+**Automatic detection:**
+- Supply script checks for `siting_summary_{ISO3}.xlsx` to trigger ADD_V2 mode
+- If found, loads existing `grid_lines_{ISO3}.parquet` and `facilities_{ISO3}.parquet` from first run
+- Appends siting clusters as synthetic facilities with merged capacity
+- Appends siting networks to grid infrastructure
+- Stitches networks to existing grid (10km MST threshold)
+- Saves integrated results with `_add_v2` suffix
+
+**Output structure:**
+```
+outputs_per_country/parquet/
+  2030_supply_100%/              # First run outputs
+    centroids_KEN.parquet
+    facilities_KEN.parquet
+    grid_lines_KEN.parquet
+    siting_clusters_KEN.parquet  # Added by siting run
+    siting_networks_KEN.parquet  # Added by siting run
+    siting_summary_KEN.xlsx      # Added by siting run
+  
+  2030_supply_100%_add_v2/       # Second run outputs (integrated)
+    centroids_KEN_add_v2.parquet
+    facilities_KEN_add_v2.parquet    # Includes synthetic facilities from clusters
+    grid_lines_KEN_add_v2.parquet    # Includes siting networks + stitches
+```
+
+**Key features:**
+- **Data preservation**: Uses first-run facilities/grid as base, avoiding re-computation
+- **Network integration**: Siting networks tagged as `line_type='siting_networks'`
+- **Grid stitching**: Connects remote networks to existing infrastructure
+- **Column consistency**: Ensures `line_type` and `line_id` populated for all grid segments
 
 ```bash
-# After running siting analysis, supply analysis automatically detects and merges
-python process_country_supply.py KEN  # Creates 2030_supply_100%_add_v2/ outputs
+# Complete workflow example:
+# 1) First supply run
+python process_country_supply.py KEN
+
+# 2) Siting analysis (generates siting_clusters, siting_networks, siting_summary)
+python process_country_siting.py KEN
+
+# 3) Second supply run (auto-detects siting outputs, generates _add_v2 files)
+python process_country_supply.py KEN  # Creates 2030_supply_100%_add_v2/
 ```
 
 ### 🔧 **Facility Data Processing** (`p1_a_ember_gem_2024.py`)
@@ -181,48 +247,72 @@ find outputs_per_country -name 'siting_summary_*.xlsx' | wc -l
 
 **Expected behavior**: Siting outputs are **conditional** - only generated when settlements have `supply_status` of "Partially Filled" or "Not Filled". Countries where supply analysis shows 100% coverage (all settlements "Filled") correctly skip siting analysis with no output files generated. Typical range: 20-80 countries need siting depending on scenario assumptions.
 
-### **ADD_V2 Integration (Tertiary Step - Optional)**
-⚠️ **Run AFTER both supply AND siting complete** to merge siting results into supply
+### **ADD_V2 Integration (Tertiary Step - Merges Siting into Supply)**
+⚠️ **Run AFTER both supply AND siting complete** to create integrated `_add_v2` outputs
 
-After siting completes, re-run supply analysis to automatically generate `_add_v2` parquets that integrate siting clusters and networks:
+**Purpose**: The second supply run generates new `_add_v2` parquet files that merge siting clusters and networks back into the supply analysis layers. This creates a complete integrated dataset.
+
+**Why re-run supply analysis?**
+- Reuses existing facility and grid data from first run (no re-computation)
+- Loads siting outputs (clusters, networks) and integrates them
+- Performs grid stitching to connect siting networks to existing infrastructure
+- Ensures consistent column schemas across all layers
+
+**What gets updated in _add_v2:**
+- `facilities_{ISO3}_add_v2.parquet`: Original facilities + synthetic facilities from siting clusters
+- `grid_lines_{ISO3}_add_v2.parquet`: Original grid + siting networks + connection stitches
+- `centroids_{ISO3}_add_v2.parquet`: Same as original (no changes needed)
 
 ```bash
-# Re-run supply analysis (detects siting_summary_*.xlsx files)
-# This generates NEW _add_v2 parquet files with integrated siting data
-python get_countries.py --create-parallel  # Regenerate supply scripts
-./submit_all_parallel.sh  # Re-submit all supply jobs
+# Generate supply parallel scripts again (same as step 1)
+python get_countries.py --create-parallel
+
+# Fix line endings if needed
+sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
+chmod +x submit_all_parallel.sh parallel_scripts/*.sh
+
+# Re-submit supply jobs (will auto-detect siting outputs and create _add_v2)
+./submit_all_parallel.sh
 
 # Monitor ADD_V2 generation
-tail -f outputs_global/logs/parallel_*.out | grep "Siting data detected"
+tail -f outputs_global/logs/parallel_*.out | grep -E "Siting data detected|add_v2"
 
-# Check completion (should be ~189 countries with _add_v2 suffix)
-find outputs_per_country/parquet -name '*_add_v2.parquet' | wc -l
+# Verify completion (should match number of countries with siting outputs)
+find outputs_per_country/parquet -type d -name '*_add_v2' | wc -l
+ls outputs_per_country/parquet/2030_supply_100%_add_v2/*_add_v2.parquet | wc -l
 ```
 
-**What ADD_V2 generates**:
-- All original supply layers with `_add_v2` suffix
-- Siting clusters merged into facilities layer
-- Siting networks merged into grid_lines layer
-- Output directory: `{scenario}_add_v2/` (e.g., `2030_supply_100%_add_v2/`)
+**Expected outputs** (per country with siting data):
+- `2030_supply_100%_add_v2/centroids_{ISO3}_add_v2.parquet`
+- `2030_supply_100%_add_v2/facilities_{ISO3}_add_v2.parquet` ← Includes synthetic facilities
+- `2030_supply_100%_add_v2/grid_lines_{ISO3}_add_v2.parquet` ← Includes siting networks
 
 
 **Key Files:**
-- **Supply Analysis (40 scripts)** - Generates facilities, grid, centroids parquets:
+- **Supply Analysis (40 scripts)** - Step 1 & 3: Generates base layers, then _add_v2 layers:
   - `submit_all_parallel.sh` - Submits all 40 supply jobs
   - `submit_one.sh` - Submit single supply script (e.g., `./submit_one.sh 06`)
   - `parallel_scripts/submit_parallel_01.sh` through `submit_parallel_40.sh`
   
-- **Siting Analysis (24 scripts)** - Generates siting_clusters, siting_networks parquets:
+- **Siting Analysis (24 scripts)** - Step 2: Generates siting_clusters, siting_networks:
   - `submit_all_parallel_siting.sh` - Submits all 24 siting jobs
   - `submit_one_siting.sh` - Submit single siting script (e.g., `./submit_one_siting.sh 03`)
   - `parallel_scripts_siting/submit_parallel_siting_01.sh` through `submit_parallel_siting_24.sh`
 
-- **ADD_V2 Integration** - Re-run supply scripts to generate _add_v2 parquets merging siting into supply
+**Complete workflow summary:**
+1. **First supply run**: Creates `2030_supply_100%/` with facilities, grid, centroids
+2. **Siting run**: Creates `siting_clusters`, `siting_networks`, `siting_summary` in same directory
+3. **Second supply run**: Creates `2030_supply_100%_add_v2/` with integrated facilities + networks
 
 **Tips:**
-- **Three-step workflow**: 1) Supply → 2) Siting → 3) Re-run Supply for ADD_V2
-- Siting creates 2 new parquet types per country, not all supply parquets
-- ADD_V2 is optional but recommended for integrated analysis
+- **Three-step workflow**: 
+  1. Supply (first run) → generates base facilities/grid/centroids
+  2. Siting → generates clusters/networks for remote settlements  
+  3. Supply (second run) → merges siting into _add_v2 integrated layers
+- The second supply run is **not** a full recomputation - it reuses existing data
+- Siting creates 2 new parquet types per country (clusters, networks)
+- ADD_V2 creates 3 integrated parquets per country (all with _add_v2 suffix)
+- `line_type` column distinguishes grid infrastructure, siting networks, and stitches
 - Use `./script.sh` on Linux/macOS when executing from current directory
 - Run `sed -i 's/\r$//'` on cluster if files prepared on Windows
 - Each job automatically uses allocated CPUs via internal parallelization

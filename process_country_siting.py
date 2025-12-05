@@ -108,7 +108,7 @@ def haversine_distance_km(lat1, lon1, lat2, lon2):
     return 2 * R * np.arcsin(np.sqrt(a))
 
 
-def identify_geographic_components(settlements_gdf, max_distance_km=100):
+def identify_geographic_components(settlements_gdf, max_distance_km=50):
     """Identify separate geographic components (islands, separated territories) using DBSCAN.
     
     This ensures settlements on different islands or separated land masses are not 
@@ -215,8 +215,14 @@ def load_facilities(country_iso3, scenario_suffix, output_dir="outputs_per_count
     return facilities_gdf
 
 
-def calculate_num_clusters(facilities_gdf, settlements_gdf):
-    """Calculate number of clusters based on remaining capacity by energy type (capacity-driven approach)."""
+def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=None):
+    """Calculate number of clusters based on remaining capacity by energy type (capacity-driven approach).
+    
+    Args:
+        facilities_gdf: Facilities dataframe
+        settlements_gdf: Filtered settlements (unfilled only)
+        all_centroids_gdf: All centroids (including filled) for calculating total supply received
+    """
     print("\n" + "="*60)
     print("CALCULATING CLUSTERS FROM REMAINING CAPACITY (CAPACITY-DRIVEN)")
     print("="*60)
@@ -233,22 +239,31 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf):
     
     print(f"\nTotal unfilled demand across all settlements: {total_demand_gap:,.2f} MWh")
     
-    # Calculate supply received by energy type from settlements
+    # Calculate supply received by energy type from ALL centroids (including filled settlements)
+    # to get accurate total supply picture
+    centroids_for_supply = all_centroids_gdf if all_centroids_gdf is not None else settlements_gdf
+    
     supply_received_by_type = {}
     for energy_type in DEMAND_TYPES:
         type_supply_col = f"{energy_type}_{ANALYSIS_YEAR}_centroid"
-        if type_supply_col in settlements_gdf.columns:
+        if type_supply_col in centroids_for_supply.columns:
             # Sum up what was actually delivered to all settlements for this type
-            supply_received_by_type[energy_type] = settlements_gdf[type_supply_col].sum()
+            supply_received_by_type[energy_type] = centroids_for_supply[type_supply_col].sum()
         else:
             supply_received_by_type[energy_type] = 0
     
     total_supply_received = sum(supply_received_by_type.values())
     
-    print(f"\nSupply received by settlements (by energy type):")
-    for energy_type, received_mwh in sorted(supply_received_by_type.items()):
-        if received_mwh > 0:
-            print(f"  {energy_type}: {received_mwh:,.2f} MWh")
+    # If energy type columns don't exist but supply_received_mwh does, use that for total
+    if total_supply_received == 0 and 'supply_received_mwh' in centroids_for_supply.columns:
+        total_supply_received = centroids_for_supply['supply_received_mwh'].sum()
+        print(f"\nSupply received by all settlements: {total_supply_received:,.2f} MWh")
+        print("  (Energy type breakdown not available in data)")
+    else:
+        print(f"\nSupply received by settlements (by energy type):")
+        for energy_type, received_mwh in sorted(supply_received_by_type.items()):
+            if received_mwh > 0:
+                print(f"  {energy_type}: {received_mwh:,.2f} MWh")
     print(f"Total supply received: {total_supply_received:,.2f} MWh")
     
     # Calculate expected supply mix from country-specific Ember projections
@@ -281,8 +296,9 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf):
     
     # Calculate expected supply by type for TOTAL demand (apply mix to total first)
     # Then subtract what's already been supplied to find the shortfall
-    if demand_col in settlements_gdf.columns:
-        total_demand = settlements_gdf[demand_col].sum()
+    # Use centroids_for_supply (all centroids) to get accurate total demand
+    if demand_col in centroids_for_supply.columns:
+        total_demand = centroids_for_supply[demand_col].sum()
     else:
         total_demand = total_supply_received + total_demand_gap
     
@@ -339,7 +355,7 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf):
     
     # First, identify geographic components for settlements (will be done later in clustering, 
     # but we need it now for component-aware synthetic facility placement)
-    settlements_gdf_temp = identify_geographic_components(settlements_gdf.copy(), max_distance_km=100)
+    settlements_gdf_temp = identify_geographic_components(settlements_gdf.copy(), max_distance_km=50)
     
     # Calculate demand per component
     component_demand_gap = settlements_gdf_temp.groupby('geo_component')['demand_gap_mwh'].sum().to_dict()
@@ -352,107 +368,37 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf):
     print(f"  Viable components (≥5 settlements): {len(viable_components)}")
     
     synthetic_facilities = []
-    excess_capacity_by_type = {}  # Track excess capacity that needs reallocation
     
-    for energy_type, total_shortfall in shortfall_by_type.items():
+    # Sort energy types by total shortfall (smallest first)
+    sorted_energy_types = sorted(shortfall_by_type.items(), key=lambda x: x[1])
+    
+    # Track which components have been assigned facilities
+    components_with_facilities = set()
+    
+    for energy_type, total_shortfall in sorted_energy_types:
         if total_shortfall <= 0:
             continue
         
         print(f"\n  {energy_type}: {total_shortfall:,.2f} MWh total shortfall")
         
-        # Calculate expected capacity per component based on energy mix
-        component_allocations = {}
-        total_allocated = 0
+        # Try to find a component that doesn't have a facility yet and has demand matching this type
+        assigned = False
         
-        for comp_id in viable_components:
-            if comp_id < 0:  # Skip noise
+        # Sort components by demand (largest first) to prioritize larger components
+        component_demands = [(comp_id, component_demand_gap.get(comp_id, 0)) 
+                            for comp_id in viable_components if comp_id >= 0]
+        component_demands.sort(key=lambda x: x[1], reverse=True)
+        
+        for comp_id, comp_demand in component_demands:
+            # Skip if this component already has a facility
+            if comp_id in components_with_facilities:
                 continue
             
-            comp_demand_gap = component_demand_gap.get(comp_id, 0)
             comp_settlements = settlements_gdf_temp[settlements_gdf_temp['geo_component'] == comp_id]
             
-            # Expected capacity for this energy type in this component (from demand gap, not total demand)
-            expected_capacity = comp_demand_gap * expected_mix[energy_type]
-            
-            if expected_capacity > 0:
-                component_allocations[comp_id] = {
-                    'capacity': expected_capacity,
-                    'settlements': comp_settlements
-                }
-                total_allocated += expected_capacity
-        
-        # Check if we have excess capacity that wasn't allocated (use tolerance for floating point)
-        excess = total_shortfall - total_allocated
-        
-        if excess > 0.01:  # Use small tolerance for floating point comparison
-            print(f"    Excess capacity: {excess:,.2f} MWh (total shortfall exceeds component demands)")
-            excess_capacity_by_type[energy_type] = excess
-            
-            # Try to reallocate excess to components with same-type existing facilities
-            components_with_type = []
-            for comp_id in viable_components:
-                if comp_id < 0:
-                    continue
-                comp_settlements = settlements_gdf_temp[settlements_gdf_temp['geo_component'] == comp_id]
-                # Check if any settlement in this component already receives this energy type
-                type_col = f"{energy_type}_{ANALYSIS_YEAR}_centroid"
-                if type_col in comp_settlements.columns:
-                    if comp_settlements[type_col].sum() > 0:
-                        components_with_type.append(comp_id)
-            
-            if len(components_with_type) > 0:
-                # Reallocate excess proportionally to components with this type
-                print(f"    Reallocating to {len(components_with_type)} components with existing {energy_type} supply")
-                excess_per_component = excess / len(components_with_type)
-                
-                for comp_id in components_with_type:
-                    if comp_id in component_allocations:
-                        component_allocations[comp_id]['capacity'] += excess_per_component
-                    else:
-                        comp_settlements = settlements_gdf_temp[settlements_gdf_temp['geo_component'] == comp_id]
-                        component_allocations[comp_id] = {
-                            'capacity': excess_per_component,
-                            'settlements': comp_settlements
-                        }
-                excess = 0  # All excess reallocated
-            
-            # If still excess (no components with this type), create additional facility
-            if excess > 0:
-                print(f"    Creating additional facility for remaining excess: {excess:,.2f} MWh")
-                # Place at overall demand-weighted centroid
-                settlements_with_demand = settlements_gdf_temp[settlements_gdf_temp['demand_gap_mwh'] > 0].copy()
-                
-                if len(settlements_with_demand) > 0:
-                    weights = settlements_with_demand['demand_gap_mwh'].values
-                    if weights.sum() > 0:
-                        weights = weights / weights.sum()
-                    else:
-                        weights = np.ones(len(weights)) / len(weights)
-                    
-                    optimal_lon = np.average(settlements_with_demand.geometry.x, weights=weights)
-                    optimal_lat = np.average(settlements_with_demand.geometry.y, weights=weights)
-                    optimal_location = Point(optimal_lon, optimal_lat)
-                    
-                    synthetic_facility = {
-                        'gem_id': f'SYNTHETIC_{energy_type}_EXCESS',
-                        'Grouped_Type': energy_type,
-                        'remaining_mwh': excess,
-                        'total_mwh': excess,
-                        'available_total_mwh': excess,
-                        'center_lat': optimal_location.y,
-                        'center_lon': optimal_location.x,
-                        'geometry': optimal_location,
-                        'geo_component': -1  # Not tied to specific component
-                    }
-                    synthetic_facilities.append(synthetic_facility)
-        
-        # Create synthetic facilities for each component allocation
-        for comp_id, allocation in component_allocations.items():
-            capacity = allocation['capacity']
-            comp_settlements = allocation['settlements']
-            
-            if capacity <= 0:
-                continue
+            # Check if component's demand is close to this energy type's shortfall
+            # Use capacity = component's total demand (not proportional to energy mix)
+            facility_capacity = comp_demand
             
             # Calculate optimal location: weighted centroid of settlements in this component
             settlements_with_demand = comp_settlements[comp_settlements['demand_gap_mwh'] > 0].copy()
@@ -473,17 +419,57 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf):
             synthetic_facility = {
                 'gem_id': f'SYNTHETIC_{energy_type}_C{comp_id}',
                 'Grouped_Type': energy_type,
-                'remaining_mwh': capacity,
-                'total_mwh': capacity,
-                'available_total_mwh': capacity,
+                'remaining_mwh': facility_capacity,
+                'total_mwh': facility_capacity,
+                'available_total_mwh': facility_capacity,
                 'center_lat': optimal_location.y,
                 'center_lon': optimal_location.x,
                 'geometry': optimal_location,
                 'geo_component': comp_id
             }
             synthetic_facilities.append(synthetic_facility)
+            components_with_facilities.add(comp_id)
+            assigned = True
             
-            print(f"    Component {comp_id}: {capacity:,.2f} MWh at ({optimal_location.y:.4f}, {optimal_location.x:.4f})")
+            print(f"    Component {comp_id}: {facility_capacity:,.2f} MWh at ({optimal_location.y:.4f}, {optimal_location.x:.4f})")
+            break
+        
+        # If no suitable component found, place in largest component
+        if not assigned and len(viable_components) > 0:
+            component_demands_dict = {comp_id: component_demand_gap.get(comp_id, 0) 
+                                     for comp_id in viable_components if comp_id >= 0}
+            largest_component_id = max(component_demands_dict.keys(), key=lambda k: component_demands_dict[k])
+            largest_component_settlements = settlements_gdf_temp[settlements_gdf_temp['geo_component'] == largest_component_id]
+            
+            settlements_with_demand = largest_component_settlements[largest_component_settlements['demand_gap_mwh'] > 0].copy()
+            
+            if len(settlements_with_demand) > 0:
+                weights = settlements_with_demand['demand_gap_mwh'].values
+                if weights.sum() > 0:
+                    weights = weights / weights.sum()
+                else:
+                    weights = np.ones(len(weights)) / len(weights)
+                
+                optimal_lon = np.average(settlements_with_demand.geometry.x, weights=weights)
+                optimal_lat = np.average(settlements_with_demand.geometry.y, weights=weights)
+                optimal_location = Point(optimal_lon, optimal_lat)
+            else:
+                optimal_location = largest_component_settlements.geometry.centroid.iloc[0] if len(largest_component_settlements) > 0 else Point(0, 0)
+            
+            synthetic_facility = {
+                'gem_id': f'SYNTHETIC_{energy_type}_C{largest_component_id}',
+                'Grouped_Type': energy_type,
+                'remaining_mwh': total_shortfall,
+                'total_mwh': total_shortfall,
+                'available_total_mwh': total_shortfall,
+                'center_lat': optimal_location.y,
+                'center_lon': optimal_location.x,
+                'geometry': optimal_location,
+                'geo_component': largest_component_id
+            }
+            synthetic_facilities.append(synthetic_facility)
+            
+            print(f"    Component {largest_component_id} (fallback): {total_shortfall:,.2f} MWh at ({optimal_location.y:.4f}, {optimal_location.x:.4f})")
     
     # Track all synthetic capacity for cluster calculations
     for facility in synthetic_facilities:
@@ -614,203 +600,116 @@ def cluster_settlements(settlements_gdf, n_clusters):
     # Ensure n_clusters doesn't exceed number of settlements
     n_clusters = min(n_clusters, len(settlements_gdf))
     
-    # Identify separate geographic components (islands, separated territories)
-    settlements_gdf = identify_geographic_components(settlements_gdf, max_distance_km=100)
-    
-    n_components = len(set(settlements_gdf['geo_component'])) - (1 if -1 in settlements_gdf['geo_component'].values else 0)
-    
     print(f"\nClustering parameters:")
-    print(f"  Algorithm: Weighted K-means (within geographic components)")
+    print(f"  Algorithm: Demand-weighted K-means with geographic validation")
     print(f"  Weight metric: demand_gap_mwh")
     print(f"  Total settlements: {len(settlements_gdf)}")
-    print(f"  Geographic components: {n_components}")
     print(f"  Desired total clusters: {n_clusters}")
     
-    # Allocate clusters proportionally to each component based on demand
-    component_demand = settlements_gdf.groupby('geo_component')['demand_gap_mwh'].sum()
-    total_demand = component_demand.sum()
+    # STEP 1: Perform demand-weighted K-means clustering across all settlements
+    print(f"\nSTEP 1: Initial demand-weighted clustering")
+    coords = np.column_stack([
+        settlements_gdf.geometry.x,
+        settlements_gdf.geometry.y
+    ])
     
-    # Check if we have enough clusters for all components (minimum 1 per component)
-    # Filter out small components (< 5 settlements) - assume off-grid solutions
-    component_sizes = settlements_gdf.groupby('geo_component').size()
-    viable_components = component_sizes[component_sizes >= 5].index.tolist()
-    
-    n_viable_components = len(viable_components)
-    
-    if n_viable_components < n_components:
-        small_components = component_sizes[component_sizes < 5]
-        print(f"\n  Excluding {len(small_components)} small components (< 5 settlements each) - assumed off-grid:")
-        for comp_id, size in small_components.items():
-            if comp_id >= 0:
-                comp_demand = component_demand[comp_id]
-                print(f"    Component {comp_id}: {size} settlements ({comp_demand:,.2f} MWh) → off-grid")
-        n_components = n_viable_components
-    
-    if n_components > n_clusters:
-        print(f"\n⚠ Warning: More viable components ({n_components}) than available clusters ({n_clusters})")
-        print(f"  Some components will not receive dedicated clusters")
-        print(f"  Allocating clusters to components with highest demand")
-        
-        # Sort viable components by demand (highest first)
-        viable_component_demand = component_demand[viable_components]
-        sorted_components = viable_component_demand.sort_values(ascending=False).head(n_clusters)
-        
-        clusters_per_component = {}
-        for comp_id in sorted_components.index:
-            if comp_id >= 0:
-                clusters_per_component[comp_id] = 1
-        
-        print(f"\n  Clusters allocated to top {len(clusters_per_component)} viable components by demand")
+    # Use demand_gap_mwh as sample weights for clustering
+    weights = settlements_gdf['demand_gap_mwh'].values
+    if weights.sum() > 0:
+        weights = weights / weights.sum()  # Normalize
     else:
-        # Normal allocation: at least 1 cluster per viable component
-        clusters_per_component = {}
-        for comp_id in viable_components:
-            if comp_id >= 0:  # Skip noise points
-                comp_settlements = settlements_gdf[settlements_gdf['geo_component'] == comp_id]
-                n_settlements_in_comp = len(comp_settlements)
-                
-                # Allocate clusters proportional to demand, but at least 1 per component
-                proportion = component_demand[comp_id] / total_demand
-                allocated_clusters = max(1, int(n_clusters * proportion))
-                
-                # Don't exceed number of settlements in component
-                allocated_clusters = min(allocated_clusters, n_settlements_in_comp)
-                
-                clusters_per_component[comp_id] = allocated_clusters
-        
-        # Adjust if total doesn't match target (due to rounding)
-        total_allocated = sum(clusters_per_component.values())
-        if total_allocated != n_clusters:
-            # Add/remove from largest component
-            largest_comp = component_demand.idxmax()
-            adjustment = n_clusters - total_allocated
-            clusters_per_component[largest_comp] += adjustment
-            clusters_per_component[largest_comp] = max(1, clusters_per_component[largest_comp])
+        weights = np.ones(len(weights)) / len(weights)  # Equal weights if no demand gap
     
-    print(f"\nCluster allocation per geographic component:")
-    for comp_id, n_clust in sorted(clusters_per_component.items()):
-        comp_settlements = settlements_gdf[settlements_gdf['geo_component'] == comp_id]
-        comp_demand = comp_settlements['demand_gap_mwh'].sum()
-        print(f"  Component {comp_id}: {n_clust} clusters for {len(comp_settlements)} settlements ({comp_demand:,.2f} MWh)")
+    if n_clusters == 1 or len(settlements_gdf) == 1:
+        settlements_gdf['cluster_id'] = 0
+        print(f"  Single cluster for all {len(settlements_gdf)} settlements")
+    else:
+        # K-means clustering with demand weighting
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        settlements_gdf['cluster_id'] = kmeans.fit_predict(coords, sample_weight=weights)
+        print(f"  Created {n_clusters} demand-weighted clusters")
     
-    # Perform K-means clustering within each component
-    settlements_gdf['cluster_id'] = -1
-    global_cluster_id = 0
+    # STEP 2: Identify geographic components and validate clusters
+    print(f"\nSTEP 2: Geographic component validation (50km threshold)")
+    settlements_gdf = identify_geographic_components(settlements_gdf, max_distance_km=50)
     
-    for comp_id, n_clust in clusters_per_component.items():
-        comp_mask = settlements_gdf['geo_component'] == comp_id
-        comp_settlements = settlements_gdf[comp_mask].copy()
-        
-        if len(comp_settlements) == 0:
+    n_components = len(set(settlements_gdf['geo_component'])) - (1 if -1 in settlements_gdf['geo_component'].values else 0)
+    component_sizes = settlements_gdf.groupby('geo_component').size()
+    
+    print(f"  Identified {n_components} geographic components")
+    
+    # Check for clusters that span multiple geographic components
+    cluster_component_violations = []
+    for cluster_id in settlements_gdf['cluster_id'].unique():
+        if cluster_id < 0:
             continue
+        cluster_mask = settlements_gdf['cluster_id'] == cluster_id
+        cluster_components = settlements_gdf[cluster_mask]['geo_component'].unique()
         
-        coords = np.column_stack([
-            comp_settlements.geometry.x,
-            comp_settlements.geometry.y
-        ])
-        
-        # Use demand_gap_mwh as sample weights for clustering
-        weights = comp_settlements['demand_gap_mwh'].values
-        if weights.sum() > 0:
-            weights = weights / weights.sum()  # Normalize
-        else:
-            weights = np.ones(len(weights)) / len(weights)  # Equal weights if no demand gap
-        
-        if n_clust == 1 or len(comp_settlements) == 1:
-            # Single cluster for this component
-            settlements_gdf.loc[comp_mask, 'cluster_id'] = global_cluster_id
-            global_cluster_id += 1
-        else:
-            # K-means clustering
-            kmeans = KMeans(n_clusters=n_clust, random_state=42, n_init=10)
-            local_labels = kmeans.fit_predict(coords, sample_weight=weights)
-            
-            # Map local labels to global cluster IDs
-            settlements_gdf.loc[comp_mask, 'cluster_id'] = local_labels + global_cluster_id
-            global_cluster_id += n_clust
+        if len(cluster_components) > 1:
+            # This cluster spans multiple geographic components - need to split
+            cluster_component_violations.append((cluster_id, cluster_components))
     
-    # Handle settlements in components that didn't receive clusters
-    # This includes: (1) small components (<5 settlements), (2) components without allocated clusters
-    unassigned_mask = settlements_gdf['cluster_id'] == -1
-    n_unassigned = unassigned_mask.sum()
-    if n_unassigned > 0:
-        unassigned_settlements = settlements_gdf[unassigned_mask].copy()
-        assigned_settlements = settlements_gdf[~unassigned_mask & (settlements_gdf['cluster_id'] >= 0)]
+    if cluster_component_violations:
+        print(f"\n  Found {len(cluster_component_violations)} clusters spanning multiple geographic components")
+        print(f"  Splitting these clusters to respect geographic boundaries...")
         
-        # Separate small components (off-grid) from unallocated components
-        small_component_mask = unassigned_settlements['geo_component'].map(
-            lambda c: component_sizes.get(c, 0) < 5
-        )
+        # Reassign cluster IDs to ensure each cluster is within a single component
+        next_cluster_id = settlements_gdf['cluster_id'].max() + 1
         
-        n_small_component = small_component_mask.sum()
-        n_unallocated = (~small_component_mask).sum()
-        
-        if n_small_component > 0:
-            print(f"\n  {n_small_component} settlements in small components (< 5 settlements) → off-grid (no cluster assigned)")
-        
-        if n_unallocated > 0:
-            print(f"\n⚠ {n_unallocated} settlements in components without allocated clusters")
-            print(f"  Assigning to nearest cluster within 100 km threshold")
+        for cluster_id, components in cluster_component_violations:
+            cluster_mask = settlements_gdf['cluster_id'] == cluster_id
             
-            if len(assigned_settlements) > 0:
-                # Get cluster centroids
-                cluster_centroids = assigned_settlements.groupby('cluster_id').apply(
-                    lambda x: Point(x.geometry.x.mean(), x.geometry.y.mean())
-                )
+            # For each component in this cluster, create a new sub-cluster
+            for i, comp_id in enumerate(components):
+                comp_cluster_mask = cluster_mask & (settlements_gdf['geo_component'] == comp_id)
                 
-                assigned_count = 0
-                for idx, settlement in unassigned_settlements[~small_component_mask].iterrows():
-                    # Find nearest cluster centroid within 100km
-                    min_dist_km = float('inf')
-                    nearest_cluster = -1
-                    
-                    for cluster_id, centroid in cluster_centroids.items():
-                        # Calculate haversine distance
-                        dist_km = haversine_distance_km(
-                            settlement.geometry.y, settlement.geometry.x,
-                            centroid.y, centroid.x
-                        )
-                        
-                        if dist_km < min_dist_km and dist_km <= 100:  # Within 100km threshold
-                            min_dist_km = dist_km
-                            nearest_cluster = cluster_id
-                    
-                    if nearest_cluster >= 0:
-                        settlements_gdf.loc[idx, 'cluster_id'] = nearest_cluster
-                        assigned_count += 1
-                    else:
-                        # No cluster within 100km - remains unassigned (off-grid)
-                        pass
-                
-                print(f"    Assigned {assigned_count} settlements to nearest clusters")
-                remaining_unassigned = n_unallocated - assigned_count
-                if remaining_unassigned > 0:
-                    print(f"    {remaining_unassigned} settlements beyond 100km threshold → off-grid (no cluster)")
+                if i == 0:
+                    # Keep first component with original cluster_id
+                    continue
+                else:
+                    # Assign new cluster_id to other components
+                    settlements_gdf.loc[comp_cluster_mask, 'cluster_id'] = next_cluster_id
+                    next_cluster_id += 1
+        
+        final_n_clusters = len(settlements_gdf['cluster_id'].unique())
+        print(f"  Split complete: {n_clusters} → {final_n_clusters} clusters")
+    else:
+        print(f"  ✓ All clusters respect geographic boundaries")
+        final_n_clusters = n_clusters
     
-    print(f"\nClustering results:")
+    # STEP 3: Summary statistics
+    print(f"\nSTEP 3: Clustering summary")
     cluster_sizes = settlements_gdf.groupby('cluster_id').size().sort_values(ascending=False)
-    print(f"  Total clusters created: {len(cluster_sizes)}")
-    print(f"  Largest cluster: {cluster_sizes.iloc[0] if len(cluster_sizes) > 0 else 0} settlements")
-    print(f"  Smallest cluster: {cluster_sizes.iloc[-1] if len(cluster_sizes) > 0 else 0} settlements")
-    print(f"  Average cluster size: {cluster_sizes.mean():.1f} settlements")
-    print(f"  Median cluster size: {cluster_sizes.median():.1f} settlements")
+    print(f"  Total clusters: {final_n_clusters}")
+    print(f"  Largest cluster: {cluster_sizes.iloc[0]} settlements")
+    print(f"  Smallest cluster: {cluster_sizes.iloc[-1]} settlements")
+    print(f"  Average: {cluster_sizes.mean():.1f} settlements/cluster")
+    print(f"  Median: {cluster_sizes.median():.1f} settlements/cluster")
     
-    # Report total demand gap per cluster
     cluster_demand = settlements_gdf.groupby('cluster_id')['demand_gap_mwh'].sum().sort_values(ascending=False)
-    print(f"\nDemand gap by cluster:")
-    print(f"  Highest demand cluster: {cluster_demand.iloc[0]:,.2f} MWh")
-    print(f"  Lowest demand cluster: {cluster_demand.iloc[-1]:,.2f} MWh")
-    print(f"  Average per cluster: {cluster_demand.mean():.2f} MWh")
-    print(f"\nDemand gap by cluster:")
-    print(f"  Highest demand cluster: {cluster_demand.iloc[0]:,.2f} MWh")
-    print(f"  Lowest demand cluster: {cluster_demand.iloc[-1]:,.2f} MWh")
-    print(f"  Average per cluster: {cluster_demand.mean():,.2f} MWh")
+    print(f"\n  Demand distribution:")
+    print(f"    Highest demand cluster: {cluster_demand.iloc[0]:,.2f} MWh")
+    print(f"    Lowest demand cluster: {cluster_demand.iloc[-1]:,.2f} MWh")
+    print(f"    Average: {cluster_demand.mean():,.2f} MWh/cluster")
+    
+    # Show cluster distribution by component
+    cluster_component_summary = settlements_gdf.groupby(['geo_component', 'cluster_id']).size().reset_index(name='settlements')
+    component_cluster_counts = cluster_component_summary.groupby('geo_component').size()
+    
+    print(f"\n  Clusters per geographic component:")
+    for comp_id in sorted(component_cluster_counts.index):
+        if comp_id >= 0:
+            comp_clusters = component_cluster_counts[comp_id]
+            comp_settlements = component_sizes[comp_id]
+            comp_demand = settlements_gdf[settlements_gdf['geo_component'] == comp_id]['demand_gap_mwh'].sum()
+            print(f"    Component {comp_id}: {comp_clusters} clusters, {comp_settlements} settlements ({comp_demand:,.2f} MWh)")
     
     return settlements_gdf
 
 
 def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type, remaining_by_type):
-    """Match settlements to facilities such that cluster demand_gap_mwh equals facility remaining_mwh."""
+    """Assign facilities to demand-weighted clusters. Clusters can receive multiple facilities as needed."""
     
     if len(settlements_gdf) == 0:
         return gpd.GeoDataFrame(columns=['cluster_id', 'geometry', 'num_settlements', 
@@ -820,70 +719,27 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
     # Get facilities with remaining capacity
     facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy().reset_index(drop=True)
     
-    print(f"\nMatching settlements to facilities (demand_gap_mwh = remaining_mwh):")
+    print(f"\nMatching facilities to demand-weighted clusters:")
     print(f"  Total settlements: {len(settlements_gdf)}")
     print(f"  Total facilities with capacity: {len(facilities_with_capacity)}")
     print(f"  Total demand gap: {settlements_gdf['demand_gap_mwh'].sum():,.2f} MWh")
     print(f"  Total remaining capacity: {facilities_with_capacity['remaining_mwh'].sum():,.2f} MWh")
     
-    # Create clusters by iteratively assigning settlements to facilities
-    # Strategy: For each facility, find settlements that match its remaining_mwh
+    # Get existing clusters from settlements (created by demand-weighted clustering)
+    if 'cluster_id' not in settlements_gdf.columns or settlements_gdf['cluster_id'].isna().all():
+        print("\n⚠ Warning: No cluster_id found in settlements. Cannot match facilities.")
+        return gpd.GeoDataFrame(crs=COMMON_CRS)
     
-    settlements_remaining = settlements_gdf.copy()
-    settlements_remaining['assigned_cluster'] = -1
-    
-    cluster_info = []
-    cluster_id = 0
-    
-    # Sort facilities by remaining capacity (largest first) for better matching
-    facilities_sorted = facilities_with_capacity.sort_values('remaining_mwh', ascending=False)
-    
-    for fac_idx, facility in facilities_sorted.iterrows():
-        if len(settlements_remaining[settlements_remaining['assigned_cluster'] == -1]) == 0:
-            break
-        
-        facility_capacity = facility['remaining_mwh']
-        facility_type = facility['Grouped_Type']
-        facility_geom = facility.geometry
-        
-        # Find unassigned settlements
-        unassigned = settlements_remaining[settlements_remaining['assigned_cluster'] == -1].copy()
-        
-        if len(unassigned) == 0:
+    # Calculate cluster properties
+    cluster_summary = []
+    for cluster_id in sorted(settlements_gdf['cluster_id'].unique()):
+        if cluster_id < 0:
             continue
         
-        # Calculate distance from facility to each unassigned settlement
-        unassigned['distance_to_facility'] = unassigned.geometry.apply(lambda g: g.distance(facility_geom))
+        cluster_settlements = settlements_gdf[settlements_gdf['cluster_id'] == cluster_id]
+        total_demand = cluster_settlements['demand_gap_mwh'].sum()
         
-        # Sort by distance (nearest first)
-        unassigned = unassigned.sort_values('distance_to_facility')
-        
-        # Greedily assign settlements until we match the facility's capacity
-        cumulative_demand = 0
-        selected_settlements = []
-        
-        for idx, settlement in unassigned.iterrows():
-            settlement_demand = settlement['demand_gap_mwh']
-            
-            # Check if adding this settlement would exceed capacity
-            if cumulative_demand + settlement_demand <= facility_capacity * 1.1:  # Allow 10% tolerance
-                selected_settlements.append(idx)
-                cumulative_demand += settlement_demand
-                
-                # Stop if we've matched the capacity (within tolerance)
-                if abs(cumulative_demand - facility_capacity) / facility_capacity < 0.05:  # Within 5%
-                    break
-        
-        # If no settlements selected but unassigned exist, take at least one
-        if len(selected_settlements) == 0 and len(unassigned) > 0:
-            selected_settlements.append(unassigned.index[0])
-            cumulative_demand = unassigned.iloc[0]['demand_gap_mwh']
-        
-        # Assign these settlements to this cluster
-        settlements_remaining.loc[selected_settlements, 'assigned_cluster'] = cluster_id
-        
-        # Calculate weighted cluster center
-        cluster_settlements = settlements_remaining.loc[selected_settlements]
+        # Weighted center
         weights = cluster_settlements['demand_gap_mwh'].values
         if weights.sum() > 0:
             weights = weights / weights.sum()
@@ -893,45 +749,116 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
         center_lon = np.average(cluster_settlements.geometry.x, weights=weights)
         center_lat = np.average(cluster_settlements.geometry.y, weights=weights)
         
-        cluster_info.append({
+        geo_component = cluster_settlements['geo_component'].mode()[0] if 'geo_component' in cluster_settlements.columns else None
+        
+        cluster_summary.append({
             'cluster_id': cluster_id,
-            'geometry': Point(center_lon, center_lat),
-            'num_settlements': len(selected_settlements),
-            'demand_gap_mwh': cumulative_demand,
-            'Grouped_Type': facility_type,
-            'remaining_mwh': facility_capacity,  # Use facility's actual remaining capacity
+            'num_settlements': len(cluster_settlements),
+            'total_demand_mwh': total_demand,
             'center_lon': center_lon,
             'center_lat': center_lat,
-            'matched_facility_id': fac_idx,
-            'capacity_match_ratio': cumulative_demand / facility_capacity if facility_capacity > 0 else 0
+            'geo_component': geo_component,
+            'geometry': Point(center_lon, center_lat),
+            'facilities_assigned': [],  # Will store list of (facility_type, capacity) tuples
+            'remaining_demand': total_demand
         })
+    
+    clusters_df = pd.DataFrame(cluster_summary)
+    
+    print(f"\n  Found {len(clusters_df)} demand-weighted clusters")
+    
+    # Sort facilities by component (match component-specific facilities first) and capacity (smallest first)
+    if 'geo_component' in facilities_with_capacity.columns:
+        facilities_sorted = facilities_with_capacity.sort_values(
+            by=['geo_component', 'remaining_mwh'], 
+            ascending=[True, True]
+        )
+    else:
+        facilities_sorted = facilities_with_capacity.sort_values('remaining_mwh', ascending=True)
+    
+    # Assign facilities to clusters
+    for fac_idx, facility in facilities_sorted.iterrows():
+        facility_type = facility['Grouped_Type']
+        facility_capacity = facility['remaining_mwh']
+        facility_component = facility.get('geo_component', None)
         
-        cluster_id += 1
+        # Filter clusters by component if facility is component-specific
+        available_clusters = clusters_df.copy()
+        if facility_component is not None and facility_component >= 0:
+            available_clusters = available_clusters[available_clusters['geo_component'] == facility_component]
+        
+        # Find cluster with highest remaining demand
+        if len(available_clusters) > 0:
+            available_clusters = available_clusters[available_clusters['remaining_demand'] > 0]
+            
+            if len(available_clusters) > 0:
+                # Assign to cluster with highest remaining demand
+                best_cluster_idx = available_clusters['remaining_demand'].idxmax()
+                best_cluster = available_clusters.loc[best_cluster_idx]
+                
+                # Add facility to cluster
+                clusters_df.at[best_cluster_idx, 'facilities_assigned'].append((facility_type, facility_capacity, fac_idx))
+                
+                # Reduce remaining demand (but don't go negative)
+                new_remaining = max(0, best_cluster['remaining_demand'] - facility_capacity)
+                clusters_df.at[best_cluster_idx, 'remaining_demand'] = new_remaining
+                
+                print(f"  Assigned {facility_type} ({facility_capacity:,.0f} MWh) → Cluster {best_cluster['cluster_id']} (remaining: {new_remaining:,.0f} MWh)")
     
-    # Handle any remaining unassigned settlements
-    unassigned_final = settlements_remaining[settlements_remaining['assigned_cluster'] == -1]
-    if len(unassigned_final) > 0:
-        print(f"\nWarning: {len(unassigned_final)} settlements could not be matched to facilities")
-        print(f"  Unassigned demand: {unassigned_final['demand_gap_mwh'].sum():,.2f} MWh")
+    # Create output clusters (one row per facility assignment)
+    cluster_output = []
+    output_cluster_id = 0
     
-    # Update settlements_gdf with cluster assignments
-    settlements_gdf['cluster_id'] = settlements_remaining['assigned_cluster'].values
+    for idx, cluster in clusters_df.iterrows():
+        if len(cluster['facilities_assigned']) == 0:
+            # Cluster with no facilities assigned
+            print(f"\n⚠ Warning: Cluster {cluster['cluster_id']} has no facilities assigned ({cluster['total_demand_mwh']:,.0f} MWh demand)")
+            continue
+        
+        for facility_type, facility_capacity, fac_idx in cluster['facilities_assigned']:
+            cluster_output.append({
+                'cluster_id': output_cluster_id,
+                'original_cluster_id': cluster['cluster_id'],
+                'geometry': cluster['geometry'],
+                'num_settlements': cluster['num_settlements'],
+                'demand_gap_mwh': cluster['total_demand_mwh'],  # Total cluster demand
+                'Grouped_Type': facility_type,
+                'remaining_mwh': facility_capacity,
+                'center_lon': cluster['center_lon'],
+                'center_lat': cluster['center_lat'],
+                'matched_facility_id': fac_idx,
+                'geo_component': cluster['geo_component']
+            })
+            output_cluster_id += 1
     
-    cluster_centers_gdf = gpd.GeoDataFrame(cluster_info, crs=COMMON_CRS)
+    if len(cluster_output) == 0:
+        print("\n⚠ Warning: No facilities were matched to any clusters")
+        return gpd.GeoDataFrame(crs=COMMON_CRS)
     
-    print(f"\nCluster matching results:")
-    print(f"  Total clusters created: {len(cluster_centers_gdf)}")
-    print(f"  Total demand in clusters: {cluster_centers_gdf['demand_gap_mwh'].sum():,.2f} MWh")
+    cluster_centers_gdf = gpd.GeoDataFrame(cluster_output, crs=COMMON_CRS)
+    
+    print(f"\nCluster-facility matching results:")
+    print(f"  Total facility assignments: {len(cluster_centers_gdf)}")
+    print(f"  Unique clusters with facilities: {cluster_centers_gdf['original_cluster_id'].nunique()}")
+    print(f"  Total cluster demand: {clusters_df['total_demand_mwh'].sum():,.2f} MWh")
     print(f"  Total capacity allocated: {cluster_centers_gdf['remaining_mwh'].sum():,.2f} MWh")
-    print(f"  Average capacity match ratio: {cluster_centers_gdf['capacity_match_ratio'].mean():.2%}")
     
-    print(f"\nCapacity matching by energy type:")
+    print(f"\nFacilities assigned by energy type:")
     for energy_type in sorted(cluster_centers_gdf['Grouped_Type'].unique()):
-        type_clusters = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
-        type_demand = type_clusters['demand_gap_mwh'].sum()
-        type_capacity = type_clusters['remaining_mwh'].sum()
-        match_ratio = type_demand / type_capacity if type_capacity > 0 else 0
-        print(f"  {energy_type}: {len(type_clusters)} clusters, demand: {type_demand:,.2f} MWh, capacity: {type_capacity:,.2f} MWh (ratio: {match_ratio:.2%})")
+        type_assignments = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
+        type_capacity = type_assignments['remaining_mwh'].sum()
+        print(f"  {energy_type}: {len(type_assignments)} assignments, capacity: {type_capacity:,.2f} MWh")
+    
+    # Show which clusters got multiple facilities
+    multi_facility_clusters = cluster_centers_gdf.groupby('original_cluster_id').size()
+    multi_facility_clusters = multi_facility_clusters[multi_facility_clusters > 1]
+    if len(multi_facility_clusters) > 0:
+        print(f"\nClusters with multiple facilities:")
+        for orig_cluster_id, n_facilities in multi_facility_clusters.items():
+            cluster_facilities = cluster_centers_gdf[cluster_centers_gdf['original_cluster_id'] == orig_cluster_id]
+            facility_types = cluster_facilities['Grouped_Type'].tolist()
+            total_capacity = cluster_facilities['remaining_mwh'].sum()
+            print(f"  Cluster {orig_cluster_id}: {n_facilities} facilities ({', '.join(facility_types)}) = {total_capacity:,.0f} MWh")
     
     return cluster_centers_gdf
 
@@ -995,250 +922,57 @@ def compute_grid_distances(cluster_centers_gdf, grid_lines_gdf):
     return cluster_centers_gdf
 
 
-def build_steiner_network(settlements_gdf, cluster_id):
-    """Step 4: Build Steiner tree network for a remote cluster using approximation algorithm."""
-    cluster_settlements = settlements_gdf[settlements_gdf['cluster_id'] == cluster_id]
+def build_remote_networks(settlements_gdf, cluster_centers_gdf, grid_lines_gdf):
+    """Build connections from remote cluster centers to nearest grid points.
     
-    if len(cluster_settlements) <= 1:
-        return []
-    
-    if len(cluster_settlements) == 2:
-        # For 2 points, Steiner tree is just a direct line
-        settlement_list = cluster_settlements.reset_index(drop=True)
-        point1 = settlement_list.iloc[0].geometry
-        point2 = settlement_list.iloc[1].geometry
-        distance_km = haversine_distance_km(point1.y, point1.x, point2.y, point2.x)
-        return [{
-            'geometry': LineString([point1, point2]),
-            'cluster_id': cluster_id,
-            'distance_km': distance_km,
-            'from_idx': settlement_list.index[0],
-            'to_idx': settlement_list.index[1],
-            'is_steiner_point': False
-        }]
-    
-    # For 3+ points, use sparse distance computation for scalability
-    settlement_list = cluster_settlements.reset_index(drop=True)
-    n_points = len(cluster_settlements)
-    
-    coords = np.column_stack([
-        cluster_settlements.geometry.x,
-        cluster_settlements.geometry.y
-    ])
-    
-    # For large clusters, use sparse k-nearest neighbors approach
-    # For small clusters, use full distance matrix
-    SPARSE_THRESHOLD = 300  # Switch to sparse computation above this size
-    K_NEIGHBORS = min(15, n_points - 1)  # Number of nearest neighbors to consider
-    
-    if n_points > SPARSE_THRESHOLD:
-        # Sparse approach: Build MST using k-nearest neighbors
-        from scipy.spatial import KDTree
-        
-        # Build KD-tree for efficient nearest neighbor search
-        tree = KDTree(coords)
-        
-        # For each point, find k nearest neighbors
-        edges_candidates = []
-        for i in range(n_points):
-            point = coords[i]
-            distances, indices = tree.query(point, k=K_NEIGHBORS + 1)  # +1 because it includes itself
-            
-            for j, neighbor_idx in enumerate(indices[1:]):  # Skip first (itself)
-                if neighbor_idx < n_points:
-                    # Calculate actual haversine distance
-                    dist_km = haversine_distance_km(
-                        settlement_list.iloc[i].geometry.y,
-                        settlement_list.iloc[i].geometry.x,
-                        settlement_list.iloc[neighbor_idx].geometry.y,
-                        settlement_list.iloc[neighbor_idx].geometry.x
-                    )
-                    edges_candidates.append((i, neighbor_idx, dist_km))
-        
-        # Build sparse distance matrix from k-nearest neighbors
-        from scipy.sparse import lil_matrix
-        sparse_dist = lil_matrix((n_points, n_points))
-        
-        for i, j, dist in edges_candidates:
-            sparse_dist[i, j] = dist
-            sparse_dist[j, i] = dist
-        
-        # Compute MST on sparse graph
-        mst = minimum_spanning_tree(sparse_dist)
-        mst_array = mst.toarray()
-        
-    else:
-        # Dense approach: Full distance matrix for small clusters
-        dist_matrix = np.zeros((n_points, n_points))
-        for i in range(n_points):
-            for j in range(i+1, n_points):
-                dist = haversine_distance_km(
-                    settlement_list.iloc[i].geometry.y,
-                    settlement_list.iloc[i].geometry.x,
-                    settlement_list.iloc[j].geometry.y,
-                    settlement_list.iloc[j].geometry.x
-                )
-                dist_matrix[i, j] = dist
-                dist_matrix[j, i] = dist
-        
-        # Compute MST
-        mst = minimum_spanning_tree(dist_matrix)
-        mst_array = mst.toarray()
-    
-    # Build adjacency list from MST
-    adjacency = {i: [] for i in range(n_points)}
-    mst_edges = []
-    for i in range(n_points):
-        for j in range(i+1, n_points):
-            if mst_array[i, j] > 0 or mst_array[j, i] > 0:
-                adjacency[i].append(j)
-                adjacency[j].append(i)
-                dist_val = mst_array[i, j] if mst_array[i, j] > 0 else mst_array[j, i]
-                mst_edges.append((i, j, dist_val))
-    
-    # Identify vertices with degree >= 3 (junction points for Steiner optimization)
-    high_degree_vertices = [v for v in range(n_points) if len(adjacency[v]) >= 3]
-    
-    if not high_degree_vertices:
-        # No junctions - return MST as-is
-        edges = []
-        for i, j, dist in mst_edges:
-            point1 = settlement_list.iloc[i].geometry
-            point2 = settlement_list.iloc[j].geometry
-            edges.append({
-                'geometry': LineString([point1, point2]),
-                'cluster_id': cluster_id,
-                'distance_km': dist,
-                'from_idx': settlement_list.index[i],
-                'to_idx': settlement_list.index[j],
-                'is_steiner_point': False
-            })
-        return edges
-    
-    # Add Steiner points at high-degree junctions and rebuild connections
-    # Strategy: Replace each high-degree vertex with a Steiner point at optimal location
-    edges = []
-    steiner_point_map = {}  # Maps original vertex -> steiner point info
-    steiner_node_offset = 1000000  # Offset to distinguish Steiner node IDs from settlement IDs
-    
-    for vertex in high_degree_vertices:
-        neighbors = adjacency[vertex]
-        
-        # Calculate Steiner point location (centroid of vertex + neighbors)
-        all_junction_points = [coords[vertex]] + [coords[n] for n in neighbors]
-        steiner_x = np.mean([p[0] for p in all_junction_points])
-        steiner_y = np.mean([p[1] for p in all_junction_points])
-        
-        steiner_point_map[vertex] = {
-            'geometry': Point(steiner_x, steiner_y),
-            'node_id': steiner_node_offset + vertex  # Unique integer ID for Steiner point
-        }
-    
-    # Now rebuild edges: 
-    # - If edge connects to high-degree vertex, route through its Steiner point
-    # - Otherwise, keep original edge
-    for i, j, dist in mst_edges:
-        point_i = settlement_list.iloc[i].geometry
-        point_j = settlement_list.iloc[j].geometry
-        idx_i = settlement_list.index[i]
-        idx_j = settlement_list.index[j]
-        
-        # Check if either endpoint is a high-degree vertex (has Steiner point)
-        i_has_steiner = i in steiner_point_map
-        j_has_steiner = j in steiner_point_map
-        
-        if i_has_steiner and j_has_steiner:
-            # Both ends are junctions - connect their Steiner points
-            steiner_i = steiner_point_map[i]['geometry']
-            steiner_j = steiner_point_map[j]['geometry']
-            steiner_id_i = steiner_point_map[i]['node_id']
-            steiner_id_j = steiner_point_map[j]['node_id']
-            dist_steiner = haversine_distance_km(steiner_i.y, steiner_i.x, steiner_j.y, steiner_j.x)
-            edges.append({
-                'geometry': LineString([steiner_i, steiner_j]),
-                'cluster_id': cluster_id,
-                'distance_km': dist_steiner,
-                'from_idx': steiner_id_i,
-                'to_idx': steiner_id_j,
-                'is_steiner_point': True
-            })
-        elif i_has_steiner:
-            # i is junction - connect j to i's Steiner point
-            steiner_i = steiner_point_map[i]['geometry']
-            steiner_id_i = steiner_point_map[i]['node_id']
-            dist_to_steiner = haversine_distance_km(point_j.y, point_j.x, steiner_i.y, steiner_i.x)
-            edges.append({
-                'geometry': LineString([point_j, steiner_i]),
-                'cluster_id': cluster_id,
-                'distance_km': dist_to_steiner,
-                'from_idx': idx_j,
-                'to_idx': steiner_id_i,
-                'is_steiner_point': True
-            })
-        elif j_has_steiner:
-            # j is junction - connect i to j's Steiner point
-            steiner_j = steiner_point_map[j]['geometry']
-            steiner_id_j = steiner_point_map[j]['node_id']
-            dist_to_steiner = haversine_distance_km(point_i.y, point_i.x, steiner_j.y, steiner_j.x)
-            edges.append({
-                'geometry': LineString([point_i, steiner_j]),
-                'cluster_id': cluster_id,
-                'distance_km': dist_to_steiner,
-                'from_idx': idx_i,
-                'to_idx': steiner_id_j,
-                'is_steiner_point': True
-            })
-        else:
-            # Neither is junction - keep original MST edge
-            edges.append({
-                'geometry': LineString([point_i, point_j]),
-                'cluster_id': cluster_id,
-                'distance_km': dist,
-                'from_idx': idx_i,
-                'to_idx': idx_j,
-                'is_steiner_point': False
-            })
-    
-    return edges
-
-
-def build_remote_networks(settlements_gdf, cluster_centers_gdf):
-    """Build MST networks for all remote clusters."""
+    Only creates facility-to-grid connections for remote clusters (>50km from grid).
+    Intra-cluster connections will be created naturally by process_country_supply.py
+    during the supply allocation process (web-looking gridlines from facility to settlements).
+    """
     print("\n" + "="*60)
-    print("STEP 4: BUILD STEINER NETWORKS FOR REMOTE CLUSTERS")
+    print("STEP 4: BUILD NETWORK CONNECTIONS FOR REMOTE CLUSTERS")
     print("="*60)
     
-    remote_clusters = cluster_centers_gdf[cluster_centers_gdf['is_remote']]['cluster_id'].values
+    remote_clusters = cluster_centers_gdf[cluster_centers_gdf['is_remote']]
     
     if len(remote_clusters) == 0:
         print("No remote clusters found!")
         return gpd.GeoDataFrame(columns=['geometry', 'cluster_id', 'distance_km', 
-                                        'from_idx', 'to_idx'], crs=COMMON_CRS)
+                                        'from_lon', 'from_lat', 'to_lon', 'to_lat'], crs=COMMON_CRS)
     
-    print(f"\nBuilding networks for {len(remote_clusters)} remote clusters...")
+    print(f"\nCreating facility-to-grid connections for {len(remote_clusters)} remote clusters...")
+    print("(Intra-cluster connections will be created during supply allocation)")
     
-    all_edges = []
-    for cluster_id in remote_clusters:
-        edges = build_steiner_network(settlements_gdf, cluster_id)
-        all_edges.extend(edges)
+    all_connections = []
+    for idx, cluster in remote_clusters.iterrows():
+        cluster_center = Point(cluster['center_lon'], cluster['center_lat'])
+        nearest_grid = Point(cluster['nearest_grid_lon'], cluster['nearest_grid_lat'])
+        distance_km = cluster['distance_to_grid_km']
         
-        if edges:
-            total_length = sum(e['distance_km'] for e in edges)
-            print(f"  Cluster {cluster_id}: {len(edges)} edges, {total_length:.2f} km total")
+        connection = {
+            'geometry': LineString([cluster_center, nearest_grid]),
+            'cluster_id': cluster['cluster_id'],
+            'distance_km': distance_km,
+            'from_lon': cluster['center_lon'],
+            'from_lat': cluster['center_lat'],
+            'to_lon': cluster['nearest_grid_lon'],
+            'to_lat': cluster['nearest_grid_lat'],
+            'connection_type': 'facility_to_grid'
+        }
+        all_connections.append(connection)
+        
+        print(f"  Cluster {cluster['cluster_id']}: {distance_km:.2f} km to grid")
     
-    if not all_edges:
-        print("No network edges generated!")
+    if not all_connections:
+        print("No network connections generated!")
         return gpd.GeoDataFrame(columns=['geometry', 'cluster_id', 'distance_km', 
-                                        'from_idx', 'to_idx', 'is_steiner_point'], crs=COMMON_CRS)
+                                        'from_lon', 'from_lat', 'to_lon', 'to_lat'], crs=COMMON_CRS)
     
-    networks_gdf = gpd.GeoDataFrame(all_edges, crs=COMMON_CRS)
+    networks_gdf = gpd.GeoDataFrame(all_connections, crs=COMMON_CRS)
     
-    # Count Steiner points
-    steiner_edges = networks_gdf[networks_gdf['is_steiner_point'] == True]
-    print(f"\nTotal network edges: {len(networks_gdf)}")
-    print(f"  Edges with Steiner points: {len(steiner_edges)}")
-    print(f"  Direct settlement edges: {len(networks_gdf) - len(steiner_edges)}")
-    print(f"Total network length: {networks_gdf['distance_km'].sum():.2f} km")
+    print(f"\nTotal facility-to-grid connections: {len(networks_gdf)}")
+    print(f"Total connection length: {networks_gdf['distance_km'].sum():.2f} km")
+    print(f"Average connection distance: {networks_gdf['distance_km'].mean():.2f} km")
     
     return networks_gdf
 
@@ -1404,8 +1138,11 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
             return None
         
         # Calculate clusters based on remaining capacity (capacity-driven approach)
+        # Pass all centroids to correctly calculate total supply received (including filled settlements)
         # This now returns facilities_with_capacity which may include synthetic facilities
-        n_clusters, clusters_per_type, total_supply, total_demand, facilities_with_capacity = calculate_num_clusters(facilities_gdf, settlements_gdf)
+        n_clusters, clusters_per_type, total_supply, total_demand, facilities_with_capacity = calculate_num_clusters(
+            facilities_gdf, settlements_gdf, all_centroids_gdf=centroids_gdf
+        )
         
         # Calculate remaining capacity by energy type for allocation (already done in calculate_num_clusters)
         remaining_by_type = facilities_with_capacity.groupby('Grouped_Type')['remaining_mwh'].sum().to_dict()
@@ -1421,7 +1158,7 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
         cluster_centers_gdf = clip_clusters_to_boundaries(cluster_centers_gdf, admin_boundaries)
         
         cluster_centers_gdf = compute_grid_distances(cluster_centers_gdf, grid_lines_gdf)
-        networks_gdf = build_remote_networks(settlements_gdf, cluster_centers_gdf)
+        networks_gdf = build_remote_networks(settlements_gdf, cluster_centers_gdf, grid_lines_gdf)
         
         # Clip networks to country boundaries
         networks_gdf = clip_networks_to_boundaries(networks_gdf, admin_boundaries)
