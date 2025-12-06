@@ -2,10 +2,10 @@
 #SBATCH --job-name=p01s_t1
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=98G
+#SBATCH --mem=95G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=56
 #SBATCH --output=outputs_global/logs/siting_01_%j.out
 #SBATCH --error=outputs_global/logs/siting_01_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting siting analysis script 1/24 (T1) at $(date)"
 echo "[INFO] Processing 1 countries in this batch: CHN"
-echo "[INFO] Tier: T1 | Memory: 98G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Tier: T1 | Memory: 95G | CPUs: 56 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

@@ -2,7 +2,7 @@
 #SBATCH --job-name=p17s_t3
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=28G
+#SBATCH --mem=25G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting siting analysis script 17/24 (T3) at $(date)"
 echo "[INFO] Processing 10 countries in this batch: LUX, LVA, MAR, MDA, MDG, MDV, MKD, MLI, MLT, MMR"
-echo "[INFO] Tier: T3 | Memory: 28G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Tier: T3 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

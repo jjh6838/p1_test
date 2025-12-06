@@ -3,6 +3,7 @@ bigdata_gadm/
 bigdata_gridfinder/
 bigdata_jrc_pop/
 bigdata_eez/
+bigdata_jrc_flooding/
 
 # Python cache
 __pycache__/
@@ -13,6 +14,7 @@ __pycache__/
 outputs_global/
 outputs_per_country/
 outputs_processed_fig/
+outputs_arcgis/
 
 # OS files
 .DS_Store
