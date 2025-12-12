@@ -4,6 +4,8 @@ bigdata_gridfinder/
 bigdata_jrc_pop/
 bigdata_eez/
 bigdata_jrc_flooding/
+bigdata_pvout/
+
 
 # Python cache
 __pycache__/
