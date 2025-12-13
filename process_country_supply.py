@@ -87,7 +87,7 @@ POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x3
 GRID_STITCH_DISTANCE_KM = 10  # 10 km: Distance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
-FACILITY_SEARCH_RADIUS_KM = 250  # 250 km: Max radius (in km) to search for facilities from each centroid
+FACILITY_SEARCH_RADIUS_KM = 300  # 300 km: Max radius (in km) to search for facilities from each centroid
 SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
@@ -2015,12 +2015,21 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
         # Calculate centroid status statistics
         status_counts = centroids_gdf['supply_status'].value_counts()
         total_centroids = len(centroids_gdf)
-        
+        no_demand_centroids = status_counts.get('No Demand', 0)
+        demand_centroids = total_centroids - no_demand_centroids
+
         print(f"\nCentroid supply status:")
         for status in ['Filled', 'Partially Filled', 'Not Filled', 'No Demand']:
             count = status_counts.get(status, 0)
-            pct = (count / total_centroids * 100) if total_centroids > 0 else 0
+            # For coverage, use demand-bearing centroids; report No Demand against total
+            denom = demand_centroids if status != 'No Demand' else total_centroids
+            pct = (count / denom * 100) if denom > 0 else 0
             print(f"  {status}: {count:,} centroids ({pct:.1f}%)")
+
+        if demand_centroids > 0:
+            filled_like = status_counts.get('Filled', 0) + status_counts.get('Partially Filled', 0)
+            coverage_demand_only = filled_like / demand_centroids * 100
+            print(f"  Coverage (demand>0 only): {coverage_demand_only:.1f}% of {demand_centroids:,} centroids")
         
         print(f"{'='*60}")
         

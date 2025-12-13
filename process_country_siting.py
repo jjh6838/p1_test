@@ -770,40 +770,57 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
     # Sort facilities by component (match component-specific facilities first) and capacity (smallest first)
     if 'geo_component' in facilities_with_capacity.columns:
         facilities_sorted = facilities_with_capacity.sort_values(
-            by=['geo_component', 'remaining_mwh'], 
+            by=['geo_component', 'remaining_mwh'],
             ascending=[True, True]
         )
     else:
         facilities_sorted = facilities_with_capacity.sort_values('remaining_mwh', ascending=True)
-    
-    # Assign facilities to clusters
+
+    # Assign facilities to clusters (prioritize clusters with no assignments, split large facilities if needed)
     for fac_idx, facility in facilities_sorted.iterrows():
         facility_type = facility['Grouped_Type']
         facility_capacity = facility['remaining_mwh']
         facility_component = facility.get('geo_component', None)
-        
-        # Filter clusters by component if facility is component-specific
-        available_clusters = clusters_df.copy()
-        if facility_component is not None and facility_component >= 0:
-            available_clusters = available_clusters[available_clusters['geo_component'] == facility_component]
-        
-        # Find cluster with highest remaining demand
-        if len(available_clusters) > 0:
-            available_clusters = available_clusters[available_clusters['remaining_demand'] > 0]
-            
-            if len(available_clusters) > 0:
-                # Assign to cluster with highest remaining demand
-                best_cluster_idx = available_clusters['remaining_demand'].idxmax()
-                best_cluster = available_clusters.loc[best_cluster_idx]
-                
-                # Add facility to cluster
-                clusters_df.at[best_cluster_idx, 'facilities_assigned'].append((facility_type, facility_capacity, fac_idx))
-                
-                # Reduce remaining demand (but don't go negative)
-                new_remaining = max(0, best_cluster['remaining_demand'] - facility_capacity)
-                clusters_df.at[best_cluster_idx, 'remaining_demand'] = new_remaining
-                
-                print(f"  Assigned {facility_type} ({facility_capacity:,.0f} MWh) → Cluster {best_cluster['cluster_id']} (remaining: {new_remaining:,.0f} MWh)")
+
+        remaining_capacity = facility_capacity
+
+        while remaining_capacity > 0:
+            # Filter clusters by component if facility is component-specific
+            available_clusters = clusters_df
+            if facility_component is not None and facility_component >= 0:
+                available_clusters = available_clusters[available_clusters['geo_component'] == facility_component]
+
+            available_clusters = available_clusters[available_clusters['remaining_demand'] > 0].copy()
+
+            if len(available_clusters) == 0:
+                break
+
+            # Prefer clusters with no facilities; then highest remaining demand
+            available_clusters['n_assigned'] = available_clusters['facilities_assigned'].apply(len)
+            available_clusters = available_clusters.sort_values(
+                by=['n_assigned', 'remaining_demand'],
+                ascending=[True, False]
+            )
+
+            best_cluster_idx = available_clusters.index[0]
+            best_cluster = clusters_df.loc[best_cluster_idx]
+
+            allocation = min(remaining_capacity, best_cluster['remaining_demand'])
+            if allocation <= 0:
+                break
+
+            # Add facility (or portion of it) to cluster
+            clusters_df.at[best_cluster_idx, 'facilities_assigned'].append((facility_type, allocation, fac_idx))
+
+            # Reduce remaining demand for cluster and capacity for facility
+            new_remaining = max(0, best_cluster['remaining_demand'] - allocation)
+            clusters_df.at[best_cluster_idx, 'remaining_demand'] = new_remaining
+            remaining_capacity -= allocation
+
+            print(f"  Assigned {facility_type} ({allocation:,.0f} MWh) → Cluster {best_cluster['cluster_id']} (cluster remaining: {new_remaining:,.0f} MWh; facility remaining: {remaining_capacity:,.0f} MWh)")
+
+        if remaining_capacity > 0:
+            print(f"  Note: {facility_type} facility {fac_idx} has {remaining_capacity:,.0f} MWh unassigned (no remaining demand within component filter)")
     
     # Create output clusters (one row per facility assignment)
     cluster_output = []
