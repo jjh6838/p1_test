@@ -1,8 +1,8 @@
 #!/bin/bash --login
 #SBATCH --job-name=p11_t3
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=25G
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
+#SBATCH --mem=95G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 11/40 (T3) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: KAZ"
-echo "[INFO] Tier: T3 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 1 countries in this batch: IRN"
+echo "[INFO] Tier: T3 | Memory: 95G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,11 +34,11 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing KAZ (T3)..."
-if $PY process_country_supply.py KAZ --output-dir outputs_per_country; then
-    echo "[SUCCESS] KAZ completed"
+echo "[INFO] Processing IRN (T3)..."
+if $PY process_country_supply.py IRN --output-dir outputs_per_country; then
+    echo "[SUCCESS] IRN completed"
 else
-    echo "[ERROR] KAZ failed"
+    echo "[ERROR] IRN failed"
 fi
 
 echo "[INFO] Batch 11/40 (T3) completed at $(date)"

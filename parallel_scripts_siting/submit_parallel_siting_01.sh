@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting siting analysis script 1/24 (T1) at $(date)"
+echo "[INFO] Starting siting analysis script 1/25 (T1) at $(date)"
 echo "[INFO] Processing 1 countries in this batch: CHN"
 echo "[INFO] Tier: T1 | Memory: 95G | CPUs: 56 | Time: 12:00:00"
 
@@ -41,4 +41,4 @@ else
     echo "[ERROR] CHN siting analysis failed"
 fi
 
-echo "[INFO] Siting batch 1/24 (T1) completed at $(date)"
+echo "[INFO] Siting batch 1/25 (T1) completed at $(date)"

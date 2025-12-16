@@ -2,7 +2,7 @@
 #SBATCH --job-name=p29_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=25G
+#SBATCH --mem=30G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -15,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 29/40 (T5) at $(date)"
 echo "[INFO] Processing 11 countries in this batch: COG, COM, CPV, CRI, CUB, CYM, CYP, CZE, DJI, DNK, DOM"
-echo "[INFO] Tier: T5 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Tier: T5 | Memory: 30G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs

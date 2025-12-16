@@ -1,11 +1,11 @@
 #!/bin/bash --login
-#SBATCH --job-name=p03s_t2
+#SBATCH --job-name=p03s_t1
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
 #SBATCH --mem=95G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=56
 #SBATCH --output=outputs_global/logs/siting_03_%j.out
 #SBATCH --error=outputs_global/logs/siting_03_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting siting analysis script 3/24 (T2) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: ARG, AUS"
-echo "[INFO] Tier: T2 | Memory: 95G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Starting siting analysis script 3/25 (T1) at $(date)"
+echo "[INFO] Processing 1 countries in this batch: USA"
+echo "[INFO] Tier: T1 | Memory: 95G | CPUs: 56 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,18 +34,11 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing siting analysis for ARG (T2)..."
-if $PY process_country_siting.py ARG; then
-    echo "[SUCCESS] ARG siting analysis completed"
+echo "[INFO] Processing siting analysis for USA (T1)..."
+if $PY process_country_siting.py USA; then
+    echo "[SUCCESS] USA siting analysis completed"
 else
-    echo "[ERROR] ARG siting analysis failed"
+    echo "[ERROR] USA siting analysis failed"
 fi
 
-echo "[INFO] Processing siting analysis for AUS (T2)..."
-if $PY process_country_siting.py AUS; then
-    echo "[SUCCESS] AUS siting analysis completed"
-else
-    echo "[ERROR] AUS siting analysis failed"
-fi
-
-echo "[INFO] Siting batch 3/24 (T2) completed at $(date)"
+echo "[INFO] Siting batch 3/25 (T1) completed at $(date)"

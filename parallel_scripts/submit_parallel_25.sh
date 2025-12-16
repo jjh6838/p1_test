@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 25/40 (T4) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: UKR"
+echo "[INFO] Processing 2 countries in this batch: TUR, UKR"
 echo "[INFO] Tier: T4 | Memory: 95G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
@@ -33,6 +33,13 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
+
+echo "[INFO] Processing TUR (T4)..."
+if $PY process_country_supply.py TUR --output-dir outputs_per_country; then
+    echo "[SUCCESS] TUR completed"
+else
+    echo "[ERROR] TUR failed"
+fi
 
 echo "[INFO] Processing UKR (T4)..."
 if $PY process_country_supply.py UKR --output-dir outputs_per_country; then

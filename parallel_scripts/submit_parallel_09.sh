@@ -1,8 +1,8 @@
 #!/bin/bash --login
 #SBATCH --job-name=p09_t3
-#SBATCH --partition=Short
-#SBATCH --time=12:00:00
-#SBATCH --mem=25G
+#SBATCH --partition=Medium
+#SBATCH --time=48:00:00
+#SBATCH --mem=95G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 9/40 (T3) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: IDN"
-echo "[INFO] Tier: T3 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 1 countries in this batch: EGY"
+echo "[INFO] Tier: T3 | Memory: 95G | CPUs: 40 | Time: 48:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,11 +34,11 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing IDN (T3)..."
-if $PY process_country_supply.py IDN --output-dir outputs_per_country; then
-    echo "[SUCCESS] IDN completed"
+echo "[INFO] Processing EGY (T3)..."
+if $PY process_country_supply.py EGY --output-dir outputs_per_country; then
+    echo "[SUCCESS] EGY completed"
 else
-    echo "[ERROR] IDN failed"
+    echo "[ERROR] EGY failed"
 fi
 
 echo "[INFO] Batch 9/40 (T3) completed at $(date)"

@@ -13,8 +13,8 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting siting analysis script 4/24 (T2) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: BRA, CAN"
+echo "[INFO] Starting siting analysis script 4/25 (T2) at $(date)"
+echo "[INFO] Processing 2 countries in this batch: ARG, AUS"
 echo "[INFO] Tier: T2 | Memory: 95G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
@@ -34,18 +34,18 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing siting analysis for BRA (T2)..."
-if $PY process_country_siting.py BRA; then
-    echo "[SUCCESS] BRA siting analysis completed"
+echo "[INFO] Processing siting analysis for ARG (T2)..."
+if $PY process_country_siting.py ARG; then
+    echo "[SUCCESS] ARG siting analysis completed"
 else
-    echo "[ERROR] BRA siting analysis failed"
+    echo "[ERROR] ARG siting analysis failed"
 fi
 
-echo "[INFO] Processing siting analysis for CAN (T2)..."
-if $PY process_country_siting.py CAN; then
-    echo "[SUCCESS] CAN siting analysis completed"
+echo "[INFO] Processing siting analysis for AUS (T2)..."
+if $PY process_country_siting.py AUS; then
+    echo "[SUCCESS] AUS siting analysis completed"
 else
-    echo "[ERROR] CAN siting analysis failed"
+    echo "[ERROR] AUS siting analysis failed"
 fi
 
-echo "[INFO] Siting batch 4/24 (T2) completed at $(date)"
+echo "[INFO] Siting batch 4/25 (T2) completed at $(date)"

@@ -7,19 +7,19 @@ source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
 
 conda activate p1_etl
 
-echo "[INFO] Submitting 24 parallel siting analysis jobs..."
+echo "[INFO] Submitting 25 parallel siting analysis jobs..."
 echo "[INFO] SLURM will automatically queue and manage job execution"
 echo ""
 
 # Submit all jobs
-for i in {01..24}; do
+for i in {01..25}; do
     echo "[$(date +%H:%M:%S)] Submitting siting job $i..."
     sbatch parallel_scripts_siting/submit_parallel_siting_${i}.sh
     sleep 1
 done
 
 echo ""
-echo "[INFO] All 24 siting jobs submitted!"
+echo "[INFO] All 25 siting jobs submitted!"
 echo ""
 echo "Monitor with:"
 echo "  squeue -u \$USER"

@@ -1,7 +1,7 @@
 #!/bin/bash --login
 #SBATCH --job-name=p03_t2
-#SBATCH --partition=Medium
-#SBATCH --time=48:00:00
+#SBATCH --partition=Long
+#SBATCH --time=168:00:00
 #SBATCH --mem=95G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 3/40 (T2) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: IND"
-echo "[INFO] Tier: T2 | Memory: 95G | CPUs: 40 | Time: 48:00:00"
+echo "[INFO] Processing 1 countries in this batch: DEU"
+echo "[INFO] Tier: T2 | Memory: 95G | CPUs: 40 | Time: 168:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country outputs_global outputs_global/logs
@@ -34,11 +34,11 @@ $PY -c 'import sys; print(sys.executable)'
 
 # Process countries in this batch
 
-echo "[INFO] Processing IND (T2)..."
-if $PY process_country_supply.py IND --output-dir outputs_per_country; then
-    echo "[SUCCESS] IND completed"
+echo "[INFO] Processing DEU (T2)..."
+if $PY process_country_supply.py DEU --output-dir outputs_per_country; then
+    echo "[SUCCESS] DEU completed"
 else
-    echo "[ERROR] IND failed"
+    echo "[ERROR] DEU failed"
 fi
 
 echo "[INFO] Batch 3/40 (T2) completed at $(date)"

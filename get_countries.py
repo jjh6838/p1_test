@@ -131,8 +131,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # Define tiers based on country size/complexity. This is determined empirically based on
     # the computational intensity (number of centroids, grid lines) of each country.
-    TIER_1 = {"CHN", "USA", "IND"}  # Largest countries, require maximum resources. CHN = 3 days, USD = 20 hours+, IND = 6 hours+
-    TIER_2 = {"BRA", "DEU"}  # Large countries. 2-4 hours for one scenario. 
+    TIER_1 = {"CHN"}  # Largest countries, require maximum resources. CHN = 3 days
+    TIER_2 = {"USA", "IND", "BRA", "DEU"}  # Large countries. USD = 20 hours+, IND = 6 hours+, Others = 2-4 hours for one scenario. 
     TIER_3 = {"CAN", "MEX", "RUS", "AUS", "ARG", "KAZ", "SAU", "IDN", "IRN", "ZAF", "EGY"}  # Medium-large countries.
     TIER_4 = {
         "TUR", "NGA", "COL", "PAK", "PER", "DZA", "VEN", "UKR", "ETH", "PHL", "MLI", "TCD", "SDN", "FRA",
@@ -148,11 +148,11 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN, USA - one country per script
-        "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # IND, CAN, MEX - one country per script
-        "t3": {"max_countries_per_script": 1, "mem": "25G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # RUS, BRA, AUS, etc. - one country per script
+        "t1": {"max_countries_per_script": 1, "mem": "170G", "cpus": 36, "time": "168:00:00", "partition": "Interactive"},  # CHN - needs 3+ days, targets cn16 (180GB, 36 CPUs)
+        "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU - Long partition (7 days)
+        "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h)
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
-        "t5": {"max_countries_per_script": 11, "mem": "25G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
+        "t5": {"max_countries_per_script": 11, "mem": "30G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
     }
     
     
