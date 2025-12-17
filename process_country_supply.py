@@ -84,7 +84,7 @@ COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 ANALYSIS_YEAR = 2030  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
 POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
-GRID_STITCH_DISTANCE_KM = 10  # 10 km: Distance threshold (in km) for stitching raw grid segments
+GRID_STITCH_DISTANCE_KM = 30  # 30 km: Distance threshold (in km) for stitching raw grid segments
 NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
 MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 300  # 300 km: Max radius (in km) to search for facilities from each centroid
@@ -542,9 +542,11 @@ def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_
             grid_graph.add_node(end, type='grid_line')
             grid_graph.add_edge(start, end, weight=line.length, edge_type='grid_infrastructure')
 
-    # Find and filter components
+    # Find all components (including isolated nodes)
+    # Previously filtered to len(comp) > 1, but now include isolated nodes
+    # since facilities are aggregated to 10km cells matching stitch distance
     components = list(nx.connected_components(grid_graph))
-    significant_components = [comp for comp in components if len(comp) > 1]
+    significant_components = [comp for comp in components if len(comp) >= 1]
     
     if len(significant_components) <= 1:
         return grid_lines_gdf
@@ -1125,9 +1127,33 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     
     print(f"  Facilities connected in {time.time() - connect_start:.2f}s")
     
+    # Track isolated facilities (facilities not connected to grid)
+    isolated_facilities = []
+    for node in facility_nodes:
+        if G.degree(node) == 0:  # No edges = isolated
+            isolated_facilities.append(node)
+    
+    if isolated_facilities:
+        print(f"  Warning: {len(isolated_facilities)} facilities are isolated (no grid within {max_distance/1000:.1f}km)")
+        print(f"  These facilities will be treated as virtual grid nodes for direct centroid connections")
+    
     # OPTIMIZATION 4: Always process centroids in batches to keep memory bounded
     print(f"Connecting {len(centroids_utm)} centroids to nearest grid nodes...")
     connect_start = time.time()
+    
+    # Build combined spatial index: grid nodes + isolated facility nodes
+    # This allows centroids to connect to facilities directly if no grid is nearby
+    if isolated_facilities:
+        # Add isolated facility coordinates to the connection pool
+        isolated_fac_coords = np.array([G.nodes[node]['coord'] for node in isolated_facilities])
+        combined_nodes = np.vstack([grid_node_array, isolated_fac_coords])
+        combined_node_list = grid_node_list + isolated_facilities
+        combined_tree = cKDTree(combined_nodes)
+        print(f"  Using combined index: {len(grid_node_list)} grid nodes + {len(isolated_facilities)} isolated facilities")
+    else:
+        combined_tree = grid_tree
+        combined_node_list = grid_node_list
+    
     if centroid_nodes:
         centroid_list = centroid_nodes[:]
         batch_size = 5000 if len(centroid_list) > 5000 else len(centroid_list)
@@ -1135,12 +1161,14 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
         for i in range(0, len(centroid_list), batch_size):
             batch_end = min(i + batch_size, len(centroid_list))
             batch_coords = np.array(centroid_list[i:batch_end])
-            distances, indices = grid_tree.query(batch_coords, k=1)
+            distances, indices = combined_tree.query(batch_coords, k=1)
             for coord, dist, idx in zip(centroid_list[i:batch_end], distances, indices):
                 if dist <= max_distance:
-                    nearest_grid = grid_node_list[idx]
-                    connector = LineString([coord, nearest_grid])
-                    G.add_edge(coord, nearest_grid, weight=dist, weight_cached=dist, edge_type='centroid_to_grid', geometry=connector)
+                    nearest_node = combined_node_list[idx]
+                    connector = LineString([coord, nearest_node[:2] if len(nearest_node) == 3 else nearest_node])
+                    # Determine edge type based on whether nearest node is facility or grid
+                    edge_type = 'centroid_to_facility' if nearest_node in isolated_facilities else 'centroid_to_grid'
+                    G.add_edge(coord, nearest_node, weight=dist, weight_cached=dist, edge_type=edge_type, geometry=connector)
             processed = batch_end
             if processed % 10000 == 0 or processed == len(centroid_list):
                 print(f"    Processed {processed:,}/{len(centroid_list):,} centroids...")

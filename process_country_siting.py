@@ -386,14 +386,13 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=No
             print(f"  {energy_type}: {remaining:,.2f} MWh (already used in cluster calculations)")
     
     # Create synthetic facilities for ALL shortfall (existing facilities can't reach unfilled settlements)
-    # The existing remaining capacity is already factored into cluster number calculations
-    # and physically cannot reach the unfilled settlements (that's why they remain unfilled)
+    # The existing remaining capacity is already factored into cluster calculations
+    # but those facilities physically cannot reach the unfilled settlements
     # 
-    # Strategy: Create synthetic facilities per geographic component, ensuring capacity matches
-    # component demand. Excess capacity is reallocated to other components.
+    # Strategy: Distribute each energy type's shortfall across geographic components
+    # proportionally based on component demand
     
-    # First, identify geographic components for settlements (will be done later in clustering, 
-    # but we need it now for component-aware synthetic facility placement)
+    # First, identify geographic components for settlements
     settlements_gdf_temp = identify_geographic_components(settlements_gdf.copy(), max_distance_km=50)
     
     # Calculate demand per component
@@ -403,41 +402,45 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=No
     component_sizes = settlements_gdf_temp.groupby('geo_component').size()
     viable_components = component_sizes[component_sizes >= 5].index.tolist()
     
-    print(f"\nCreating synthetic facilities per geographic component:")
+    print(f"\nCreating synthetic facilities (distributing shortfall across components):")
     print(f"  Viable components (≥5 settlements): {len(viable_components)}")
     
     synthetic_facilities = []
     
-    # Sort energy types by total shortfall (smallest first)
-    sorted_energy_types = sorted(shortfall_by_type.items(), key=lambda x: x[1])
-    
-    # Track which components have been assigned facilities
-    components_with_facilities = set()
-    
-    for energy_type, total_shortfall in sorted_energy_types:
+    # For each energy type, distribute its shortfall across ALL viable components
+    # proportionally based on component demand
+    for energy_type, total_shortfall in sorted(shortfall_by_type.items()):
         if total_shortfall <= 0:
             continue
         
         print(f"\n  {energy_type}: {total_shortfall:,.2f} MWh total shortfall")
+        print(f"    Distributing proportionally across {len(viable_components)} components:")
         
-        # Try to find a component that doesn't have a facility yet and has demand matching this type
-        assigned = False
+        # Calculate total demand across all viable components
+        total_viable_demand = sum(component_demand_gap.get(comp_id, 0) for comp_id in viable_components if comp_id >= 0)
         
-        # Sort components by demand (largest first) to prioritize larger components
-        component_demands = [(comp_id, component_demand_gap.get(comp_id, 0)) 
-                            for comp_id in viable_components if comp_id >= 0]
-        component_demands.sort(key=lambda x: x[1], reverse=True)
+        if total_viable_demand <= 0:
+            print(f"    Warning: No demand in viable components for {energy_type}")
+            continue
         
-        for comp_id, comp_demand in component_demands:
-            # Skip if this component already has a facility
-            if comp_id in components_with_facilities:
+        # Distribute shortfall proportionally to component demand
+        for comp_id in viable_components:
+            if comp_id < 0:
+                continue
+            
+            comp_demand = component_demand_gap.get(comp_id, 0)
+            if comp_demand <= 0:
+                continue
+            
+            # Proportional allocation: facility capacity = (component demand / total demand) * total shortfall
+            proportion = comp_demand / total_viable_demand
+            facility_capacity = total_shortfall * proportion
+            
+            # Skip if capacity is too small (< 1 MWh)
+            if facility_capacity < 1:
                 continue
             
             comp_settlements = settlements_gdf_temp[settlements_gdf_temp['geo_component'] == comp_id]
-            
-            # Check if component's demand is close to this energy type's shortfall
-            # Use capacity = component's total demand (not proportional to energy mix)
-            facility_capacity = comp_demand
             
             # Calculate optimal location: weighted centroid of settlements in this component
             settlements_with_demand = comp_settlements[comp_settlements['demand_gap_mwh'] > 0].copy()
@@ -467,48 +470,8 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=No
                 'geo_component': comp_id
             }
             synthetic_facilities.append(synthetic_facility)
-            components_with_facilities.add(comp_id)
-            assigned = True
             
-            print(f"    Component {comp_id}: {facility_capacity:,.2f} MWh at ({optimal_location.y:.4f}, {optimal_location.x:.4f})")
-            break
-        
-        # If no suitable component found, place in largest component
-        if not assigned and len(viable_components) > 0:
-            component_demands_dict = {comp_id: component_demand_gap.get(comp_id, 0) 
-                                     for comp_id in viable_components if comp_id >= 0}
-            largest_component_id = max(component_demands_dict.keys(), key=lambda k: component_demands_dict[k])
-            largest_component_settlements = settlements_gdf_temp[settlements_gdf_temp['geo_component'] == largest_component_id]
-            
-            settlements_with_demand = largest_component_settlements[largest_component_settlements['demand_gap_mwh'] > 0].copy()
-            
-            if len(settlements_with_demand) > 0:
-                weights = settlements_with_demand['demand_gap_mwh'].values
-                if weights.sum() > 0:
-                    weights = weights / weights.sum()
-                else:
-                    weights = np.ones(len(weights)) / len(weights)
-                
-                optimal_lon = np.average(settlements_with_demand.geometry.x, weights=weights)
-                optimal_lat = np.average(settlements_with_demand.geometry.y, weights=weights)
-                optimal_location = Point(optimal_lon, optimal_lat)
-            else:
-                optimal_location = largest_component_settlements.geometry.centroid.iloc[0] if len(largest_component_settlements) > 0 else Point(0, 0)
-            
-            synthetic_facility = {
-                'gem_id': f'SYNTHETIC_{energy_type}_C{largest_component_id}',
-                'Grouped_Type': energy_type,
-                'remaining_mwh': total_shortfall,
-                'total_mwh': total_shortfall,
-                'available_total_mwh': total_shortfall,
-                'center_lat': optimal_location.y,
-                'center_lon': optimal_location.x,
-                'geometry': optimal_location,
-                'geo_component': largest_component_id
-            }
-            synthetic_facilities.append(synthetic_facility)
-            
-            print(f"    Component {largest_component_id} (fallback): {total_shortfall:,.2f} MWh at ({optimal_location.y:.4f}, {optimal_location.x:.4f})")
+            print(f"      Component {comp_id}: {facility_capacity:,.2f} MWh ({proportion*100:.1f}% of shortfall)")
     
     # Track all synthetic capacity for cluster calculations
     for facility in synthetic_facilities:
@@ -748,7 +711,8 @@ def cluster_settlements(settlements_gdf, n_clusters):
 
 
 def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type, remaining_by_type):
-    """Assign facilities to demand-weighted clusters. Clusters can receive multiple facilities as needed."""
+    """Assign facilities to demand-weighted clusters using greedy allocation.
+    Prioritizes high-demand clusters and allows facilities to serve multiple clusters."""
     
     if len(settlements_gdf) == 0:
         return gpd.GeoDataFrame(columns=['cluster_id', 'geometry', 'num_settlements', 
@@ -758,7 +722,7 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
     # Get facilities with remaining capacity
     facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy().reset_index(drop=True)
     
-    print(f"\nMatching facilities to demand-weighted clusters:")
+    print(f"\nMatching facilities to demand-weighted clusters (greedy allocation):")
     print(f"  Total settlements: {len(settlements_gdf)}")
     print(f"  Total facilities with capacity: {len(facilities_with_capacity)}")
     print(f"  Total demand gap: {settlements_gdf['demand_gap_mwh'].sum():,.2f} MWh")
@@ -769,7 +733,7 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
         print("\n⚠ Warning: No cluster_id found in settlements. Cannot match facilities.")
         return gpd.GeoDataFrame(crs=COMMON_CRS)
     
-    # Calculate cluster properties
+    # Calculate cluster properties - SORT BY DEMAND (highest first for greedy allocation)
     cluster_summary = []
     for cluster_id in sorted(settlements_gdf['cluster_id'].unique()):
         if cluster_id < 0:
@@ -798,123 +762,148 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
             'center_lat': center_lat,
             'geo_component': geo_component,
             'geometry': Point(center_lon, center_lat),
-            'facilities_assigned': [],  # Will store list of (facility_type, capacity) tuples
             'remaining_demand': total_demand
         })
     
     clusters_df = pd.DataFrame(cluster_summary)
+    # SORT CLUSTERS BY DEMAND (highest first) - GREEDY ALLOCATION
+    clusters_df = clusters_df.sort_values('total_demand_mwh', ascending=False).reset_index(drop=True)
     
     print(f"\n  Found {len(clusters_df)} demand-weighted clusters")
+    print(f"  Sorted by demand (highest first) for greedy allocation")
     
-    # Sort facilities by component (match component-specific facilities first) and capacity (smallest first)
-    if 'geo_component' in facilities_with_capacity.columns:
-        facilities_sorted = facilities_with_capacity.sort_values(
-            by=['geo_component', 'remaining_mwh'],
-            ascending=[True, True]
-        )
-    else:
-        facilities_sorted = facilities_with_capacity.sort_values('remaining_mwh', ascending=True)
-
-    # Assign facilities to clusters (prioritize clusters with no assignments, split large facilities if needed)
-    for fac_idx, facility in facilities_sorted.iterrows():
-        facility_type = facility['Grouped_Type']
-        facility_capacity = facility['remaining_mwh']
-        facility_component = facility.get('geo_component', None)
-
-        remaining_capacity = facility_capacity
-
-        while remaining_capacity > 0:
-            # Filter clusters by component if facility is component-specific
-            available_clusters = clusters_df
-            if facility_component is not None and facility_component >= 0:
-                available_clusters = available_clusters[available_clusters['geo_component'] == facility_component]
-
-            available_clusters = available_clusters[available_clusters['remaining_demand'] > 0].copy()
-
-            if len(available_clusters) == 0:
-                break
-
-            # Prefer clusters with no facilities; then highest remaining demand
-            available_clusters['n_assigned'] = available_clusters['facilities_assigned'].apply(len)
-            available_clusters = available_clusters.sort_values(
-                by=['n_assigned', 'remaining_demand'],
-                ascending=[True, False]
-            )
-
-            best_cluster_idx = available_clusters.index[0]
-            best_cluster = clusters_df.loc[best_cluster_idx]
-
-            allocation = min(remaining_capacity, best_cluster['remaining_demand'])
-            if allocation <= 0:
-                break
-
-            # Add facility (or portion of it) to cluster
-            clusters_df.at[best_cluster_idx, 'facilities_assigned'].append((facility_type, allocation, fac_idx))
-
-            # Reduce remaining demand for cluster and capacity for facility
-            new_remaining = max(0, best_cluster['remaining_demand'] - allocation)
-            clusters_df.at[best_cluster_idx, 'remaining_demand'] = new_remaining
-            remaining_capacity -= allocation
-
-            print(f"  Assigned {facility_type} ({allocation:,.0f} MWh) → Cluster {best_cluster['cluster_id']} (cluster remaining: {new_remaining:,.0f} MWh; facility remaining: {remaining_capacity:,.0f} MWh)")
-
-        if remaining_capacity > 0:
-            print(f"  Note: {facility_type} facility {fac_idx} has {remaining_capacity:,.0f} MWh unassigned (no remaining demand within component filter)")
+    # Track facility capacity remaining for each facility by energy type
+    facility_remaining = {}
+    for idx, fac in facilities_with_capacity.iterrows():
+        facility_remaining[idx] = {
+            'type': fac['Grouped_Type'],
+            'remaining': fac['remaining_mwh'],
+            'geometry': fac.geometry,
+            'geo_component': fac.get('geo_component', None)
+        }
     
-    # Create output clusters (one row per facility assignment)
-    cluster_output = []
-    output_cluster_id = 0
+    # Output: List of (cluster_id, facility_idx, facility_type, allocated_capacity)
+    allocations = []
     
-    for idx, cluster in clusters_df.iterrows():
-        if len(cluster['facilities_assigned']) == 0:
-            # Cluster with no facilities assigned
-            print(f"\n⚠ Warning: Cluster {cluster['cluster_id']} has no facilities assigned ({cluster['total_demand_mwh']:,.0f} MWh demand)")
+    # GREEDY ALLOCATION: Process clusters in order of demand (highest first)
+    for cluster_idx, cluster in clusters_df.iterrows():
+        cluster_demand = cluster['remaining_demand']
+        cluster_id = cluster['cluster_id']
+        cluster_component = cluster.get('geo_component', None)
+        
+        if cluster_demand <= 0:
             continue
         
-        for facility_type, facility_capacity, fac_idx in cluster['facilities_assigned']:
-            cluster_output.append({
-                'cluster_id': output_cluster_id,
-                'original_cluster_id': cluster['cluster_id'],
-                'geometry': cluster['geometry'],
-                'num_settlements': cluster['num_settlements'],
-                'demand_gap_mwh': cluster['total_demand_mwh'],  # Total cluster demand
-                'Grouped_Type': facility_type,
-                'remaining_mwh': facility_capacity,
-                'center_lon': cluster['center_lon'],
-                'center_lat': cluster['center_lat'],
-                'matched_facility_id': fac_idx,
-                'geo_component': cluster['geo_component']
-            })
-            output_cluster_id += 1
+        # Find facilities that can serve this cluster
+        # Priority: Same component > Any component
+        available_facilities = []
+        for fac_idx, fac_info in facility_remaining.items():
+            if fac_info['remaining'] <= 0:
+                continue
+            
+            # Check component compatibility
+            fac_component = fac_info.get('geo_component', None)
+            is_component_match = (fac_component is None or fac_component < 0 or 
+                                 cluster_component is None or cluster_component < 0 or
+                                 fac_component == cluster_component)
+            
+            if is_component_match:
+                available_facilities.append((fac_idx, fac_info['remaining'], fac_component == cluster_component))
+        
+        # Sort: component match first, then by remaining capacity (largest first to fill faster)
+        available_facilities.sort(key=lambda x: (not x[2], -x[1]))
+        
+        # Allocate facilities to this cluster until demand is met or no more facilities
+        cluster_remaining_demand = cluster_demand
+        
+        for fac_idx, fac_capacity, is_match in available_facilities:
+            if cluster_remaining_demand <= 0:
+                break
+            
+            fac_info = facility_remaining[fac_idx]
+            
+            # Allocate up to what the cluster needs or what the facility has
+            allocation = min(fac_info['remaining'], cluster_remaining_demand)
+            
+            if allocation > 0:
+                allocations.append({
+                    'cluster_id': cluster_id,
+                    'original_cluster_id': cluster_id,
+                    'facility_idx': fac_idx,
+                    'facility_type': fac_info['type'],
+                    'allocated_mwh': allocation,
+                    'center_lon': cluster['center_lon'],
+                    'center_lat': cluster['center_lat'],
+                    'num_settlements': cluster['num_settlements'],
+                    'total_demand_mwh': cluster['total_demand_mwh'],
+                    'geo_component': cluster_component,
+                    'geometry': Point(cluster['center_lon'], cluster['center_lat'])
+                })
+                
+                # Update remaining
+                facility_remaining[fac_idx]['remaining'] -= allocation
+                cluster_remaining_demand -= allocation
+        
+        # Update cluster remaining demand
+        clusters_df.at[cluster_idx, 'remaining_demand'] = cluster_remaining_demand
     
-    if len(cluster_output) == 0:
-        print("\n⚠ Warning: No facilities were matched to any clusters")
+    # Create output from allocations
+    if len(allocations) == 0:
+        print("\n⚠ Warning: No facilities were allocated to any clusters")
         return gpd.GeoDataFrame(crs=COMMON_CRS)
+    
+    # Convert allocations to output format
+    cluster_output = []
+    for i, alloc in enumerate(allocations):
+        cluster_output.append({
+            'cluster_id': i,  # Unique ID per allocation
+            'original_cluster_id': alloc['cluster_id'],
+            'geometry': alloc['geometry'],
+            'num_settlements': alloc['num_settlements'],
+            'demand_gap_mwh': alloc['total_demand_mwh'],
+            'Grouped_Type': alloc['facility_type'],
+            'remaining_mwh': alloc['allocated_mwh'],
+            'center_lon': alloc['center_lon'],
+            'center_lat': alloc['center_lat'],
+            'matched_facility_id': alloc['facility_idx'],
+            'geo_component': alloc.get('geo_component', None)
+        })
     
     cluster_centers_gdf = gpd.GeoDataFrame(cluster_output, crs=COMMON_CRS)
     
-    print(f"\nCluster-facility matching results:")
-    print(f"  Total facility assignments: {len(cluster_centers_gdf)}")
-    print(f"  Unique clusters with facilities: {cluster_centers_gdf['original_cluster_id'].nunique()}")
-    print(f"  Total cluster demand: {clusters_df['total_demand_mwh'].sum():,.2f} MWh")
+    print(f"\nGreedy allocation results:")
+    print(f"  Total facility allocations: {len(cluster_centers_gdf)}")
+    print(f"  Unique clusters served: {cluster_centers_gdf['original_cluster_id'].nunique()}")
     print(f"  Total capacity allocated: {cluster_centers_gdf['remaining_mwh'].sum():,.2f} MWh")
+    print(f"  Total cluster demand: {clusters_df['total_demand_mwh'].sum():,.2f} MWh")
+    print(f"  Total demand satisfied: {clusters_df['total_demand_mwh'].sum() - clusters_df['remaining_demand'].sum():,.2f} MWh")
+    print(f"  Demand coverage: {(1 - clusters_df['remaining_demand'].sum() / clusters_df['total_demand_mwh'].sum()) * 100:.1f}%")
     
-    print(f"\nFacilities assigned by energy type:")
+    print(f"\nAllocations by energy type:")
     for energy_type in sorted(cluster_centers_gdf['Grouped_Type'].unique()):
-        type_assignments = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
-        type_capacity = type_assignments['remaining_mwh'].sum()
-        print(f"  {energy_type}: {len(type_assignments)} assignments, capacity: {type_capacity:,.2f} MWh")
+        type_allocations = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
+        type_capacity = type_allocations['remaining_mwh'].sum()
+        print(f"  {energy_type}: {len(type_allocations)} allocations, capacity: {type_capacity:,.2f} MWh")
     
-    # Show which clusters got multiple facilities
-    multi_facility_clusters = cluster_centers_gdf.groupby('original_cluster_id').size()
-    multi_facility_clusters = multi_facility_clusters[multi_facility_clusters > 1]
-    if len(multi_facility_clusters) > 0:
-        print(f"\nClusters with multiple facilities:")
-        for orig_cluster_id, n_facilities in multi_facility_clusters.items():
-            cluster_facilities = cluster_centers_gdf[cluster_centers_gdf['original_cluster_id'] == orig_cluster_id]
-            facility_types = cluster_facilities['Grouped_Type'].tolist()
-            total_capacity = cluster_facilities['remaining_mwh'].sum()
-            print(f"  Cluster {orig_cluster_id}: {n_facilities} facilities ({', '.join(facility_types)}) = {total_capacity:,.0f} MWh")
+    # Show clusters that couldn't be fully satisfied
+    unsatisfied_clusters = clusters_df[clusters_df['remaining_demand'] > 0]
+    if len(unsatisfied_clusters) > 0:
+        print(f"\nClusters with remaining unmet demand:")
+        for idx, cluster in unsatisfied_clusters.iterrows():
+            pct_met = (1 - cluster['remaining_demand'] / cluster['total_demand_mwh']) * 100
+            print(f"  Cluster {cluster['cluster_id']}: {cluster['remaining_demand']:,.0f} / {cluster['total_demand_mwh']:,.0f} MWh remaining ({pct_met:.1f}% satisfied)")
+    
+    # Show facilities with remaining capacity
+    unused_capacity_by_type = {}
+    for fac_idx, fac_info in facility_remaining.items():
+        if fac_info['remaining'] > 0:
+            fac_type = fac_info['type']
+            unused_capacity_by_type[fac_type] = unused_capacity_by_type.get(fac_type, 0) + fac_info['remaining']
+    
+    if unused_capacity_by_type:
+        print(f"\nUnused facility capacity:")
+        for energy_type, unused in sorted(unused_capacity_by_type.items()):
+            print(f"  {energy_type}: {unused:,.2f} MWh")
     
     return cluster_centers_gdf
 
@@ -1113,7 +1102,7 @@ def clip_clusters_to_boundaries(cluster_centers_gdf, admin_boundaries):
 
 def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, 
                 output_dir="outputs_per_country"):
-    """Save all outputs to parquet files."""
+    """Save all outputs to parquet files with detailed summary."""
     scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
     output_path = Path(output_dir) / "parquet" / scenario_suffix
     output_path.mkdir(parents=True, exist_ok=True)
@@ -1131,44 +1120,70 @@ def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso
         networks_gdf.to_parquet(networks_file, compression='snappy')
         print(f"Saved networks: {networks_file}")
     
-    summary_data = {
-        'Parameter': [
-            'Country',
-            'Analysis_Year',
-            'Supply_Factor_Pct',
-            'Cluster_Radius_km',
-            'Grid_Distance_Threshold_km',
-            'Drop_Percentage',
-            'Total_Unfilled_Settlements',
-            'Total_Clusters',
-            'Remote_Clusters',
-            'Near_Grid_Clusters',
-            'Total_Network_Edges',
-            'Total_Network_Length_km'
-        ],
-        'Value': [
-            country_iso3,
-            ANALYSIS_YEAR,
-            SUPPLY_FACTOR * 100,
-            CLUSTER_RADIUS_KM,
-            GRID_DISTANCE_THRESHOLD_KM,
-            DROP_PERCENTAGE * 100,
-            len(settlements_gdf),
-            len(cluster_centers_gdf),
-            cluster_centers_gdf['is_remote'].sum() if len(cluster_centers_gdf) > 0 else 0,
-            (~cluster_centers_gdf['is_remote']).sum() if len(cluster_centers_gdf) > 0 else 0,
-            len(networks_gdf),
-            networks_gdf['distance_km'].sum() if len(networks_gdf) > 0 else 0
-        ]
-    }
-    summary_df = pd.DataFrame(summary_data)
+    # Calculate detailed statistics
+    total_settlements = len(settlements_gdf)
+    total_demand = settlements_gdf['demand_gap_mwh'].sum() if len(settlements_gdf) > 0 else 0
+    total_clusters = cluster_centers_gdf['original_cluster_id'].nunique() if len(cluster_centers_gdf) > 0 else 0
+    total_allocations = len(cluster_centers_gdf)
+    total_capacity_allocated = cluster_centers_gdf['remaining_mwh'].sum() if len(cluster_centers_gdf) > 0 else 0
+    capacity_after_factor = total_capacity_allocated * SUPPLY_FACTOR
+    
+    # Basic configuration
+    config_params = [
+        ('Country', country_iso3),
+        ('Analysis_Year', ANALYSIS_YEAR),
+        ('Supply_Factor_Pct', SUPPLY_FACTOR * 100),
+        ('', ''),
+        ('--- CONFIGURATION ---', ''),
+        ('Cluster_Radius_km', CLUSTER_RADIUS_KM),
+        ('Grid_Distance_Threshold_km', GRID_DISTANCE_THRESHOLD_KM),
+        ('Drop_Percentage', DROP_PERCENTAGE * 100),
+        ('', ''),
+        ('--- SETTLEMENTS ---', ''),
+        ('Total_Unfilled_Settlements', total_settlements),
+        ('Total_Demand_Gap_MWh', total_demand),
+        ('', ''),
+        ('--- CLUSTERS ---', ''),
+        ('Unique_Clusters_Formed', total_clusters),
+        ('Total_Facility_Allocations', total_allocations),
+        ('', ''),
+        ('--- CAPACITY ---', ''),
+        ('Total_Capacity_Allocated_MWh', total_capacity_allocated),
+        ('  (Calculation)', f'Raw capacity for {ANALYSIS_YEAR}'),
+        ('Available_After_Factor_MWh', capacity_after_factor),
+        ('  (Calculation)', f'{total_capacity_allocated:,.0f} * {SUPPLY_FACTOR} = {capacity_after_factor:,.0f}'),
+        ('', ''),
+        ('--- GRID ANALYSIS ---', ''),
+        ('Remote_Clusters', cluster_centers_gdf['is_remote'].sum() if len(cluster_centers_gdf) > 0 and 'is_remote' in cluster_centers_gdf.columns else 0),
+        ('Near_Grid_Clusters', (~cluster_centers_gdf['is_remote']).sum() if len(cluster_centers_gdf) > 0 and 'is_remote' in cluster_centers_gdf.columns else 0),
+        ('Total_Network_Edges', len(networks_gdf)),
+        ('Total_Network_Length_km', networks_gdf['distance_km'].sum() if len(networks_gdf) > 0 else 0)
+    ]
+    
+    # Energy type breakdown
+    energy_type_params = [('', ''), ('--- CAPACITY BY ENERGY TYPE ---', '')]
+    if len(cluster_centers_gdf) > 0 and 'Grouped_Type' in cluster_centers_gdf.columns:
+        for energy_type in sorted(cluster_centers_gdf['Grouped_Type'].unique()):
+            type_data = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
+            raw_capacity = type_data['remaining_mwh'].sum()
+            available_capacity = raw_capacity * SUPPLY_FACTOR
+            
+            energy_type_params.append(('', ''))
+            energy_type_params.append((f'--- {energy_type} ---', ''))
+            energy_type_params.append((f'Allocations_{energy_type}', len(type_data)))
+            energy_type_params.append((f'Raw_Capacity_{energy_type}_MWh', raw_capacity))
+            energy_type_params.append((f'Available_After_Factor_{energy_type}_MWh', available_capacity))
+    
+    # Combine all parameters
+    all_params = config_params + energy_type_params
+    summary_df = pd.DataFrame(all_params, columns=['Parameter', 'Value'])
     
     summary_file = output_path / f"siting_summary_{country_iso3}.xlsx"
     with pd.ExcelWriter(summary_file, engine='openpyxl') as writer:
         summary_df.to_excel(writer, index=False, sheet_name='Summary')
         worksheet = writer.sheets['Summary']
-        worksheet.column_dimensions['A'].width = 30
-        worksheet.column_dimensions['B'].width = 30
+        worksheet.column_dimensions['A'].width = 40
+        worksheet.column_dimensions['B'].width = 35
     
     print(f"Saved summary: {summary_file}")
 
