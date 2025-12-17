@@ -1667,7 +1667,7 @@ def create_all_layers(centroids_gdf, facilities_gdf, grid_lines_gdf, network_gra
     
     return layers
 
-def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facility_supplied, facility_remaining, demand_col, total_available_supply):
+def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facility_supplied, facility_remaining, demand_col, total_available_supply, original_total_capacity=None, demand_by_type_no_facilities=None):
     """Create summary statistics DataFrame for Excel export."""
     
     # Configuration parameters
@@ -1703,15 +1703,36 @@ def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facil
     centroids_no_demand = status_counts.get('No Demand', 0)
     
     # Demand and supply summary
+    # Calculate target supply based on SUPPLY_FACTOR
+    target_available_supply = centroid_demand_mwh * SUPPLY_FACTOR
+    gap_vs_target = total_available_supply_mwh - target_available_supply
+    gap_pct = (gap_vs_target / target_available_supply * 100) if target_available_supply > 0 else 0
+    
     demand_supply_params = [
         ('Country', country_iso3),
         ('Analysis_Year', ANALYSIS_YEAR),
+        ('', ''),  # Blank row for readability
+        ('--- DEMAND ---', ''),
         ('Centroid_Demand_MWh', centroid_demand_mwh),
+        ('', ''),  # Blank row
+        ('--- SUPPLY FACTOR ---', ''),
+        ('Supply_Factor_Pct', SUPPLY_FACTOR * 100),
+        ('Target_Available_Supply_MWh', target_available_supply),
+        ('  (Calculation)', f'Demand * Factor = {centroid_demand_mwh:,.0f} * {SUPPLY_FACTOR} = {target_available_supply:,.0f}'),
+        ('', ''),  # Blank row
+        ('--- ACTUAL SUPPLY ---', ''),
+        ('Original_Facility_Capacity_MWh', original_total_capacity if original_total_capacity is not None else 0),
         ('Available_Supply_MWh (adjusted by factor)', total_available_supply_mwh),
+        ('Gap_vs_Target_MWh', gap_vs_target),
+        ('Gap_vs_Target_Pct', gap_pct),
+        ('', ''),  # Blank row
+        ('--- SUPPLY ALLOCATION ---', ''),
         ('Actually_Supplied_MWh', total_supplied_mwh),
         ('Unsupplied_MWh', total_unsupplied_mwh),
         ('Demand_Coverage_Pct', demand_coverage_pct),
         ('Additional_Needed_MWh', additional_needed_mwh),
+        ('', ''),  # Blank row
+        ('--- CENTROID STATUS ---', ''),
         ('Centroids_Filled', centroids_filled),
         ('Centroids_Partially_Filled', centroids_partially),
         ('Centroids_Not_Filled', centroids_not_filled),
@@ -1721,13 +1742,25 @@ def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facil
         ('Pct_Partially_Filled', (centroids_partially / total_centroids * 100) if total_centroids > 0 else 0),
         ('Pct_Not_Filled', (centroids_not_filled / total_centroids * 100) if total_centroids > 0 else 0),
         ('Pct_No_Demand', (centroids_no_demand / total_centroids * 100) if total_centroids > 0 else 0),
-        ('Supply_Factor', SUPPLY_FACTOR)
+        ('', ''),  # Blank row
+        ('--- NOTE ---', ''),
+        ('After siting and re-running supply:', ''),
+        ('Expected Available_Supply_MWh', target_available_supply),
+        ('Current gap to close (MWh)', abs(gap_vs_target)),
+        ('Current gap to close (Pct)', abs(gap_pct))
     ]
     
     # Calculate by energy type
-    energy_type_params = []
+    energy_type_params = [('', ''), ('--- BREAKDOWN BY ENERGY TYPE ---', '')]
     if not facilities_gdf.empty and facility_supplied:
         for energy_type in DEMAND_TYPES:
+            # Get demand for this energy type from centroids
+            type_demand_col = f"{energy_type}_{ANALYSIS_YEAR}_centroid"
+            if type_demand_col in centroids_gdf.columns:
+                type_demand = centroids_gdf[type_demand_col].sum()
+            else:
+                type_demand = 0
+            
             facilities_of_type = facilities_gdf[facilities_gdf['Grouped_Type'] == energy_type]
             # Total_MWh_{type} = sum of available_total_mwh (adjusted by factor)
             if 'available_total_mwh' in facilities_of_type.columns:
@@ -1738,8 +1771,24 @@ def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facil
             # Supplied_MWh_{type} = sum of actually supplied (from network analysis)
             supplied_mwh = sum(facility_supplied.get(idx, 0) for idx in facilities_of_type.index)
             
-            energy_type_params.append((f'Total_MWh_{energy_type}', total_mwh))
+            # Calculate target for this energy type
+            target_type_supply = type_demand * SUPPLY_FACTOR
+            gap_type = total_mwh - target_type_supply
+            
+            # Add demand and supply info with targets
+            energy_type_params.append(('', ''))  # Blank row
+            energy_type_params.append((f'--- {energy_type} ---', ''))
+            energy_type_params.append((f'Demand_MWh_{energy_type}', type_demand))
+            energy_type_params.append((f'Target_Supply_MWh_{energy_type}', target_type_supply))
+            energy_type_params.append((f'  (Calculation)', f'Demand * Factor = {type_demand:,.0f} * {SUPPLY_FACTOR} = {target_type_supply:,.0f}'))
+            energy_type_params.append((f'Available_MWh_{energy_type}', total_mwh))
+            energy_type_params.append((f'Gap_vs_Target_{energy_type}', gap_type))
             energy_type_params.append((f'Supplied_MWh_{energy_type}', supplied_mwh))
+            
+            # Flag if this type has zero facilities but non-zero demand
+            if demand_by_type_no_facilities and energy_type in demand_by_type_no_facilities:
+                energy_type_params.append((f'WARNING_NO_FACILITIES_{energy_type}', demand_by_type_no_facilities[energy_type]))
+                energy_type_params.append((f'  Action required', 'Run process_country_siting.py'))
     
     # Combine all parameters
     all_params = config_params + demand_supply_params + energy_type_params
@@ -1824,11 +1873,18 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
             total_demand = centroids_gdf[demand_col].sum()
             
+            # Preserve original facility capacity before reallocation
+            facilities_gdf['original_total_mwh'] = facilities_gdf['total_mwh']
+            original_total_capacity = facilities_gdf['total_mwh'].sum()
+            
             # Calculate type-specific allocations using dictionaries to preserve index order
             facility_remaining = {}
             facility_supplied = {}
             new_total_mwh_dict = {}
             new_available_total_mwh_dict = {}
+            
+            # Track demand for energy types with zero facilities (to be handled by siting)
+            demand_by_type_no_facilities = {}
             
             for energy_type in DEMAND_TYPES:
                 # Get demand for this energy type
@@ -1841,8 +1897,16 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 # Get facilities of this type
                 facilities_of_type = facilities_gdf[facilities_gdf['Grouped_Type'] == energy_type]
                 
-                if len(facilities_of_type) == 0 or type_demand == 0:
-                    # No facilities or no demand for this type
+                if len(facilities_of_type) == 0:
+                    # No facilities for this type - demand should be addressed by siting
+                    if type_demand > 0:
+                        demand_by_type_no_facilities[energy_type] = type_demand
+                        print(f"  WARNING: {energy_type} has demand of {type_demand:,.0f} MWh but ZERO existing facilities")
+                        print(f"           This gap should be addressed by process_country_siting.py")
+                    continue
+                
+                if type_demand == 0:
+                    # No demand for this type
                     for idx in facilities_of_type.index:
                         new_total_mwh_dict[idx] = 0
                         new_available_total_mwh_dict[idx] = 0
@@ -1877,6 +1941,20 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
             facilities_gdf['available_total_mwh'] = facilities_gdf.index.map(lambda idx: new_available_total_mwh_dict.get(idx, 0))
             
             total_available_supply = sum(new_available_total_mwh_dict.values())
+            
+            # Calculate total demand that has no facilities (should be handled by siting)
+            total_demand_no_facilities = sum(demand_by_type_no_facilities.values())
+            
+            if total_demand_no_facilities > 0:
+                print(f"\n{'='*60}")
+                print(f"SITING REQUIREMENT SUMMARY")
+                print(f"{'='*60}")
+                print(f"Total demand with zero existing facilities: {total_demand_no_facilities:,.0f} MWh")
+                print(f"This represents {(total_demand_no_facilities / total_demand * 100):.1f}% of total demand")
+                print(f"Breakdown by energy type:")
+                for energy_type, demand_val in demand_by_type_no_facilities.items():
+                    print(f"  {energy_type}: {demand_val:,.0f} MWh")
+                print(f"{'='*60}\n")
             
             if SUPPLY_FACTOR < 1.0:
                 print(f"Sensitivity analysis: Available supply = {SUPPLY_FACTOR*100:.0f}% of demand = {total_available_supply:,.0f} MWh")
@@ -1947,7 +2025,9 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 # Create summary statistics DataFrame
                 summary_data = create_summary_statistics(
                     country_iso3, centroids_gdf, facilities_gdf, 
-                    facility_supplied, facility_remaining, demand_col_year, total_available_supply
+                    facility_supplied, facility_remaining, demand_col_year, total_available_supply,
+                    original_total_capacity=original_total_capacity,
+                    demand_by_type_no_facilities=demand_by_type_no_facilities
                 )
                 
                 with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
@@ -1985,7 +2065,9 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 # Create summary statistics DataFrame
                 summary_data = create_summary_statistics(
                     country_iso3, centroids_gdf, facilities_gdf,
-                    facility_supplied, facility_remaining, demand_col_year, total_available_supply
+                    facility_supplied, facility_remaining, demand_col_year, total_available_supply,
+                    original_total_capacity=original_total_capacity,
+                    demand_by_type_no_facilities=demand_by_type_no_facilities
                 )
                 
                 with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:

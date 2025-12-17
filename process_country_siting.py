@@ -333,15 +333,30 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=No
     
     # Step 1: Apply energy mix to DEMAND GAP (unfilled demand) to get expected synthetic capacity
     # We're only creating synthetic facilities for the unfilled portion
+    # IMPORTANT: This needs to account for SUPPLY_FACTOR and the analysis year
+    # The synthetic capacity should ramp up to match: demand_gap × energy_mix × (1 / SUPPLY_FACTOR)
+    # This ensures that after applying SUPPLY_FACTOR in process_country_supply.py,
+    # Available_Supply_MWh = demand_gap
+    
     expected_supply_by_type = {}
     for energy_type in DEMAND_TYPES:
-        # Expected synthetic capacity = demand_gap × mix proportion
-        expected_supply_by_type[energy_type] = total_demand_gap * expected_mix[energy_type]
+        # Expected synthetic capacity = demand_gap × mix proportion × (1 / SUPPLY_FACTOR)
+        # Example: If demand_gap = 1000 MWh, mix = 50%, SUPPLY_FACTOR = 1.0 (100%)
+        #          then synthetic capacity = 1000 × 0.5 × (1/1.0) = 500 MWh
+        # Example: If SUPPLY_FACTOR = 0.6 (60% sensitivity analysis)
+        #          then synthetic capacity = 1000 × 0.5 × (1/0.6) = 833 MWh
+        #          so after applying SUPPLY_FACTOR: 833 × 0.6 = 500 MWh available
+        if SUPPLY_FACTOR > 0:
+            expected_supply_by_type[energy_type] = (total_demand_gap * expected_mix[energy_type]) / SUPPLY_FACTOR
+        else:
+            expected_supply_by_type[energy_type] = total_demand_gap * expected_mix[energy_type]
     
     print(f"\nExpected synthetic capacity by energy type (from remaining {total_demand_gap:,.2f} MWh):")
+    print(f"  (Adjusted for SUPPLY_FACTOR={SUPPLY_FACTOR*100:.0f}% - capacity will be scaled by 1/{SUPPLY_FACTOR})")
     for energy_type, expected_mwh in sorted(expected_supply_by_type.items()):
         if expected_mwh > 0:
-            print(f"  {energy_type}: {expected_mwh:,.2f} MWh")
+            available_after_factor = expected_mwh * SUPPLY_FACTOR
+            print(f"  {energy_type}: {expected_mwh:,.2f} MWh capacity → {available_after_factor:,.2f} MWh available after factor")
     
     # Step 2: Calculate shortfall for synthetic facilities
     # Since we filtered to unfilled settlements, shortfall = expected capacity needed
@@ -1205,6 +1220,26 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
         networks_gdf = clip_networks_to_boundaries(networks_gdf, admin_boundaries)
         
         save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, output_dir)
+        
+        # Print summary of capacity added for process_country_supply.py
+        print("\n" + "="*60)
+        print("SITING CAPACITY SUMMARY")
+        print("="*60)
+        print(f"Analysis Year: {ANALYSIS_YEAR}")
+        print(f"Supply Factor: {SUPPLY_FACTOR*100:.0f}%")
+        print(f"\nNew synthetic facilities created: {len(cluster_centers_gdf)}")
+        print(f"Total remaining_mwh (raw capacity): {cluster_centers_gdf['remaining_mwh'].sum():,.2f} MWh")
+        print(f"Available after SUPPLY_FACTOR: {cluster_centers_gdf['remaining_mwh'].sum() * SUPPLY_FACTOR:,.2f} MWh")
+        print(f"\nBreakdown by energy type:")
+        for energy_type in sorted(cluster_centers_gdf['Grouped_Type'].unique()):
+            type_facilities = cluster_centers_gdf[cluster_centers_gdf['Grouped_Type'] == energy_type]
+            raw_capacity = type_facilities['remaining_mwh'].sum()
+            available_capacity = raw_capacity * SUPPLY_FACTOR
+            print(f"  {energy_type}: {len(type_facilities)} facilities")
+            print(f"    Raw capacity: {raw_capacity:,.2f} MWh")
+            print(f"    Available after factor: {available_capacity:,.2f} MWh")
+        print(f"\nThese synthetic facilities will be loaded by process_country_supply.py")
+        print(f"to close the gap between demand and existing facility capacity.")
         
         print("\n" + "="*60)
         print(f"SITING ANALYSIS COMPLETE FOR {country_iso3}")
