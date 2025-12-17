@@ -19,6 +19,7 @@ import geopandas as gpd
 from pathlib import Path
 import argparse
 import sys
+import os
 from shapely.geometry import Point, LineString
 from shapely.ops import nearest_points
 from sklearn.cluster import KMeans
@@ -28,6 +29,28 @@ from sklearn.cluster import DBSCAN
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
+
+def get_bigdata_path(folder_name):
+    """
+    Get the correct path for bigdata folders.
+    Checks local path first, then cluster path if not found.
+    
+    Args:
+        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
+    
+    Returns:
+        str: Path to the folder
+    """
+    local_path = folder_name
+    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
+    
+    if os.path.exists(local_path):
+        return local_path
+    elif os.path.exists(cluster_path):
+        return cluster_path
+    else:
+        # Return local path as default (will trigger appropriate error if needed)
+        return local_path
 
 # Constants
 COMMON_CRS = "EPSG:4326"
@@ -170,7 +193,8 @@ def identify_geographic_components(settlements_gdf, max_distance_km=50):
 
 def load_admin_boundaries(country_iso3):
     """Load administrative boundaries for a specific country from the GADM dataset."""
-    admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410-levels.gpkg', layer="ADM_0")
+    gadm_file = os.path.join(get_bigdata_path('bigdata_gadm'), 'gadm_410-levels.gpkg')
+    admin_boundaries = gpd.read_file(gadm_file, layer="ADM_0")
     country_data = admin_boundaries[admin_boundaries['GID_0'] == country_iso3]
     
     if country_data.empty:

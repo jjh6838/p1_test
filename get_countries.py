@@ -31,6 +31,29 @@
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
+import os
+
+def get_bigdata_path(folder_name):
+    """
+    Get the correct path for bigdata folders.
+    Checks local path first, then cluster path if not found.
+    
+    Args:
+        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
+    
+    Returns:
+        str: Path to the folder
+    """
+    local_path = folder_name
+    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
+    
+    if os.path.exists(local_path):
+        return local_path
+    elif os.path.exists(cluster_path):
+        return cluster_path
+    else:
+        # Return local path as default (will trigger appropriate error if needed)
+        return local_path
 
 def get_country_list():
     """
@@ -39,7 +62,7 @@ def get_country_list():
     The final list is saved to 'countries_list.txt' for use in the Snakemake workflow.
     """
     demand_file = "outputs_processed_data/p1_b_ember_2024_30_50.xlsx"
-    gadm_file = "bigdata_gadm/gadm_410-levels.gpkg"
+    gadm_file = os.path.join(get_bigdata_path('bigdata_gadm'), 'gadm_410-levels.gpkg')
     
     # Check if files exist
     if not Path(demand_file).exists():

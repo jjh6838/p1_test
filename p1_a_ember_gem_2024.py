@@ -26,8 +26,31 @@
 import pandas as pd
 import warnings
 from pycountry import countries
+import os
 
 # Suppress openpyxl warning
+
+def get_bigdata_path(folder_name):
+    """
+    Get the correct path for bigdata folders.
+    Checks local path first, then cluster path if not found.
+    
+    Args:
+        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
+    
+    Returns:
+        str: Path to the folder
+    """
+    local_path = folder_name
+    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
+    
+    if os.path.exists(local_path):
+        return local_path
+    elif os.path.exists(cluster_path):
+        return cluster_path
+    else:
+        # Return local path as default (will trigger appropriate error if needed)
+        return local_path
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 # Define granular and grouped energy categories
@@ -630,7 +653,8 @@ def filter_facilities_to_boundaries(df):
     
     # Load GADM land boundaries
     try:
-        admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410-levels.gpkg', layer="ADM_0")
+        gadm_file = os.path.join(get_bigdata_path('bigdata_gadm'), 'gadm_410-levels.gpkg')
+        admin_boundaries = gpd.read_file(gadm_file, layer="ADM_0")
         print("  Loaded GADM land boundaries")
     except Exception as e:
         print(f"Warning: Could not load GADM boundaries: {e}")
@@ -640,7 +664,8 @@ def filter_facilities_to_boundaries(df):
     # (https://www.marineregions.org/downloads.php - downloaded on 2023-10-25)
     # World EEZ V12 (2023-10-25, 122MB) - GeoPackage format
     try:
-        eez_boundaries = gpd.read_file('bigdata_eez/eez_v12.gpkg')
+        eez_file = os.path.join(get_bigdata_path('bigdata_eez'), 'eez_v12.gpkg')
+        eez_boundaries = gpd.read_file(eez_file)
         print("  Loaded EEZ maritime boundaries")
         has_eez = True
     except Exception as e:

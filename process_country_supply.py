@@ -93,6 +93,28 @@ SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its ca
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False
 
+def get_bigdata_path(folder_name):
+    """
+    Get the correct path for bigdata folders.
+    Checks local path first, then cluster path if not found.
+    
+    Args:
+        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
+    
+    Returns:
+        str: Path to the folder
+    """
+    local_path = folder_name
+    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
+    
+    if os.path.exists(local_path):
+        return local_path
+    elif os.path.exists(cluster_path):
+        return cluster_path
+    else:
+        # Return local path as default (will trigger appropriate error if needed)
+        return local_path
+
 def print_configuration_banner(test_mode=False, scenario_suffix=""):
     """Emit configuration details once per process."""
     global _CONFIG_PRINTED
@@ -193,7 +215,8 @@ def aggregate_raster(data, transform, factor):
 
 def load_admin_boundaries(country_iso3):
     """Load administrative boundaries for a specific country from the GADM dataset."""
-    admin_boundaries = gpd.read_file('bigdata_gadm/gadm_410-levels.gpkg', layer="ADM_0")
+    gadm_file = os.path.join(get_bigdata_path('bigdata_gadm'), 'gadm_410-levels.gpkg')
+    admin_boundaries = gpd.read_file(gadm_file, layer="ADM_0")
     country_data = admin_boundaries[admin_boundaries['GID_0'] == country_iso3]
     
     if country_data.empty:
@@ -209,7 +232,8 @@ def load_population_centroids(country_bbox, admin_boundaries):
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
     # Select: 2025 eporch, 30 arcsec, WGS84(4326)
 
-    with rasterio.open('bigdata_jrc_pop/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif') as src:
+    pop_file = os.path.join(get_bigdata_path('bigdata_jrc_pop'), 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif')
+    with rasterio.open(pop_file) as src:
         window = rasterio.windows.from_bounds(minx, miny, maxx, maxy, src.transform)
         pop_data = src.read(1, window=window)
         windowed_transform = rasterio.windows.transform(window, src.transform)
@@ -698,12 +722,13 @@ def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=
                 return grid_country
 
     # If no siting data or grid_lines parquet doesn't exist, load from GridFinder
+    grid_file = os.path.join(get_bigdata_path('bigdata_gridfinder'), 'grid.gpkg')
     try:
         if HAS_PYOGRIO:
             try:
                 print("Reading grid lines via pyogrio with spatial mask...")
                 grid_country = pyogrio.read_dataframe(
-                    'bigdata_gridfinder/grid.gpkg',
+                    grid_file,
                     mask=admin_union,
                     use_arrow=True
                 )
@@ -713,9 +738,9 @@ def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=
 
         if grid_country is None:
             try:
-                grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg', bbox=(minx, miny, maxx, maxy))
+                grid_lines = gpd.read_file(grid_file, bbox=(minx, miny, maxx, maxy))
             except TypeError:
-                grid_lines = gpd.read_file('bigdata_gridfinder/grid.gpkg')
+                grid_lines = gpd.read_file(grid_file)
                 grid_lines = grid_lines.cx[minx:maxx, miny:maxy]
 
             if len(grid_lines) > 10000:
