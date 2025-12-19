@@ -3,31 +3,64 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python
-  - pandas>=2.0
-  - geopandas>=0.14
-  - fiona
-  - shapely
-  - pyproj
-  - rasterio
-  - gdal
-  - libgdal
-  - libspatialindex
-  - rtree
-  - numpy
-  - scipy
-  - openpyxl
-  - xlsxwriter
-  - pyarrow
-  - tqdm
-  - matplotlib
-  - seaborn
-  - folium
-  - click
-  - networkx
+  # Core Python
+  - python>=3.12
   - pip
   - setuptools
   - wheel
+  
+  # Data Processing
+  - pandas>=2.3
+  - numpy>=2.0
+  - scipy>=1.14
+  - pyarrow>=21.0
+  - openpyxl
+  - xlsxwriter
+  
+  # Geospatial
+  - geopandas>=1.0
+  - fiona>=1.10
+  - shapely>=2.0
+  - pyproj>=3.7
+  - rasterio>=1.4
+  - gdal>=3.10
+  - libgdal
+  - libspatialindex
+  - rtree
+  - pyogrio
+  
+  # Climate Data
+  - netcdf4>=1.7
+  - xarray>=2024.0
+  
+  # Network Analysis
+  - networkx>=3.0
+  
+  # Machine Learning
+  - scikit-learn>=1.5
+  
+  # Visualization
+  - matplotlib>=3.9
+  - seaborn>=0.13
+  - folium>=0.18
+  - bokeh>=3.0
+  
+  # Utilities
+  - tqdm
+  - click
+  - requests
+  - joblib
+  
+  # Parallel Processing
+  - dask
+  - distributed
+  
+  # pip packages
   - pip:
-      - pyyaml
-      - snakemake
+      - pyyaml>=6.0
+      - snakemake>=9.0
+      - cdsapi>=0.7            # Copernicus Climate Data Store API
+      - pycountry>=24.0        # Country code utilities
+      - libpysal>=4.0          # Spatial analysis library
+      - momepy>=0.10           # Urban morphology analysis
+      - beautifulsoup4>=4.0    # HTML parsing
