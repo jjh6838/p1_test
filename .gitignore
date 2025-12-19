@@ -4,8 +4,11 @@ bigdata_gridfinder/
 bigdata_jrc_pop/
 bigdata_eez/
 bigdata_jrc_flooding/
-bigdata_pvout/
-
+bigdata_solar_pvout/
+bigdata_solar_cmip6/
+bigdata_wind_atlas/
+bigdata_wind_cmip6/
+bigdata_wind_era5/
 
 # Python cache
 __pycache__/

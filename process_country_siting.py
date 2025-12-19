@@ -30,6 +30,13 @@ from sklearn.cluster import DBSCAN
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
+# Import shared configuration
+from config import (
+    COMMON_CRS, ANALYSIS_YEAR, DEMAND_TYPES, SUPPLY_FACTOR,
+    CLUSTER_RADIUS_KM, CLUSTER_MIN_SAMPLES,
+    GRID_DISTANCE_THRESHOLD_KM, DROP_PERCENTAGE
+)
+
 def get_bigdata_path(folder_name):
     """
     Get the correct path for bigdata folders.
@@ -51,16 +58,6 @@ def get_bigdata_path(folder_name):
     else:
         # Return local path as default (will trigger appropriate error if needed)
         return local_path
-
-# Constants
-COMMON_CRS = "EPSG:4326"
-ANALYSIS_YEAR = 2030
-SUPPLY_FACTOR = 1.0
-CLUSTER_RADIUS_KM = 50
-CLUSTER_MIN_SAMPLES = 1
-GRID_DISTANCE_THRESHOLD_KM = 50
-DROP_PERCENTAGE = 0.01
-DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
 
 
 def load_country_energy_mix(country_iso3, year=2030):

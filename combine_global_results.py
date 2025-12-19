@@ -8,9 +8,104 @@ import geopandas as gpd
 from pathlib import Path
 import argparse
 import sys
+import os
+import re
 import logging
 from tqdm import tqdm
 from datetime import datetime
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR CMIP6 LAYERS
+# =============================================================================
+
+def get_bigdata_path(folder_name):
+    """
+    Get the correct path for bigdata folders.
+    Checks local path first, then cluster path if not found.
+    """
+    local_path = folder_name
+    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
+    
+    if os.path.exists(local_path):
+        return local_path
+    elif os.path.exists(cluster_path):
+        return cluster_path
+    else:
+        return local_path
+
+
+def get_year_from_scenario(scenario: str) -> int:
+    """
+    Extract year (2030 or 2050) from scenario string.
+    E.g., '2030_supply_100%' -> 2030, '2050_supply_100%_add_v2' -> 2050
+    """
+    if scenario is None:
+        return 2030
+    match = re.match(r'^(\d{4})', scenario)
+    if match:
+        return int(match.group(1))
+    return 2030  # Default to 2030 if not found
+
+
+def get_cmip6_layer_paths(year: int) -> dict:
+    """
+    Get paths to CMIP6 WPD and PVOUT parquet files for given year.
+    Returns dict with layer names as keys and paths as values.
+    """
+    wind_dir = Path(get_bigdata_path("bigdata_wind_cmip6")) / "outputs"
+    solar_dir = Path(get_bigdata_path("bigdata_solar_cmip6")) / "outputs"
+    suffix = "300arcsec"
+    
+    return {
+        # Wind layers
+        "wpd": wind_dir / f"WPD100_{year}_{suffix}.parquet",
+        "wpd_uncertainty": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.parquet",
+        "wpd_baseline": wind_dir / f"WPD100_ERA5_baseline_{suffix}.parquet",
+        # Solar layers
+        "pvout": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
+        "pvout_uncertainty": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
+        "pvout_baseline": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
+    }
+
+
+def load_cmip6_layers_global(year: int, logger) -> dict:
+    """
+    Load CMIP6 WPD and PVOUT layers globally (no clipping).
+    
+    Returns:
+        dict: {layer_name: GeoDataFrame} for layers that exist
+    """
+    cmip6_paths = get_cmip6_layer_paths(year)
+    
+    # Check if any CMIP6 files exist
+    existing_files = {k: v for k, v in cmip6_paths.items() if v.exists()}
+    if not existing_files:
+        logger.warning("No CMIP6 parquet files found. Run p1_c_cmip6_solar.py and p1_d_cmip6_wind.py first.")
+        return {}
+    
+    loaded_layers = {}
+    
+    for layer_name, parquet_path in cmip6_paths.items():
+        if not parquet_path.exists():
+            logger.warning(f"CMIP6 file not found: {parquet_path.name}")
+            continue
+        
+        try:
+            logger.info(f"Loading CMIP6 layer '{layer_name}' from {parquet_path.name}")
+            gdf = gpd.read_parquet(parquet_path)
+            loaded_layers[layer_name] = gdf
+            logger.info(f"Loaded '{layer_name}': {len(gdf):,} points")
+                
+        except Exception as e:
+            logger.warning(f"Failed to load CMIP6 layer '{layer_name}': {e}")
+    
+    return loaded_layers
+
+
+# =============================================================================
+# LOGGING AND CORE FUNCTIONS
+# =============================================================================
 
 def setup_logging(log_file=None):
     """Setup logging configuration"""
@@ -297,6 +392,20 @@ def combine_global_results(input_dir="outputs_per_country", output_file="outputs
     if not combined_layers:
         logger.error("No layers were successfully combined")
         return False
+    
+    # -------------------------------------------------------------------------
+    # Add CMIP6 layers (WPD and PVOUT) - always included regardless of stage
+    # -------------------------------------------------------------------------
+    year = get_year_from_scenario(scenario_subfolder)
+    logger.info(f"\n--- Loading CMIP6 layers for year {year} ---")
+    
+    cmip6_layers = load_cmip6_layers_global(year, logger)
+    
+    if cmip6_layers:
+        logger.info(f"Adding {len(cmip6_layers)} CMIP6 layers to combined output")
+        combined_layers.update(cmip6_layers)
+    else:
+        logger.warning("No CMIP6 layers added (files not found or empty)")
     
     # Save combined data based on output format
     if output_format == 'gpkg':

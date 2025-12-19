@@ -79,16 +79,13 @@ except ImportError:
 # Suppress warnings
 # warnings.filterwarnings("ignore")
 
-# Constants
-COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
-ANALYSIS_YEAR = 2030  # Year for supply-demand analysis: 2024, 2030, or 2050
-DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
-POP_AGGREGATION_FACTOR = 10  # x10: Aggregate from native 30"x30" grid to 300"x300" (i.e., from ~1km x 1km to ~10km x 10km cells)
-GRID_STITCH_DISTANCE_KM = 30  # 30 km: Distance threshold (in km) for stitching raw grid segments
-NODE_SNAP_TOLERANCE_M = 100  # 100m: Snap distance (in meters, UTM) for clustering nearby grid nodes
-MAX_CONNECTION_DISTANCE_M = 50000  # 50km: (in meters) threshold for connecting facilities/centroids to grid
-FACILITY_SEARCH_RADIUS_KM = 300  # 300 km: Max radius (in km) to search for facilities from each centroid
-SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+# Import shared configuration
+from config import (
+    POP_AGGREGATION_FACTOR, TARGET_RESOLUTION_ARCSEC,
+    COMMON_CRS, ANALYSIS_YEAR, DEMAND_TYPES, SUPPLY_FACTOR,
+    GRID_STITCH_DISTANCE_KM, NODE_SNAP_TOLERANCE_M,
+    MAX_CONNECTION_DISTANCE_M, FACILITY_SEARCH_RADIUS_KM
+)
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False
@@ -227,6 +224,9 @@ def load_admin_boundaries(country_iso3):
 def load_population_centroids(country_bbox, admin_boundaries):
     """Load and process population centroids from the GHS-POP raster data.
     This is optimized to only process pixels with non-zero population, which significantly speeds up processing for sparsely populated areas.
+    
+    IMPORTANT: The window is aligned to POP_AGGREGATION_FACTOR boundaries so that
+    aggregated pixel centers match the global CMIP6 grid (WPD/PVOUT layers).
     """
     minx, miny, maxx, maxy = country_bbox
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
@@ -234,7 +234,22 @@ def load_population_centroids(country_bbox, admin_boundaries):
 
     pop_file = os.path.join(get_bigdata_path('bigdata_jrc_pop'), 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif')
     with rasterio.open(pop_file) as src:
+        # Get initial window from bounds
         window = rasterio.windows.from_bounds(minx, miny, maxx, maxy, src.transform)
+        
+        # Align window to aggregation factor boundaries so pixel centers match global grid
+        # This ensures settlement centroids align with CMIP6 WPD/PVOUT layers
+        col_off = int(window.col_off // POP_AGGREGATION_FACTOR) * POP_AGGREGATION_FACTOR
+        row_off = int(window.row_off // POP_AGGREGATION_FACTOR) * POP_AGGREGATION_FACTOR
+        # Expand width/height to cover original extent (round up to next agg boundary)
+        col_end = int(np.ceil((window.col_off + window.width) / POP_AGGREGATION_FACTOR)) * POP_AGGREGATION_FACTOR
+        row_end = int(np.ceil((window.row_off + window.height) / POP_AGGREGATION_FACTOR)) * POP_AGGREGATION_FACTOR
+        width = col_end - col_off
+        height = row_end - row_off
+        
+        # Create aligned window
+        window = rasterio.windows.Window(col_off, row_off, width, height)
+        
         pop_data = src.read(1, window=window)
         windowed_transform = rasterio.windows.transform(window, src.transform)
 
