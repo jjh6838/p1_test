@@ -37,11 +37,13 @@ def get_year_from_scenario(scenario: str) -> int:
 
 def get_cmip6_layer_paths(year: int) -> dict:
     """
-    Get paths to CMIP6 WPD and PVOUT parquet files for given year.
+    Get paths to CMIP6 WPD, PVOUT, and HYDRO parquet files for given year.
     Returns dict with layer names as keys and paths as values.
     """
     wind_dir = Path(get_bigdata_path("bigdata_wind_cmip6")) / "outputs"
     solar_dir = Path(get_bigdata_path("bigdata_solar_cmip6")) / "outputs"
+    hydro_dir = Path(get_bigdata_path("bigdata_hydro_cmip6")) / "outputs"
+    hydro_atlas_dir = Path(get_bigdata_path("bigdata_hydro_atlas")) / "outputs"
     suffix = "300arcsec"
     
     return {
@@ -53,6 +55,13 @@ def get_cmip6_layer_paths(year: int) -> dict:
         "pvout": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
         "pvout_uncertainty": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
         "pvout_baseline": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
+        # Hydro runoff layers (clip to GADM only - land-based)
+        "runoff": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
+        "runoff_uncertainty": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
+        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_ERA5_baseline_{suffix}.parquet",
+        # HydroATLAS river reach layers (clip to GADM only)
+        "riveratlas": hydro_atlas_dir / f"RiverATLAS_projected_{year}.parquet",
+        "riveratlas_baseline": hydro_atlas_dir / "RiverATLAS_baseline.parquet",
     }
 
 
@@ -105,7 +114,7 @@ def load_cmip6_layers_clipped(iso3: str, year: int) -> dict:
     # Check if any CMIP6 files exist
     existing_files = {k: v for k, v in cmip6_paths.items() if v.exists()}
     if not existing_files:
-        print(f"[WARN] No CMIP6 parquet files found. Run p1_c_cmip6_solar.py and p1_d_cmip6_wind.py first.")
+        print(f"[WARN] No CMIP6 parquet files found. Run p1_c_cmip6_solar.py, p1_d_cmip6_wind.py, and p1_e_cmip6_hydro.py first.")
         return {}
     
     # Load country boundaries
@@ -140,20 +149,25 @@ def load_cmip6_layers_clipped(iso3: str, year: int) -> dict:
                 clip_gdf = gadm_eez_gdf
                 boundary_type = "GADM+EEZ"
             else:
-                # Solar: use GADM only
+                # Solar, Runoff, RiverATLAS: use GADM only
                 clip_gdf = gadm_gdf
                 boundary_type = "GADM"
             
-            # Clip using spatial join (faster for points)
-            clipped = gpd.sjoin(gdf, clip_gdf, predicate="within", how="inner")
+            # Check geometry type and use appropriate clipping method
+            geom_type = gdf.geometry.iloc[0].geom_type if not gdf.empty else None
             
-            # Drop the index_right column from sjoin
-            if "index_right" in clipped.columns:
-                clipped = clipped.drop(columns=["index_right"])
+            if geom_type in ('LineString', 'MultiLineString'):
+                # For line geometries (RiverATLAS), use clip() to cut lines at boundary
+                clipped = gpd.clip(gdf, clip_gdf)
+            else:
+                # For point geometries, use spatial join (faster)
+                clipped = gpd.sjoin(gdf, clip_gdf, predicate="within", how="inner")
+                if "index_right" in clipped.columns:
+                    clipped = clipped.drop(columns=["index_right"])
             
             if not clipped.empty:
                 clipped_layers[layer_name] = clipped
-                print(f"[INFO] Clipped '{layer_name}' to {boundary_type}: {len(clipped):,} points")
+                print(f"[INFO] Clipped '{layer_name}' to {boundary_type}: {len(clipped):,} features")
             else:
                 print(f"[WARN] No data after clipping '{layer_name}' to {boundary_type}")
                 

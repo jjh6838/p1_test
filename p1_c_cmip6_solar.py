@@ -370,7 +370,7 @@ def get_ghs_pop_grid_params() -> dict:
     if _GHS_POP_GRID_PARAMS is not None:
         return _GHS_POP_GRID_PARAMS
     
-    ghs_pop_path = Path(get_bigdata_path('bigdata_jrc_pop')) / 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif'
+    ghs_pop_path = Path(get_bigdata_path('bigdata_settlements_jrc')) / 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif'
     
     if ghs_pop_path.exists():
         with rasterio.open(ghs_pop_path) as src:

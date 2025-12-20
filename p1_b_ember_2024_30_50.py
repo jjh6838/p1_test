@@ -33,7 +33,7 @@ import itertools
 # Task 1
 # Load the first dataset 
 # UN Population data is used to calculate growth factors, which serve as a proxy for energy demand growth
-file_path1 = "un_pop/WPP2024_TotalPopulationBySex2025-11-23.csv" # updated November 23, 2025 
+file_path1 = "data_pop_un/WPP2024_TotalPopulationBySex2025-11-23.csv" # updated November 23, 2025 
 # https://population.un.org/wpp/downloads?folder=Standard%20Projections&group=CSV%20format
 # Standard Projections -> CSV format --> Population -> 1950-2011, all scenarios (gz)
 
@@ -94,7 +94,7 @@ print("Number of unique country codes in merged_df:", merged_df["ISO3_code"].nun
 ### Task 3
 # Load the third dataset
 # Ember targets dataset contains country-specific renewable energy targets (NDCs)
-file_path3 = "ember_energy_data/targets_download2025-11-23.xlsx" # updated November 23, 2025
+file_path3 = "data_energy_ember/targets_download2025-11-23.xlsx" # updated November 23, 2025
 # Source: https://ember-energy.org/data/global-renewable-power-sector-targets-2030/
 df3_original = pd.read_excel(file_path3, sheet_name="capacity_target_wide")
 
@@ -253,7 +253,7 @@ for col in columns_to_fill:
 # Task 4 - Calculate Fossil and Nuclear generation (MWh) for 2030 and 2050 based on IEA Stated Policies CAAGRs
 # Projections for non-renewable sources are based on global/regional growth rates from IEA scenarios.
 
-# check: iea_energy_projections\WEO2025_Free_Dataset.xlsx (Sheet name: "World Electricity"), updated on November 23, 2025
+# check: data_energy_projections_iea\WEO2025_Free_Dataset.xlsx (Sheet name: "World Electricity"), updated on November 23, 2025
 # Source: https://www.iea.org/data-and-statistics/data-product/world-energy-outlook-2025-free-dataset
 iea_pledge_caagr_2050 = {"Fossil": -1.6 * 0.01, "Nuclear": 2.6 * 0.01}  # 2024-2050 Compound Annual Growth Rate for renewable energy generation
 # Calculate Fossil_2030_MWh and Nuclear_2030_MWh based on the growth rates (IEA Pledges)
@@ -317,7 +317,7 @@ final_merged_df["Other Renewables_2030_MWh_per_capita"] = final_merged_df["Other
 # Step 6.1. First calculate MWh per capita for 2030
 # Load/add WB Country Class (https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups)
 # Download the current classification by income in XLSX format.
-wb_country_class_path = "wb_country_class/CLASS_2025_10_07.xlsx" # updated on November 23, 2025
+wb_country_class_path = "data_country_class_wb/CLASS_2025_10_07.xlsx" # updated on November 23, 2025
 wb_country_class_df = pd.read_excel(wb_country_class_path, sheet_name="List of economies")
 
 # Merge the WB Country Class data with the final merged dataset and drop the "Code" column in one step
@@ -526,7 +526,7 @@ for index, row in final_merged_df.iterrows():
 
 ### Task 7 - extrapolate the 2030 renewable targets for 2050 (for both countries with and without valid NDCs)
 # 7.1: Bring MWh per capita for 2030 for each renewable type from above code, and calculate the 2050 MWh per capita values based on the CAAGR from 2024 to 2050
-# (IEA Stated Policies, from iea_energy_projections\WEO2025_Free_Dataset.xlsx (Sheet name: "World Electricity")) 
+# (IEA Stated Policies, from data_energy_projections_iea\WEO2025_Free_Dataset.xlsx (Sheet name: "World Electricity")) 
 # 7.2: Calculate the 2050 MWh targets (MWh) for each renewable type, by multiplying Population 2050 by the 2050 MWh per capita values.
 # Please note that countries with valid NDCs will use the 2030 MWh per capita values as a base, while countries without valid NDCs will use the regional benchmarks for 2030 MWh per capita values.
 # 7.3: Ensure the 2050 values are at least equal to the 2030 values (i.e., the minimum rule!), and adjust proportions to meet the target renewable share (IEA 2050 Pledges targets).

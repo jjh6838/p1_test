@@ -1,22 +1,29 @@
 """
-p1_c_cmip6_wind.py
-==================
-ERA5 + CMIP6 Delta Method for Wind Power Density (WPD) Projections
+p1_e_cmip6_hydro.py
+===================
+ERA5-Land + CMIP6 Delta Method for Runoff Projections
 
 Methodology:
-1. Load ERA5 100m wind baseline (1995-2014 monthly means)
-2. Load CMIP6 sfcWind for historical (1995-2014) and SSP245 (2021-2060)
+1. Load ERA5-Land runoff baseline (1995-2014 monthly means)
+2. Load CMIP6 total_runoff for historical (1995-2014) and SSP245 (2021-2060)
 3. Compute climate change ratio: Δ = CMIP6_future / CMIP6_historical
-4. Apply delta to ERA5: U100_future = U100_ERA5 × Δ
-5. Compute WPD = 0.5 × ρ × U³
-6. Ensemble mean across 3 CMIP6 models
-7. Regrid to 300 arcsec and apply Global Wind Atlas mask
+4. Apply delta to ERA5-Land: Runoff_future = Runoff_ERA5 × Δ
+5. Ensemble mean across 3 CMIP6 models
+6. Regrid to 300 arcsec (aligned with GHS-POP grid, matching process_country_supply.py)
 
 Output:
-- WPD100_2030_300arcsec.tif
-- WPD100_2050_300arcsec.tif
-- WPD100_UNCERTAINTY_2030_300arcsec.tif (IQR across models)
-- WPD100_UNCERTAINTY_2050_300arcsec.tif
+- HYDRO_RUNOFF_2030_300arcsec.tif (mm/year)
+- HYDRO_RUNOFF_2050_300arcsec.tif (mm/year)
+- HYDRO_RUNOFF_UNCERTAINTY_2030_300arcsec.tif (range = max - min across models, same as solar/wind)
+- HYDRO_RUNOFF_UNCERTAINTY_2050_300arcsec.tif
+- HYDRO_RUNOFF_ERA5_baseline_300arcsec.tif
+- HYDRO_ATLAS_DELTA_2030_300arcsec.tif (for use by p1_f_hydroatlas.py)
+- HYDRO_ATLAS_DELTA_2050_300arcsec.tif
+
+Units:
+- ERA5-Land runoff: meters (accumulated monthly) → convert to mm/year
+- CMIP6 total_runoff: kg m⁻² s⁻¹ → convert to mm/year
+- Output: mm/year (millimeters per year)
 """
 
 import os
@@ -31,7 +38,6 @@ import geopandas as gpd
 import xarray as xr
 import rasterio
 from rasterio.transform import from_bounds
-from rasterio.warp import reproject, Resampling
 from scipy.interpolate import RegularGridInterpolator
 
 import cdsapi
@@ -49,12 +55,6 @@ def get_bigdata_path(folder_name: str) -> str:
     """
     Get the correct path for bigdata folders.
     Checks local path first, then cluster path if not found.
-    
-    Args:
-        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
-    
-    Returns:
-        str: Path to the folder
     """
     local_path = folder_name
     cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
@@ -64,7 +64,6 @@ def get_bigdata_path(folder_name: str) -> str:
     elif os.path.exists(cluster_path):
         return cluster_path
     else:
-        # Return local path as default (will trigger appropriate error if needed)
         return local_path
 
 
@@ -72,7 +71,7 @@ def get_bigdata_path(folder_name: str) -> str:
 # USER SETTINGS
 # =============================================================================
 
-# CMIP6 models for ensemble
+# CMIP6 models for ensemble (same as solar/wind)
 CMIP6_MODELS = [
     "cesm2",
     "ec_earth3_veg_lr",
@@ -80,42 +79,42 @@ CMIP6_MODELS = [
 ]
 
 # Periods
-HIST_PERIOD = ("1995-01-01", "2014-12-31")  # Historical baseline (aligns ERA5 & CMIP6)
+HIST_PERIOD = ("1995-01-01", "2014-12-31")  # Historical baseline
 P2030 = ("2021-01-01", "2040-12-31")        # 20-year mean centered on ~2030
 P2050 = ("2041-01-01", "2060-12-31")        # 20-year mean centered on ~2050
 
 # CDS settings
 CDS_CMIP6_DATASET = "projections-cmip6"
-CDS_ERA5_DATASET = "reanalysis-era5-single-levels-monthly-means"
+CDS_ERA5_LAND_DATASET = "reanalysis-era5-land-monthly-means"
 SCENARIO = "ssp2_4_5"
 
-# Physical constants
-AIR_DENSITY = 1.225  # kg/m³ at sea level, 15°C
+# Unit conversion constants
+# ERA5-Land runoff is in meters (monthly accumulated)
+# CMIP6 runoff is in kg/m²/s (same as mm/s since 1 kg/m² = 1 mm)
+SECONDS_PER_YEAR = 365.25 * 24 * 3600
+MM_PER_METER = 1000
 
-# Output resolution settings - imported from shared config for consistency
+# Output resolution settings
 from config import POP_AGGREGATION_FACTOR, TARGET_RESOLUTION_ARCSEC, GHS_POP_NATIVE_RESOLUTION_ARCSEC
-
-# Global Wind Atlas mask settings
-GWA_EXCLUDE_CLASS = 12  # Class S (unsuitable for wind)
 
 
 # =============================================================================
 # DOWNLOAD FUNCTIONS
 # =============================================================================
 
-def download_era5(out_dir: Path) -> Path:
+def download_era5_land(out_dir: Path) -> Path:
     """
-    Download ERA5 monthly 100m wind components (1995-2014).
+    Download ERA5-Land monthly runoff (1995-2014).
     Returns path to downloaded NetCDF file.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "era5_100m_wind_1995-2014.nc"
+    out_file = out_dir / "era5_land_runoff_1995-2014.nc"
     
     if out_file.exists():
-        print(f"[skip] ERA5 already downloaded: {out_file}")
+        print(f"[skip] ERA5-Land already downloaded: {out_file}")
         return out_file
     
-    print("[download] ERA5 100m wind components (1995-2014)...")
+    print("[download] ERA5-Land runoff (1995-2014)...")
     
     years = [str(y) for y in range(1995, 2015)]
     months = [f"{m:02d}" for m in range(1, 13)]
@@ -123,10 +122,7 @@ def download_era5(out_dir: Path) -> Path:
     client = cdsapi.Client()
     request = {
         "product_type": ["monthly_averaged_reanalysis"],
-        "variable": [
-            "100m_u_component_of_wind",
-            "100m_v_component_of_wind"
-        ],
+        "variable": ["runoff"],
         "year": years,
         "month": months,
         "time": ["00:00"],
@@ -134,24 +130,24 @@ def download_era5(out_dir: Path) -> Path:
         "download_format": "unarchived"
     }
     
-    client.retrieve(CDS_ERA5_DATASET, request, str(out_file))
-    print(f"[done] ERA5 downloaded: {out_file}")
+    client.retrieve(CDS_ERA5_LAND_DATASET, request, str(out_file))
+    print(f"[done] ERA5-Land downloaded: {out_file}")
     return out_file
 
 
 def download_cmip6_historical(model: str, out_dir: Path) -> Optional[Path]:
     """
-    Download CMIP6 historical sfcWind (1995-2014).
+    Download CMIP6 historical total_runoff (1995-2014).
     Returns path to downloaded ZIP file or None if failed.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"{model}_historical_1995-2014.zip"
+    out_file = out_dir / f"{model}_historical_runoff_1995-2014.zip"
     
     if out_file.exists():
         print(f"[skip] CMIP6 historical already downloaded: {out_file}")
         return out_file
     
-    print(f"[download] CMIP6 historical: {model} (1995-2014)...")
+    print(f"[download] CMIP6 historical runoff: {model} (1995-2014)...")
     
     years = [str(y) for y in range(1995, 2015)]
     months = [f"{m:02d}" for m in range(1, 13)]
@@ -161,7 +157,7 @@ def download_cmip6_historical(model: str, out_dir: Path) -> Optional[Path]:
         "format": "zip",
         "temporal_resolution": "monthly",
         "experiment": "historical",
-        "variable": "near_surface_wind_speed",
+        "variable": "total_runoff",
         "model": model,
         "year": years,
         "month": months,
@@ -178,17 +174,17 @@ def download_cmip6_historical(model: str, out_dir: Path) -> Optional[Path]:
 
 def download_cmip6_ssp245(model: str, out_dir: Path) -> Optional[Path]:
     """
-    Download CMIP6 SSP245 sfcWind (2021-2060).
+    Download CMIP6 SSP245 total_runoff (2021-2060).
     Returns path to downloaded ZIP file or None if failed.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"{model}_ssp245_2021-2060.zip"
+    out_file = out_dir / f"{model}_ssp245_runoff_2021-2060.zip"
     
     if out_file.exists():
         print(f"[skip] CMIP6 SSP245 already downloaded: {out_file}")
         return out_file
     
-    print(f"[download] CMIP6 SSP245: {model} (2021-2060)...")
+    print(f"[download] CMIP6 SSP245 runoff: {model} (2021-2060)...")
     
     years = [str(y) for y in range(2021, 2061)]
     months = [f"{m:02d}" for m in range(1, 13)]
@@ -198,7 +194,7 @@ def download_cmip6_ssp245(model: str, out_dir: Path) -> Optional[Path]:
         "format": "zip",
         "temporal_resolution": "monthly",
         "experiment": SCENARIO,
-        "variable": "near_surface_wind_speed",
+        "variable": "total_runoff",
         "model": model,
         "year": years,
         "month": months,
@@ -231,53 +227,47 @@ def extract_zip(zip_path: Path, out_dir: Path) -> list[Path]:
 # DATA LOADING FUNCTIONS
 # =============================================================================
 
-def load_era5_wind(nc_path: Path) -> xr.DataArray:
+def load_era5_land_runoff(nc_path: Path) -> xr.DataArray:
     """
-    Load ERA5 100m wind and compute wind speed from u/v components.
-    Returns wind speed DataArray with dimensions (time, lat, lon).
+    Load ERA5-Land runoff data.
+    ERA5-Land runoff is monthly accumulated in meters.
+    Returns DataArray with dimensions (time, lat, lon).
     """
-    print(f"  Loading ERA5 from {nc_path.name}...")
+    print(f"  Loading ERA5-Land from {nc_path.name}...")
     ds = xr.open_dataset(nc_path)
     
-    # Identify u and v components (handle different naming conventions)
-    u_var = None
-    v_var = None
+    # Find runoff variable (could be 'ro', 'runoff', etc.)
+    runoff_var = None
     for var in ds.data_vars:
         var_lower = var.lower()
-        if 'u100' in var_lower or ('u' in var_lower and '100' in var_lower):
-            u_var = var
-        elif 'v100' in var_lower or ('v' in var_lower and '100' in var_lower):
-            v_var = var
+        if 'runoff' in var_lower or var == 'ro':
+            runoff_var = var
+            break
     
-    if u_var is None or v_var is None:
-        # Try standard ERA5 names
-        if 'u100' in ds.data_vars:
-            u_var, v_var = 'u100', 'v100'
+    if runoff_var is None:
+        # Try common ERA5-Land names
+        if 'ro' in ds.data_vars:
+            runoff_var = 'ro'
         else:
-            raise RuntimeError(f"Cannot find u100/v100 in ERA5. Variables: {list(ds.data_vars)}")
+            raise RuntimeError(f"Cannot find runoff variable. Variables: {list(ds.data_vars)}")
     
-    print(f"  Using u={u_var}, v={v_var}")
+    print(f"  Using variable: {runoff_var}")
     
-    # Compute wind speed
-    u = ds[u_var]
-    v = ds[v_var]
-    wind_speed = np.sqrt(u**2 + v**2)
-    wind_speed.name = "wind_speed_100m"
+    da = ds[runoff_var]
+    da = standardize_coords(da)
     
-    # Standardize coordinates
-    wind_speed = standardize_coords(wind_speed)
-    
-    return wind_speed
+    return da
 
 
-def load_cmip6_wind(nc_paths: list[Path]) -> xr.DataArray:
+def load_cmip6_runoff(nc_paths: list[Path]) -> xr.DataArray:
     """
-    Load CMIP6 sfcWind from NetCDF files.
-    Returns wind speed DataArray with dimensions (time, lat, lon).
+    Load CMIP6 total_runoff from NetCDF files.
+    CMIP6 runoff is in kg m⁻² s⁻¹ (equivalent to mm/s).
+    Returns DataArray with dimensions (time, lat, lon).
     """
     ds = xr.open_mfdataset([str(p) for p in nc_paths], combine="by_coords")
     
-    # Find the sfcWind variable (skip auxiliary vars like *_bnds)
+    # Find the runoff variable (mrro = total runoff)
     data_vars = [v for v in ds.data_vars if not v.endswith('_bnds')]
     if not data_vars:
         raise RuntimeError("No data variables found in CMIP6 NetCDF.")
@@ -293,7 +283,6 @@ def load_cmip6_wind(nc_paths: list[Path]) -> xr.DataArray:
 
 def standardize_coords(da: xr.DataArray) -> xr.DataArray:
     """Standardize coordinate names and ensure lon is in [-180, 180]."""
-    # Rename dimensions if needed
     dim_mapping = {}
     for dim in da.dims:
         dim_lower = str(dim).lower()
@@ -306,7 +295,6 @@ def standardize_coords(da: xr.DataArray) -> xr.DataArray:
         elif 'latitude' in dim_lower:
             dim_mapping[dim] = 'lat'
         elif dim == 'valid_time' or 'time' in dim_lower:
-            # ERA5 uses 'valid_time', CMIP6 uses 'time'
             if dim != 'time':
                 dim_mapping[dim] = 'time'
     
@@ -323,6 +311,38 @@ def standardize_coords(da: xr.DataArray) -> xr.DataArray:
 
 
 # =============================================================================
+# UNIT CONVERSION FUNCTIONS
+# =============================================================================
+
+def era5_to_mm_per_year(da: xr.DataArray) -> xr.DataArray:
+    """
+    Convert ERA5-Land runoff from meters (monthly accumulated) to mm/year.
+    
+    ERA5-Land runoff is monthly accumulated, so we sum all months and convert.
+    """
+    # Sum annual runoff (assumes 12 months per year in the data)
+    # Then convert meters to mm
+    annual_mean = da.groupby('time.year').sum('time').mean('year')
+    annual_mm = annual_mean * MM_PER_METER  # m → mm
+    
+    return annual_mm
+
+
+def cmip6_to_mm_per_year(da: xr.DataArray) -> xr.DataArray:
+    """
+    Convert CMIP6 runoff from kg m⁻² s⁻¹ to mm/year.
+    
+    1 kg/m²/s = 1 mm/s (by definition, since 1 kg water = 1 liter = 1 mm over 1 m²)
+    mm/year = mm/s × seconds_per_year
+    """
+    # Mean annual value (already in kg/m²/s = mm/s)
+    # Convert to mm/year
+    annual_mm = da * SECONDS_PER_YEAR
+    
+    return annual_mm
+
+
+# =============================================================================
 # DELTA METHOD COMPUTATION
 # =============================================================================
 
@@ -335,14 +355,15 @@ def compute_temporal_mean(da: xr.DataArray, start_date: str, end_date: str) -> x
 def compute_delta_ratio(cmip6_future: xr.DataArray, cmip6_hist: xr.DataArray) -> xr.DataArray:
     """
     Compute climate change ratio: Δ = future / historical.
-    Values are clipped to [0.5, 2.0] to avoid unrealistic extremes.
+    Values are clipped to [0.2, 3.0] to avoid unrealistic extremes.
+    (Wider range than wind since runoff changes can be more dramatic)
     """
     # Avoid division by zero
-    hist_safe = cmip6_hist.where(cmip6_hist > 0.1, 0.1)
+    hist_safe = cmip6_hist.where(cmip6_hist > 1e-10, 1e-10)
     delta = cmip6_future / hist_safe
     
     # Clip to reasonable range
-    delta = delta.clip(min=0.5, max=2.0)
+    delta = delta.clip(min=0.2, max=3.0)
     
     return delta
 
@@ -352,45 +373,27 @@ def apply_delta_to_era5(era5_baseline: xr.DataArray, delta: xr.DataArray) -> xr.
     Apply CMIP6 delta to ERA5 baseline.
     Interpolates delta to ERA5 grid first.
     """
-    # Interpolate delta to ERA5 grid
     delta_interp = delta.interp(
         lat=era5_baseline.lat,
         lon=era5_baseline.lon,
         method="linear"
     )
     
-    # Apply delta
-    future_wind = era5_baseline * delta_interp
+    future_runoff = era5_baseline * delta_interp
     
-    return future_wind
-
-
-def compute_wpd(wind_speed: xr.DataArray) -> xr.DataArray:
-    """
-    Compute Wind Power Density: WPD = 0.5 × ρ × U³
-    Units: W/m²
-    """
-    wpd = 0.5 * AIR_DENSITY * (wind_speed ** 3)
-    wpd.attrs['units'] = 'W/m²'
-    wpd.attrs['long_name'] = 'Wind Power Density at 100m'
-    return wpd
+    return future_runoff
 
 
 # =============================================================================
 # OUTPUT FUNCTIONS
 # =============================================================================
 
-# Cache for GHS-POP grid parameters (read once from raster)
 _GHS_POP_GRID_PARAMS = None
 
 
 def get_ghs_pop_grid_params() -> dict:
     """
-    Get GHS-POP raster grid parameters (origin and pixel size) dynamically.
-    This ensures CMIP6 outputs align with settlement centroids regardless of GHS-POP version.
-    
-    Returns:
-        dict: {origin_lon, origin_lat, pixel_size_lon, pixel_size_lat}
+    Get GHS-POP raster grid parameters for alignment with settlement centroids.
     """
     global _GHS_POP_GRID_PARAMS
     
@@ -400,41 +403,32 @@ def get_ghs_pop_grid_params() -> dict:
     ghs_pop_path = Path(get_bigdata_path('bigdata_settlements_jrc')) / 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif'
     
     if ghs_pop_path.exists():
-        import rasterio
         with rasterio.open(ghs_pop_path) as src:
             t = src.transform
             _GHS_POP_GRID_PARAMS = {
                 'origin_lon': t.c,
                 'origin_lat': t.f,
-                'pixel_size_lon': t.a,  # positive
-                'pixel_size_lat': t.e,  # negative
+                'pixel_size_lon': t.a,
+                'pixel_size_lat': t.e,
             }
-            print(f"  [grid] GHS-POP params from raster:")
-            print(f"         origin=({t.c:.6f}, {t.f:.6f})")
-            print(f"         pixel_size=({t.a:.10f}, {t.e:.10f})")
+            print(f"  [grid] GHS-POP params from raster")
     else:
-        # Fallback to known values if raster not available
         _GHS_POP_GRID_PARAMS = {
             'origin_lon': -180.00791593130032,
             'origin_lat': 89.0995831776456,
             'pixel_size_lon': 0.008333333300326923,
             'pixel_size_lat': -0.00833333329979504,
         }
-        print(f"  [grid] GHS-POP raster not found, using fallback params")
+        print(f"  [grid] Using fallback GHS-POP params")
     
     return _GHS_POP_GRID_PARAMS
 
 
 def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Regrid DataArray to target resolution.
-    Grid is aligned with GHS-POP raster for consistency with settlement centroids.
+    Regrid DataArray to target resolution aligned with GHS-POP grid.
     Returns (data, lons, lats) at target resolution.
-    
-    The output grid exactly matches what process_country_supply.py produces via
-    rasterio.transform.xy() after aggregating GHS-POP by POP_AGGREGATION_FACTOR.
     """
-    # Source grid
     src_data = da.values
     src_lons = da.lon.values
     src_lats = da.lat.values
@@ -444,34 +438,22 @@ def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarr
         src_lats = src_lats[::-1]
         src_data = src_data[::-1, :]
     
-    # Get GHS-POP grid parameters (origin and pixel size)
     ghs_params = get_ghs_pop_grid_params()
     
-    # Calculate aggregation factor from target resolution
     ghs_native_arcsec = abs(ghs_params['pixel_size_lon']) * 3600
     agg_factor = round(target_res_arcsec / ghs_native_arcsec)
     
-    # Aggregated pixel size (match GHS-POP exactly, don't use target_res_arcsec/3600)
     agg_pixel_lon = ghs_params['pixel_size_lon'] * agg_factor
-    agg_pixel_lat = ghs_params['pixel_size_lat'] * agg_factor  # negative
+    agg_pixel_lat = ghs_params['pixel_size_lat'] * agg_factor
     
-    # Generate target grid matching rasterio.transform.xy() output
-    # For aggregated GHS-POP: xy(row, col) gives pixel center at:
-    #   x = origin_lon + agg_pixel_lon * (col + 0.5)
-    #   y = origin_lat + agg_pixel_lat * (row + 0.5)  # agg_pixel_lat is negative
-    
-    # Number of pixels in aggregated grid
     n_cols = int(np.ceil(360 / abs(agg_pixel_lon)))
     n_rows = int(np.ceil(180 / abs(agg_pixel_lat)))
     
-    # Generate coordinates exactly as rasterio.transform.xy would
     target_lons = ghs_params['origin_lon'] + agg_pixel_lon * (np.arange(n_cols) + 0.5)
-    target_lats = ghs_params['origin_lat'] + agg_pixel_lat * (np.arange(n_rows) + 0.5)  # descending
+    target_lats = ghs_params['origin_lat'] + agg_pixel_lat * (np.arange(n_rows) + 0.5)
     
-    # For interpolation, need ascending lats
     target_lats_asc = target_lats[::-1]
     
-    # Interpolate using ascending lats for correct results
     interp_func = RegularGridInterpolator(
         (src_lats, src_lons),
         src_data,
@@ -484,70 +466,18 @@ def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarr
     points = np.column_stack([lat_grid.ravel(), lon_grid.ravel()])
     
     target_data = interp_func(points).reshape(lat_grid.shape).astype("float32")
-    
-    # Flip data back to match descending lats (row 0 = north)
     target_data = target_data[::-1, :]
     
-    # Return descending lats (standard GeoTIFF order: row 0 = north)
     return target_data, target_lons, target_lats
 
 
-def apply_gwa_mask(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
-                   gwa_path: Path, exclude_class: int = 12) -> np.ndarray:
-    """
-    Apply Global Wind Atlas mask to exclude unsuitable areas.
-    Sets WPD to 0 where GWA class == exclude_class.
-    """
-    if not gwa_path.exists():
-        print(f"  [warning] GWA mask not found: {gwa_path}")
-        return data
-    
-    print(f"  Applying GWA mask (excluding class {exclude_class})...")
-    
-    with rasterio.open(gwa_path) as src:
-        gwa_data = src.read(1)
-        gwa_transform = src.transform
-        gwa_crs = src.crs
-    
-    # Create output grid coordinates
-    height, width = data.shape
-    transform = from_bounds(
-        lons.min(), lats.min(), lons.max(), lats.max(),
-        width, height
-    )
-    
-    # Reproject GWA mask to match our grid
-    mask_reprojected = np.empty((height, width), dtype=gwa_data.dtype)
-    
-    reproject(
-        source=gwa_data,
-        destination=mask_reprojected,
-        src_transform=gwa_transform,
-        src_crs=gwa_crs,
-        dst_transform=transform,
-        dst_crs="EPSG:4326",
-        resampling=Resampling.nearest
-    )
-    
-    # Apply mask: set to 0 where GWA class == exclude_class
-    data_masked = data.copy()
-    data_masked[mask_reprojected == exclude_class] = 0
-    
-    # Count masked pixels
-    n_masked = np.sum(mask_reprojected == exclude_class)
-    print(f"  Masked {n_masked:,} pixels (class {exclude_class})")
-    
-    return data_masked
-
-
 def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
-                 out_path: Path, nodata: float = 0) -> None:
+                 out_path: Path, nodata: float = -9999) -> None:
     """Save data array as GeoTIFF."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     height, width = data.shape
     
-    # Flip data if lats are ascending (GeoTIFF expects top-left origin)
     if lats[0] < lats[-1]:
         data = data[::-1, :]
         lats = lats[::-1]
@@ -572,7 +502,6 @@ def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
         "blockysize": 256,
     }
     
-    # Replace NaN with nodata
     data = np.nan_to_num(data, nan=nodata)
     
     with rasterio.open(out_path, "w", **profile) as dst:
@@ -582,33 +511,27 @@ def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
 
 
 def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
-                    out_path: Path, value_column: str = "value", nodata: float = 0) -> None:
-    """Save data array as Parquet centroids (points with values)."""
+                    out_path: Path, value_column: str = "value", nodata: float = -9999) -> None:
+    """Save data array as Parquet centroids."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Ensure lats are in correct order for grid creation
     if lats[0] > lats[-1]:
         lats = lats[::-1]
         data = data[::-1, :]
     
-    # Create meshgrid of coordinates
     lon_grid, lat_grid = np.meshgrid(lons, lats)
     
-    # Flatten arrays
     lon_flat = lon_grid.ravel()
     lat_flat = lat_grid.ravel()
     data_flat = data.ravel()
     
-    # Filter out nodata/NaN values
     valid_mask = ~np.isnan(data_flat) & (data_flat != nodata) & (data_flat > 0)
     
-    # Create GeoDataFrame
     gdf = gpd.GeoDataFrame({
         value_column: data_flat[valid_mask],
         'geometry': gpd.points_from_xy(lon_flat[valid_mask], lat_flat[valid_mask])
     }, crs="EPSG:4326")
     
-    # Save as parquet
     gdf.to_parquet(out_path)
     print(f"  Saved: {out_path} ({len(gdf):,} points)")
 
@@ -617,17 +540,16 @@ def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
 # MAIN PIPELINE
 # =============================================================================
 
-def run_download_only(workdir: Path):
+def run_download_only(workdir: Path, era5_dir: Path):
     """Download all required datasets."""
-    era5_dir = Path(get_bigdata_path("bigdata_wind_era5")) / "downloads"
     cmip6_dir = workdir / "downloads"
     
     print("\n" + "="*70)
     print("STEP 1: DOWNLOADING DATA")
     print("="*70)
     
-    # Download ERA5
-    download_era5(era5_dir)
+    # Download ERA5-Land
+    download_era5_land(era5_dir)
     
     # Download CMIP6 for each model
     for model in CMIP6_MODELS:
@@ -638,9 +560,8 @@ def run_download_only(workdir: Path):
     print("\n[done] All downloads complete!")
 
 
-def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
+def run_processing(workdir: Path, era5_dir: Path):
     """Process downloaded data using delta method."""
-    era5_dir = Path(get_bigdata_path("bigdata_wind_era5")) / "downloads"
     cmip6_dl_dir = workdir / "downloads"
     cmip6_ex_dir = workdir / "extracted"
     out_dir = workdir / "outputs"
@@ -650,25 +571,27 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
     print("="*70)
     
     # -------------------------------------------------------------------------
-    # Load ERA5 baseline
+    # Load ERA5-Land baseline
     # -------------------------------------------------------------------------
-    print("\n--- Loading ERA5 baseline ---")
-    era5_file = era5_dir / "era5_100m_wind_1995-2014.nc"
+    print("\n--- Loading ERA5-Land baseline ---")
+    era5_file = era5_dir / "era5_land_runoff_1995-2014.nc"
     if not era5_file.exists():
-        raise FileNotFoundError(f"ERA5 file not found: {era5_file}. Run with --download first.")
+        raise FileNotFoundError(f"ERA5-Land file not found: {era5_file}. Run with --download first.")
     
-    era5_wind = load_era5_wind(era5_file)
-    era5_baseline = compute_temporal_mean(era5_wind, HIST_PERIOD[0], HIST_PERIOD[1])
-    print(f"  ERA5 baseline shape: {era5_baseline.shape}")
-    print(f"  ERA5 mean wind speed: {float(era5_baseline.mean()):.2f} m/s")
+    era5_runoff = load_era5_land_runoff(era5_file)
+    
+    # Convert to mm/year and compute baseline mean
+    era5_annual = era5_to_mm_per_year(era5_runoff)
+    print(f"  ERA5-Land baseline shape: {era5_annual.shape}")
+    print(f"  ERA5-Land mean runoff: {float(era5_annual.mean()):.1f} mm/year")
     
     # -------------------------------------------------------------------------
     # Process each CMIP6 model
     # -------------------------------------------------------------------------
     delta_2030_list = []
     delta_2050_list = []
-    wpd_2030_list = []
-    wpd_2050_list = []
+    runoff_2030_list = []
+    runoff_2050_list = []
     successful_models = []
     
     for model in CMIP6_MODELS:
@@ -676,30 +599,30 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
         
         try:
             # Extract historical
-            hist_zip = cmip6_dl_dir / f"{model}_historical_1995-2014.zip"
+            hist_zip = cmip6_dl_dir / f"{model}_historical_runoff_1995-2014.zip"
             if not hist_zip.exists():
                 print(f"  [skip] Historical ZIP not found: {hist_zip}")
                 continue
             
             hist_nc = extract_zip(hist_zip, cmip6_ex_dir / "historical" / model)
-            cmip6_hist_wind = load_cmip6_wind(hist_nc)
-            cmip6_hist_mean = compute_temporal_mean(cmip6_hist_wind, HIST_PERIOD[0], HIST_PERIOD[1])
-            print(f"  Historical mean: {float(cmip6_hist_mean.mean()):.2f} m/s")
+            cmip6_hist_runoff = load_cmip6_runoff(hist_nc)
+            cmip6_hist_mean = compute_temporal_mean(cmip6_hist_runoff, HIST_PERIOD[0], HIST_PERIOD[1])
+            print(f"  Historical mean: {float(cmip6_hist_mean.mean() * SECONDS_PER_YEAR):.1f} mm/year")
             
             # Extract SSP245
-            ssp_zip = cmip6_dl_dir / f"{model}_ssp245_2021-2060.zip"
+            ssp_zip = cmip6_dl_dir / f"{model}_ssp245_runoff_2021-2060.zip"
             if not ssp_zip.exists():
                 print(f"  [skip] SSP245 ZIP not found: {ssp_zip}")
                 continue
             
             ssp_nc = extract_zip(ssp_zip, cmip6_ex_dir / "ssp245" / model)
-            cmip6_ssp_wind = load_cmip6_wind(ssp_nc)
+            cmip6_ssp_runoff = load_cmip6_runoff(ssp_nc)
             
-            # Compute period means for 2030 and 2050
-            cmip6_2030_mean = compute_temporal_mean(cmip6_ssp_wind, P2030[0], P2030[1])
-            cmip6_2050_mean = compute_temporal_mean(cmip6_ssp_wind, P2050[0], P2050[1])
-            print(f"  2030 mean: {float(cmip6_2030_mean.mean()):.2f} m/s")
-            print(f"  2050 mean: {float(cmip6_2050_mean.mean()):.2f} m/s")
+            # Compute period means
+            cmip6_2030_mean = compute_temporal_mean(cmip6_ssp_runoff, P2030[0], P2030[1])
+            cmip6_2050_mean = compute_temporal_mean(cmip6_ssp_runoff, P2050[0], P2050[1])
+            print(f"  2030 mean: {float(cmip6_2030_mean.mean() * SECONDS_PER_YEAR):.1f} mm/year")
+            print(f"  2050 mean: {float(cmip6_2050_mean.mean() * SECONDS_PER_YEAR):.1f} mm/year")
             
             # Compute delta ratios
             delta_2030 = compute_delta_ratio(cmip6_2030_mean, cmip6_hist_mean)
@@ -707,28 +630,30 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
             print(f"  Delta 2030 mean: {float(delta_2030.mean()):.3f}")
             print(f"  Delta 2050 mean: {float(delta_2050.mean()):.3f}")
             
-            # Apply delta to ERA5
-            wind_2030 = apply_delta_to_era5(era5_baseline, delta_2030)
-            wind_2050 = apply_delta_to_era5(era5_baseline, delta_2050)
+            # Apply delta to ERA5-Land
+            runoff_2030 = apply_delta_to_era5(era5_annual, delta_2030)
+            runoff_2050 = apply_delta_to_era5(era5_annual, delta_2050)
             
-            # Compute WPD
-            wpd_2030 = compute_wpd(wind_2030)
-            wpd_2050 = compute_wpd(wind_2050)
+            # Interpolate deltas to ERA5 grid before storing (ensures consistent grids for ensemble)
+            delta_2030_interp = delta_2030.interp(lat=era5_annual.lat, lon=era5_annual.lon, method="linear")
+            delta_2050_interp = delta_2050.interp(lat=era5_annual.lat, lon=era5_annual.lon, method="linear")
             
             # Store for ensemble
-            delta_2030_list.append(delta_2030)
-            delta_2050_list.append(delta_2050)
-            wpd_2030_list.append(wpd_2030)
-            wpd_2050_list.append(wpd_2050)
+            delta_2030_list.append(delta_2030_interp)
+            delta_2050_list.append(delta_2050_interp)
+            runoff_2030_list.append(runoff_2030)
+            runoff_2050_list.append(runoff_2050)
             successful_models.append(model)
             
             print(f"  [done] {model}")
             
         except Exception as e:
             print(f"  [ERROR] Failed to process {model}: {e}")
+            import traceback
+            traceback.print_exc()
             continue
     
-    if not wpd_2030_list:
+    if not runoff_2030_list:
         raise RuntimeError("No CMIP6 models processed successfully!")
     
     print(f"\n--- Successfully processed {len(successful_models)} models: {successful_models} ---")
@@ -738,150 +663,142 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
     # -------------------------------------------------------------------------
     print("\n--- Computing ensemble statistics ---")
     
-    # Ensemble mean WPD
     print("  Computing ensemble mean...")
-    wpd_2030_ensemble = xr.concat(wpd_2030_list, dim="model").mean("model", skipna=True)
-    wpd_2050_ensemble = xr.concat(wpd_2050_list, dim="model").mean("model", skipna=True)
+    runoff_2030_ensemble = xr.concat(runoff_2030_list, dim="model").mean("model", skipna=True)
+    runoff_2050_ensemble = xr.concat(runoff_2050_list, dim="model").mean("model", skipna=True)
     
-    # Ensemble uncertainty: use range (max - min) instead of IQR
-    # This is faster and nearly equivalent for 3 models
     print("  Computing ensemble uncertainty (range)...")
-    wpd_2030_stack = xr.concat(wpd_2030_list, dim="model")
-    wpd_2050_stack = xr.concat(wpd_2050_list, dim="model")
+    runoff_2030_stack = xr.concat(runoff_2030_list, dim="model")
+    runoff_2050_stack = xr.concat(runoff_2050_list, dim="model")
     
-    wpd_2030_iqr = wpd_2030_stack.max(dim="model") - wpd_2030_stack.min(dim="model")
-    wpd_2050_iqr = wpd_2050_stack.max(dim="model") - wpd_2050_stack.min(dim="model")
+    runoff_2030_iqr = runoff_2030_stack.max(dim="model") - runoff_2030_stack.min(dim="model")
+    runoff_2050_iqr = runoff_2050_stack.max(dim="model") - runoff_2050_stack.min(dim="model")
     
-    print(f"  Ensemble WPD 2030 mean: {float(wpd_2030_ensemble.mean()):.1f} W/m²")
-    print(f"  Ensemble WPD 2050 mean: {float(wpd_2050_ensemble.mean()):.1f} W/m²")
+    print(f"  Ensemble runoff 2030 mean: {float(runoff_2030_ensemble.mean()):.1f} mm/year")
+    print(f"  Ensemble runoff 2050 mean: {float(runoff_2050_ensemble.mean()):.1f} mm/year")
     
     # -------------------------------------------------------------------------
-    # Regrid to 300 arcsec and apply mask
+    # Regrid to target resolution
     # -------------------------------------------------------------------------
     print(f"\n--- Regridding to {TARGET_RESOLUTION_ARCSEC} arcsec ---")
     
-    wpd_2030_data, lons, lats = regrid_to_target(wpd_2030_ensemble, TARGET_RESOLUTION_ARCSEC)
-    wpd_2050_data, _, _ = regrid_to_target(wpd_2050_ensemble, TARGET_RESOLUTION_ARCSEC)
-    iqr_2030_data, _, _ = regrid_to_target(wpd_2030_iqr, TARGET_RESOLUTION_ARCSEC)
-    iqr_2050_data, _, _ = regrid_to_target(wpd_2050_iqr, TARGET_RESOLUTION_ARCSEC)
+    runoff_2030_data, lons, lats = regrid_to_target(runoff_2030_ensemble, TARGET_RESOLUTION_ARCSEC)
+    runoff_2050_data, _, _ = regrid_to_target(runoff_2050_ensemble, TARGET_RESOLUTION_ARCSEC)
+    iqr_2030_data, _, _ = regrid_to_target(runoff_2030_iqr, TARGET_RESOLUTION_ARCSEC)
+    iqr_2050_data, _, _ = regrid_to_target(runoff_2050_iqr, TARGET_RESOLUTION_ARCSEC)
     
-    print(f"  Output shape: {wpd_2030_data.shape}")
+    # Also regrid baseline
+    era5_data, _, _ = regrid_to_target(era5_annual, TARGET_RESOLUTION_ARCSEC)
     
-    # Apply GWA mask if provided
-    if gwa_mask_path and gwa_mask_path.exists():
-        wpd_2030_data = apply_gwa_mask(wpd_2030_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
-        wpd_2050_data = apply_gwa_mask(wpd_2050_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
-        iqr_2030_data = apply_gwa_mask(iqr_2030_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
-        iqr_2050_data = apply_gwa_mask(iqr_2050_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
+    print(f"  Output shape: {runoff_2030_data.shape}")
     
     # -------------------------------------------------------------------------
-    # Save outputs (GeoTIFF and Parquet)
+    # Save outputs
     # -------------------------------------------------------------------------
     print("\n--- Saving outputs (GeoTIFF) ---")
     
     suffix = f"{TARGET_RESOLUTION_ARCSEC}arcsec"
     
-    save_geotiff(wpd_2030_data, lons, lats, out_dir / f"WPD100_2030_{suffix}.tif")
-    save_geotiff(wpd_2050_data, lons, lats, out_dir / f"WPD100_2050_{suffix}.tif")
-    save_geotiff(iqr_2030_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2030_{suffix}.tif")
-    save_geotiff(iqr_2050_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2050_{suffix}.tif")
-    
-    # Also save ERA5 baseline WPD for reference
-    era5_wpd = compute_wpd(era5_baseline)
-    era5_wpd_data, _, _ = regrid_to_target(era5_wpd, TARGET_RESOLUTION_ARCSEC)
-    if gwa_mask_path and gwa_mask_path.exists():
-        era5_wpd_data = apply_gwa_mask(era5_wpd_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
-    save_geotiff(era5_wpd_data, lons, lats, out_dir / f"WPD100_ERA5_baseline_{suffix}.tif")
+    save_geotiff(runoff_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2030_{suffix}.tif")
+    save_geotiff(runoff_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2050_{suffix}.tif")
+    save_geotiff(iqr_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_UNCERTAINTY_2030_{suffix}.tif")
+    save_geotiff(iqr_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_UNCERTAINTY_2050_{suffix}.tif")
+    save_geotiff(era5_data, lons, lats, out_dir / f"HYDRO_RUNOFF_ERA5_baseline_{suffix}.tif")
     
     print("\n--- Saving outputs (Parquet centroids) ---")
     
-    save_as_parquet(wpd_2030_data, lons, lats, out_dir / f"WPD100_2030_{suffix}.parquet", "WPD_2030")
-    save_as_parquet(wpd_2050_data, lons, lats, out_dir / f"WPD100_2050_{suffix}.parquet", "WPD_2050")
-    save_as_parquet(iqr_2030_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2030_{suffix}.parquet", "WPD_UNC_2030")
-    save_as_parquet(iqr_2050_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2050_{suffix}.parquet", "WPD_UNC_2050")
-    save_as_parquet(era5_wpd_data, lons, lats, out_dir / f"WPD100_ERA5_baseline_{suffix}.parquet", "WPD_baseline")
+    save_as_parquet(runoff_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2030_{suffix}.parquet", "RUNOFF_2030")
+    save_as_parquet(runoff_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2050_{suffix}.parquet", "RUNOFF_2050")
+    save_as_parquet(iqr_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_UNCERTAINTY_2030_{suffix}.parquet", "RUNOFF_UNC_2030")
+    save_as_parquet(iqr_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_UNCERTAINTY_2050_{suffix}.parquet", "RUNOFF_UNC_2050")
+    save_as_parquet(era5_data, lons, lats, out_dir / f"HYDRO_RUNOFF_ERA5_baseline_{suffix}.parquet", "RUNOFF_baseline")
+    
+    # -------------------------------------------------------------------------
+    # Save delta grids for use by p1_f_hydroatlas.py
+    # -------------------------------------------------------------------------
+    print("\n--- Saving delta grids for HydroATLAS script ---")
+    
+    # Deltas are already on ERA5 grid (-180 to 180 longitude) from interpolation above
+    delta_2030_ensemble = xr.concat(delta_2030_list, dim="model").mean("model", skipna=True)
+    delta_2050_ensemble = xr.concat(delta_2050_list, dim="model").mean("model", skipna=True)
+    
+    print(f"  Delta 2030 ensemble mean: {float(delta_2030_ensemble.mean()):.3f}")
+    print(f"  Delta 2050 ensemble mean: {float(delta_2050_ensemble.mean()):.3f}")
+    
+    delta_2030_data, _, _ = regrid_to_target(delta_2030_ensemble, TARGET_RESOLUTION_ARCSEC)
+    delta_2050_data, _, _ = regrid_to_target(delta_2050_ensemble, TARGET_RESOLUTION_ARCSEC)
+    
+    save_geotiff(delta_2030_data, lons, lats, out_dir / f"HYDRO_ATLAS_DELTA_2030_{suffix}.tif", nodata=1.0)
+    save_geotiff(delta_2050_data, lons, lats, out_dir / f"HYDRO_ATLAS_DELTA_2050_{suffix}.tif", nodata=1.0)
     
     print(f"\n{'='*70}")
     print("PROCESSING COMPLETE!")
     print(f"{'='*70}")
     print(f"Outputs saved to: {out_dir.resolve()}")
-    print(f"  GeoTIFF rasters:")
-    print(f"    - WPD100_2030_{suffix}.tif")
-    print(f"    - WPD100_2050_{suffix}.tif")
-    print(f"    - WPD100_UNCERTAINTY_2030_{suffix}.tif")
-    print(f"    - WPD100_UNCERTAINTY_2050_{suffix}.tif")
-    print(f"    - WPD100_ERA5_baseline_{suffix}.tif")
-    print(f"  Parquet centroids:")
-    print(f"    - WPD100_2030_{suffix}.parquet")
-    print(f"    - WPD100_2050_{suffix}.parquet")
-    print(f"    - WPD100_UNCERTAINTY_2030_{suffix}.parquet")
-    print(f"    - WPD100_UNCERTAINTY_2050_{suffix}.parquet")
-    print(f"    - WPD100_ERA5_baseline_{suffix}.parquet")
+    print(f"\nGeoTIFF rasters:")
+    print(f"  - HYDRO_RUNOFF_2030_{suffix}.tif")
+    print(f"  - HYDRO_RUNOFF_2050_{suffix}.tif")
+    print(f"  - HYDRO_RUNOFF_UNCERTAINTY_2030_{suffix}.tif")
+    print(f"  - HYDRO_RUNOFF_UNCERTAINTY_2050_{suffix}.tif")
+    print(f"  - HYDRO_RUNOFF_ERA5_baseline_{suffix}.tif")
+    print(f"  - HYDRO_ATLAS_DELTA_2030_{suffix}.tif (for HydroATLAS)")
+    print(f"  - HYDRO_ATLAS_DELTA_2050_{suffix}.tif (for HydroATLAS)")
 
 
 def run(workdir: str = None,
-        gwa_mask: str = None,
+        era5_dir: str = None,
         download_only: bool = False,
         process_only: bool = False):
     """
     Main entry point.
-    
-    Args:
-        workdir: Working directory for CMIP6 data
-        gwa_mask: Path to Global Wind Atlas suitability mask
-        download_only: Only download data, don't process
-        process_only: Only process data, assume downloads exist
     """
-    # Use get_bigdata_path for default directories
     if workdir is None:
-        workdir = Path(get_bigdata_path("bigdata_wind_cmip6"))
+        workdir = Path(get_bigdata_path("bigdata_hydro_cmip6"))
     else:
         workdir = Path(workdir)
     
-    # Default GWA mask path
-    if gwa_mask is None:
-        gwa_path = Path(get_bigdata_path("bigdata_wind_atlas")) / "gasp_flsclassnowake_100m.tif"
+    if era5_dir is None:
+        era5_dir = Path(get_bigdata_path("bigdata_hydro_era5_land")) / "downloads"
     else:
-        gwa_path = Path(gwa_mask)
+        era5_dir = Path(era5_dir)
     
     if download_only:
-        run_download_only(workdir)
+        run_download_only(workdir, era5_dir)
     elif process_only:
-        run_processing(workdir, gwa_path)
+        run_processing(workdir, era5_dir)
     else:
-        # Full pipeline
-        run_download_only(workdir)
-        run_processing(workdir, gwa_path)
+        run_download_only(workdir, era5_dir)
+        run_processing(workdir, era5_dir)
 
 
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="ERA5 + CMIP6 Delta Method for Wind Power Density Projections",
+        description="ERA5-Land + CMIP6 Delta Method for Runoff Projections",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Download all data
-  python p1_c_cmip6_wind.py --download-only
+  python p1_e_cmip6_hydro.py --download-only
   
-  # Process with GWA mask
-  python p1_c_cmip6_wind.py --process-only --gwa-mask ./bigdata_windatlas/gasp_flsclassnowake_100m.tif
+  # Process only (assumes downloads exist)
+  python p1_e_cmip6_hydro.py --process-only
   
   # Full pipeline
-  python p1_c_cmip6_wind.py --gwa-mask ./bigdata_windatlas/gasp_flsclassnowake_100m.tif
+  python p1_e_cmip6_hydro.py
         """
     )
     
     parser.add_argument(
         "--workdir", 
         default=None,
-        help="Working directory for CMIP6 downloads and outputs (auto-detects local/cluster)"
+        help="Working directory for CMIP6 downloads and outputs"
     )
     parser.add_argument(
-        "--gwa-mask",
+        "--era5-dir",
         default=None,
-        help="Path to Global Wind Atlas suitability mask (auto-detects local/cluster, class 12 = excluded)"
+        help="Directory for ERA5-Land downloads"
     )
     parser.add_argument(
         "--download-only",
@@ -898,7 +815,7 @@ Examples:
     
     run(
         workdir=args.workdir,
-        gwa_mask=args.gwa_mask,
+        era5_dir=args.era5_dir,
         download_only=args.download_only,
         process_only=args.process_only
     )

@@ -50,11 +50,13 @@ def get_year_from_scenario(scenario: str) -> int:
 
 def get_cmip6_layer_paths(year: int) -> dict:
     """
-    Get paths to CMIP6 WPD and PVOUT parquet files for given year.
+    Get paths to CMIP6 WPD, PVOUT, and HYDRO parquet files for given year.
     Returns dict with layer names as keys and paths as values.
     """
     wind_dir = Path(get_bigdata_path("bigdata_wind_cmip6")) / "outputs"
     solar_dir = Path(get_bigdata_path("bigdata_solar_cmip6")) / "outputs"
+    hydro_dir = Path(get_bigdata_path("bigdata_hydro_cmip6")) / "outputs"
+    hydro_atlas_dir = Path(get_bigdata_path("bigdata_hydro_atlas")) / "outputs"
     suffix = "300arcsec"
     
     return {
@@ -66,6 +68,13 @@ def get_cmip6_layer_paths(year: int) -> dict:
         "pvout": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
         "pvout_uncertainty": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
         "pvout_baseline": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
+        # Hydro runoff layers (gridded)
+        "runoff": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
+        "runoff_uncertainty": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
+        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_ERA5_baseline_{suffix}.parquet",
+        # HydroATLAS river reach layers
+        "riveratlas": hydro_atlas_dir / f"RiverATLAS_projected_{year}.parquet",
+        "riveratlas_baseline": hydro_atlas_dir / "RiverATLAS_baseline.parquet",
     }
 
 
@@ -81,7 +90,7 @@ def load_cmip6_layers_global(year: int, logger) -> dict:
     # Check if any CMIP6 files exist
     existing_files = {k: v for k, v in cmip6_paths.items() if v.exists()}
     if not existing_files:
-        logger.warning("No CMIP6 parquet files found. Run p1_c_cmip6_solar.py and p1_d_cmip6_wind.py first.")
+        logger.warning("No CMIP6 parquet files found. Run p1_c_cmip6_solar.py, p1_d_cmip6_wind.py, and p1_e_cmip6_hydro.py first.")
         return {}
     
     loaded_layers = {}

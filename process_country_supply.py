@@ -232,7 +232,7 @@ def load_population_centroids(country_bbox, admin_boundaries):
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=pop
     # Select: 2025 eporch, 30 arcsec, WGS84(4326)
 
-    pop_file = os.path.join(get_bigdata_path('bigdata_jrc_pop'), 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif')
+    pop_file = os.path.join(get_bigdata_path('bigdata_settlements_jrc'), 'GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.tif')
     with rasterio.open(pop_file) as src:
         # Get initial window from bounds
         window = rasterio.windows.from_bounds(minx, miny, maxx, maxy, src.transform)

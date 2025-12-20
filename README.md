@@ -33,7 +33,7 @@ This project performs country-level analysis of electricity supply and demand ne
 2. **Projecting future scenarios** — 2030 and 2050 energy demand based on IEA World Energy Outlook and UN population projections
 3. **Modeling supply networks** — Network graph analysis to match power generation facilities with population demand centers
 4. **Identifying underserved areas** — Siting analysis for remote settlements requiring new infrastructure
-5. **Assessing climate impacts** — CMIP6-based projections of solar PV output and wind power density changes
+5. **Assessing climate impacts** — CMIP6-based projections of solar PV output, wind power density, and hydropower runoff changes
 
 ---
 
@@ -44,7 +44,7 @@ This project performs country-level analysis of electricity supply and demand ne
 - **Energy type differentiation**: Solar, Wind, Hydro, Other Renewables, Nuclear, Fossil
 - **Parallel processing**: Automatic CPU detection with HPC cluster support (SLURM)
 - **Maritime support**: Includes offshore facilities using EEZ boundaries
-- **Climate projections**: CMIP6 ensemble-mean projections with uncertainty quantification
+- **Climate projections**: CMIP6 ensemble-mean projections for solar, wind, and hydro with uncertainty quantification
 - **Publication-ready outputs**: GeoPackage and Parquet formats for GIS visualization and analysis
 
 ---
@@ -59,6 +59,8 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── p1_b_ember_2024_30_50.py           # Project 2030/2050 energy scenarios
 ├── p1_c_cmip6_solar.py                # CMIP6 solar radiation projections
 ├── p1_d_cmip6_wind.py                 # CMIP6 wind power density projections
+├── p1_e_cmip6_hydro.py                # ERA5-Land + CMIP6 runoff projections
+├── p1_f_hydroatlas.py                 # HydroATLAS river reach projections
 │
 ├── # ═══ Core Analysis Scripts ═══
 ├── process_country_supply.py          # Main supply-demand network analysis
@@ -90,15 +92,18 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── bigdata_gadm/                      # GADM administrative boundaries
 ├── bigdata_eez/                       # Marine Regions EEZ boundaries
 ├── bigdata_gridfinder/                # GridFinder electrical grid data
-├── bigdata_jrc_pop/                   # JRC GHS-POP population raster
+├── bigdata_settlements_jrc/           # JRC GHS-POP population raster
 ├── bigdata_solar_pvout/               # Global Solar Atlas baseline
 ├── bigdata_wind_atlas/                # Global Wind Atlas baseline
 ├── bigdata_solar_cmip6/               # CMIP6 solar projections
 ├── bigdata_wind_cmip6/                # CMIP6 wind projections
-├── ember_energy_data/                 # Ember electricity statistics
-├── iea_energy_projections/            # IEA World Energy Outlook data
-├── un_pop/                            # UN population projections
-├── wb_country_class/                  # World Bank country classifications
+├── bigdata_hydro_cmip6/               # CMIP6 runoff projections
+├── bigdata_hydro_era5_land/           # ERA5-Land runoff data
+├── bigdata_hydro_atlas/               # HydroATLAS river datasets
+├── data_energy_ember/                 # Ember electricity statistics
+├── data_energy_projections_iea/       # IEA World Energy Outlook data
+├── data_pop_un/                       # UN population projections
+├── data_country_class_wb/             # World Bank country classifications
 │
 ├── # ═══ Output Directories ═══
 ├── outputs_per_country/               # Country-level Parquet outputs
@@ -184,8 +189,11 @@ python get_countries.py --create-parallel
 sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
 chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 
-# Submit all 40 parallel jobs
+# Submit all 40 parallel jobs (single scenario: 100%)
 ./submit_all_parallel.sh
+
+# OR: Submit with ALL scenarios (100%, 90%, 80%, 70%, 60%)
+./submit_all_parallel.sh --run-all-scenarios
 
 # Monitor progress
 squeue -u $USER
@@ -218,6 +226,7 @@ All configurable parameters are centralized in `config.py`:
 > ```bash
 > python p1_c_cmip6_solar.py --process-only
 > python p1_d_cmip6_wind.py --process-only
+> python p1_e_cmip6_hydro.py --process-only
 > ```
 
 ### Network Settings
@@ -248,18 +257,19 @@ All configurable parameters are centralized in `config.py`:
 | **GADM Boundaries** | `bigdata_gadm/gadm_410-levels.gpkg` | [GADM v4.1](https://gadm.org/) | Country land boundaries |
 | **EEZ Boundaries** | `bigdata_eez/eez_v12.gpkg` | [Marine Regions v12](https://marineregions.org/) | Maritime territorial waters |
 | **GridFinder** | `bigdata_gridfinder/grid.gpkg` | [GridFinder](https://gridfinder.rdrn.me/) | Global grid infrastructure |
-| **JRC Population** | `bigdata_jrc_pop/GHS_POP_E2025_*.tif` | [JRC GHSL](https://ghsl.jrc.ec.europa.eu/) | Population distribution |
+| **JRC Population** | `bigdata_settlements_jrc/GHS_POP_E2025_*.tif` | [JRC GHSL](https://ghsl.jrc.ec.europa.eu/) | Population distribution |
 | **Solar Baseline** | `bigdata_solar_pvout/PVOUT.tif` | [Global Solar Atlas](https://globalsolaratlas.info/) | PVOUT baseline |
 | **Wind Baseline** | `bigdata_wind_atlas/gasp_*.tif` | [Global Wind Atlas](https://globalwindatlas.info/) | Wind power density |
+| **HydroATLAS** | `bigdata_hydro_atlas/RiverATLAS_Data_v10.gdb` | [HydroATLAS](https://www.hydrosheds.org/hydroatlas) | River reach attributes |
 
 ### Energy Statistics
 
 | Dataset | Path | Source |
 |---------|------|--------|
-| **Ember Data** | `ember_energy_data/yearly_full_release_*.csv` | [Ember](https://ember-climate.org/) |
-| **IEA Projections** | `iea_energy_projections/WEO*.csv` | [IEA WEO 2024](https://www.iea.org/) |
-| **UN Population** | `un_pop/` | [UN WPP 2024](https://population.un.org/) |
-| **World Bank** | `wb_country_class/` | [World Bank](https://datahelpdesk.worldbank.org/) |
+| **Ember Data** | `data_energy_ember/yearly_full_release_*.csv` | [Ember](https://ember-climate.org/) |
+| **IEA Projections** | `data_energy_projections_iea/WEO*.csv` | [IEA WEO 2024](https://www.iea.org/) |
+| **UN Population** | `data_pop_un/` | [UN WPP 2024](https://population.un.org/) |
+| **World Bank** | `data_country_class_wb/` | [World Bank](https://datahelpdesk.worldbank.org/) |
 
 ---
 
@@ -276,7 +286,7 @@ Harmonizes Ember country-level statistics with Global Energy Monitor facility da
 - Validates coordinates against GADM + EEZ boundaries
 - Filters out offshore facilities beyond territorial waters
 
-**Output:** `re_data/p1_a_ember_2024_30.xlsx`
+**Output:** `data_facilities_gem/p1_a_ember_2024_30.xlsx`
 
 #### `p1_b_ember_2024_30_50.py`
 Projects 2030 and 2050 electricity generation scenarios.
@@ -287,7 +297,7 @@ Projects 2030 and 2050 electricity generation scenarios.
 - Applies IEA growth rates for fossil/nuclear
 - Disaggregates broad renewable targets
 
-**Output:** `re_data/p1_b_ember_2024_30_50.xlsx`
+**Output:** `data_facilities_gem/p1_b_ember_2024_30_50.xlsx`
 
 #### `p1_c_cmip6_solar.py` / `p1_d_cmip6_wind.py`
 Generate CMIP6-based climate projections for solar and wind resources.
@@ -302,6 +312,55 @@ Generate CMIP6-based climate projections for solar and wind resources.
 - `bigdata_solar_cmip6/outputs/PVOUT_{year}_300arcsec.tif`
 - `bigdata_wind_cmip6/outputs/WPD100_{year}_300arcsec.tif`
 
+#### `p1_e_cmip6_hydro.py`
+Generate ERA5-Land + CMIP6 based runoff projections for hydropower potential.
+
+**Data Sources:**
+- **Baseline**: ERA5-Land monthly runoff (reanalysis, 0.1° resolution)
+- **Climate projections**: CMIP6 `total_runoff` (SSP2-4.5 scenario)
+
+**Method:**
+1. Download ERA5-Land runoff via CDS API (1995-2014 baseline)
+2. Download CMIP6 total_runoff for historical and future periods
+3. Calculate annual mean baseline from ERA5-Land
+4. Compute delta ratios: Δ = CMIP6_future / CMIP6_historical
+5. Apply deltas to ERA5 baseline: Future = Baseline × Δ
+6. Clip extreme deltas [0.2, 3.0] for robustness
+
+**CMIP6 Models:**
+- CESM2, EC-Earth3-veg-lr, MPI-ESM1-2-lr (ensemble mean)
+
+**Outputs:**
+- `bigdata_hydro_cmip6/outputs/HYDRO_RUNOFF_baseline_300arcsec.tif`
+- `bigdata_hydro_cmip6/outputs/HYDRO_RUNOFF_{2030,2050}_300arcsec.tif`
+- `bigdata_hydro_cmip6/outputs/HYDRO_DELTA_{2030,2050}_300arcsec.tif`
+
+#### `p1_f_hydroatlas.py`
+Apply CMIP6 runoff change factors to HydroATLAS river reach data.
+
+**Prerequisites:**
+- RiverATLAS dataset from [HydroATLAS](https://www.hydrosheds.org/hydroatlas)
+- Delta rasters from `p1_e_cmip6_hydro.py`
+
+**Method:**
+1. Load RiverATLAS river reach geometries and attributes
+2. Extract CMIP6 delta values at each river reach centroid
+3. Apply deltas to baseline discharge: Future_Q = Baseline_Q × Δ
+4. Compute hydropower potential indicator: P ∝ Q × gradient × elevation
+5. Filter by minimum discharge and stream order thresholds
+
+**Key Attributes Used:**
+- `dis_m3_pyr`: Mean annual discharge (m³/year)
+- `run_mm_cyr`: Land surface runoff (mm/year)
+- `sgr_dk_rav`: Stream gradient (‰)
+- `ele_mt_uav`: Upstream mean elevation (m)
+- `ord_stra`: Strahler stream order
+
+**Outputs:**
+- `bigdata_hydro_atlas/outputs/RiverATLAS_projected_{2030,2050}.parquet`
+- `bigdata_hydro_atlas/outputs/RiverATLAS_baseline.parquet`
+- `bigdata_hydro_atlas/outputs/RiverATLAS_projected.gpkg`
+
 ---
 
 ### Core Analysis
@@ -310,8 +369,11 @@ Generate CMIP6-based climate projections for solar and wind resources.
 Main supply-demand network analysis pipeline.
 
 ```bash
-# Basic usage
+# Basic usage (single scenario: 100%)
 python process_country_supply.py <ISO3>
+
+# All supply scenarios (100%, 90%, 80%, 70%, 60%)
+python process_country_supply.py <ISO3> --run-all-scenarios
 
 # Multiple countries
 python process_country_supply.py USA CHN IND
@@ -382,6 +444,12 @@ python combine_one_results.py KEN --scenario 2050_supply_100%
 ```
 
 **Output:** `outputs_per_country/{scenario}_{ISO3}.gpkg`
+
+**CMIP6 Climate Layers (auto-included if available):**
+- Wind: `wpd`, `wpd_uncertainty`, `wpd_baseline`
+- Solar: `pvout`, `pvout_uncertainty`, `pvout_baseline`
+- Hydro: `runoff`, `runoff_uncertainty`, `runoff_baseline`
+- Rivers: `riveratlas`, `riveratlas_baseline`
 
 #### `combine_global_results.py`
 Merge all country outputs into global GeoPackage.
@@ -546,10 +614,14 @@ sed -i 's/\r$//' submit_all_parallel_siting.sh submit_one_siting.sh parallel_scr
 chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 1: SUPPLY ANALYSIS (~8-12 hours)
+# STEP 1: SUPPLY ANALYSIS (~8-12 hours for single scenario)
 # ═══════════════════════════════════════════════════════════════
 
+# Single scenario (100% only - faster)
 ./submit_all_parallel.sh
+
+# OR: All 5 scenarios (100%, 90%, 80%, 70%, 60%) - takes ~5x longer
+./submit_all_parallel.sh --run-all-scenarios
 
 # Monitor
 squeue -u $USER
@@ -559,10 +631,14 @@ tail -f outputs_global/logs/parallel_*.out
 find outputs_per_country/parquet -name "facilities_*.parquet" | wc -l
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 2: SITING ANALYSIS (~4-6 hours)
+# STEP 2: SITING ANALYSIS (~4-6 hours for single scenario)
 # ═══════════════════════════════════════════════════════════════
 
+# Single scenario
 ./submit_all_parallel_siting.sh
+
+# OR: All 5 scenarios
+./submit_all_parallel_siting.sh --run-all-scenarios
 
 # Monitor
 tail -f outputs_global/logs/siting_*.out
@@ -591,23 +667,31 @@ ls -lh outputs_global/*_global.gpkg
 
 ### Expected Timeline
 
-| Phase | Duration | Output |
-|-------|----------|--------|
-| Supply Analysis | 8-12 hours | ~189 country parquets |
-| Siting Analysis | 4-6 hours | ~150 siting parquets |
-| ADD_V2 Integration | 8-12 hours | ~150 integrated parquets |
-| Results Combination | 1-2 hours | Global GeoPackages |
-| **Total (full)** | **21-32 hours** | |
-| **Total (no ADD_V2)** | **13-20 hours** | |
+| Phase | Single Scenario | All 5 Scenarios | Output |
+|-------|-----------------|-----------------|--------|
+| Supply Analysis | 8-12 hours | 40-60 hours | ~189 country parquets |
+| Siting Analysis | 4-6 hours | 20-30 hours | ~150 siting parquets |
+| ADD_V2 Integration | 8-12 hours | 40-60 hours | ~150 integrated parquets |
+| Results Combination | 1-2 hours | 1-2 hours | Global GeoPackages |
+| **Total (full)** | **21-32 hours** | **101-152 hours** | |
+| **Total (no ADD_V2)** | **13-20 hours** | **61-92 hours** | |
+
+> **Note**: Running `--run-all-scenarios` processes 5 supply factors (100%, 90%, 80%, 70%, 60%) sequentially per country, taking ~5x longer than single scenario.
 
 ### Single Job Submission
 
 ```bash
-# Submit specific supply script
-./submit_one.sh 06  # Submits parallel_scripts/submit_parallel_06.sh
+# Submit specific supply script (single scenario)
+./submit_one.sh 06
 
-# Submit specific siting script
-./submit_one_siting.sh 03  # Submits parallel_scripts_siting/submit_parallel_siting_03.sh
+# Submit specific supply script (all 5 scenarios)
+./submit_one.sh 06 --run-all-scenarios
+
+# Submit specific siting script (single scenario)
+./submit_one_siting.sh 03
+
+# Submit specific siting script (all 5 scenarios)
+./submit_one_siting.sh 03 --run-all-scenarios
 ```
 
 ---

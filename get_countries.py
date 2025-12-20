@@ -356,6 +356,13 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check if running all scenarios (passed via sbatch --export)
+SCENARIO_FLAG=""
+if [ "$RUN_ALL_SCENARIOS" = "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
+
 # Process countries in this batch
 """
         
@@ -364,7 +371,7 @@ $PY -c 'import sys; print(sys.executable)'
         for country in batch:
             script_content += f"""
 echo "[INFO] Processing {country} ({get_tier(country).upper()})..."
-if $PY process_country_supply.py {country} --output-dir outputs_per_country; then
+if $PY process_country_supply.py {country} $SCENARIO_FLAG --output-dir outputs_per_country; then
     echo "[SUCCESS] {country} completed"
 else
     echo "[ERROR] {country} failed"
@@ -386,6 +393,26 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
     # This script submits all jobs immediately and returns to prompt
     master_script = f"""#!/bin/bash
 # Submit all parallel jobs immediately (SLURM will queue them automatically)
+# Usage: ./submit_all_parallel.sh [--run-all-scenarios]
+
+# --- Parse arguments ---
+RUN_ALL_SCENARIOS=""
+SBATCH_EXPORT=""
+
+for arg in "$@"; do
+    case $arg in
+        --run-all-scenarios)
+            RUN_ALL_SCENARIOS="1"
+            SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+            echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            echo "Usage: $0 [--run-all-scenarios]"
+            exit 1
+            ;;
+    esac
+done
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -395,12 +422,15 @@ conda activate p1_etl
 
 echo "[INFO] Submitting {len(all_batches)} parallel jobs..."
 echo "[INFO] SLURM will automatically queue and manage job execution (max 8 running at once)"
+if [ -n "$RUN_ALL_SCENARIOS" ]; then
+    echo "[INFO] Each job will run 5 scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
 echo ""
 
 # Submit all jobs
 for i in {{01..{len(all_batches):02d}}}; do
     echo "[$(date +%H:%M:%S)] Submitting job $i..."
-    sbatch parallel_scripts/submit_parallel_${{i}}.sh
+    sbatch $SBATCH_EXPORT parallel_scripts/submit_parallel_${{i}}.sh
     sleep 1  # Small delay to avoid overwhelming scheduler
 done
 
@@ -487,18 +517,42 @@ fi
     # Create individual script runner for re-running specific scripts
     single_script = """#!/bin/bash
 # Run a single parallel script by number (e.g., ./submit_one.sh 06)
-# Usage: ./submit_one.sh <script_number>
+# Usage: ./submit_one.sh <script_number> [--run-all-scenarios]
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <script_number>"
+# --- Parse arguments ---
+RUN_ALL_SCENARIOS=""
+SBATCH_EXPORT=""
+SCRIPT_NUM=""
+
+for arg in "$@"; do
+    case $arg in
+        --run-all-scenarios)
+            RUN_ALL_SCENARIOS="1"
+            SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+            ;;
+        *)
+            if [ -z "$SCRIPT_NUM" ]; then
+                SCRIPT_NUM="$arg"
+            else
+                echo "Unknown argument: $arg"
+                echo "Usage: $0 <script_number> [--run-all-scenarios]"
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+if [ -z "$SCRIPT_NUM" ]; then
+    echo "Usage: $0 <script_number> [--run-all-scenarios]"
     echo "Example: $0 06"
+    echo "Example: $0 06 --run-all-scenarios"
     echo ""
     echo "Available scripts:"
     ls -1 parallel_scripts/submit_parallel_*.sh | sed 's/.*submit_parallel_/  /' | sed 's/.sh//'
     exit 1
 fi
 
-SCRIPT_NUM=$(printf "%02d" $1)
+SCRIPT_NUM=$(printf "%02d" $SCRIPT_NUM)
 SCRIPT_FILE="parallel_scripts/submit_parallel_${SCRIPT_NUM}.sh"
 
 if [ ! -f "$SCRIPT_FILE" ]; then
@@ -510,7 +564,10 @@ if [ ! -f "$SCRIPT_FILE" ]; then
 fi
 
 echo "[INFO] Submitting script ${SCRIPT_NUM}..."
-sbatch "$SCRIPT_FILE"
+if [ -n "$RUN_ALL_SCENARIOS" ]; then
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
+sbatch $SBATCH_EXPORT "$SCRIPT_FILE"
 
 echo ""
 echo "Monitor with:"
@@ -738,13 +795,20 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
+# Check if running all scenarios (passed via sbatch --export)
+SCENARIO_FLAG=""
+if [ "$RUN_ALL_SCENARIOS" = "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
+
 # Process countries in this batch
 """
         
         for country in batch:
             script_content += f"""
 echo "[INFO] Processing siting analysis for {country} ({get_tier(country).upper()})..."
-if $PY process_country_siting.py {country}; then
+if $PY process_country_siting.py {country} $SCENARIO_FLAG; then
     echo "[SUCCESS] {country} siting analysis completed"
 else
     echo "[ERROR] {country} siting analysis failed"
@@ -764,6 +828,26 @@ echo "[INFO] Siting batch {i}/{len(all_batches)} ({tier.upper()}) completed at $
     # Create master submission script
     master_script = f"""#!/bin/bash
 # Submit all parallel siting analysis jobs
+# Usage: ./submit_all_parallel_siting.sh [--run-all-scenarios]
+
+# --- Parse arguments ---
+RUN_ALL_SCENARIOS=""
+SBATCH_EXPORT=""
+
+for arg in "$@"; do
+    case $arg in
+        --run-all-scenarios)
+            RUN_ALL_SCENARIOS="1"
+            SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+            echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            echo "Usage: $0 [--run-all-scenarios]"
+            exit 1
+            ;;
+    esac
+done
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -773,12 +857,15 @@ conda activate p1_etl
 
 echo "[INFO] Submitting {len(all_batches)} parallel siting analysis jobs..."
 echo "[INFO] SLURM will automatically queue and manage job execution"
+if [ -n "$RUN_ALL_SCENARIOS" ]; then
+    echo "[INFO] Each job will run 5 scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
 echo ""
 
 # Submit all jobs
 for i in {{01..{len(all_batches):02d}}}; do
     echo "[$(date +%H:%M:%S)] Submitting siting job $i..."
-    sbatch parallel_scripts_siting/submit_parallel_siting_${{i}}.sh
+    sbatch $SBATCH_EXPORT parallel_scripts_siting/submit_parallel_siting_${{i}}.sh
     sleep 1
 done
 
@@ -807,18 +894,42 @@ echo "  Tier 3 (all others):           11 countries/script | Short partition (12
     # Create single script runner
     single_script = """#!/bin/bash
 # Run a single parallel siting script by number
-# Usage: ./submit_one_siting.sh <script_number>
+# Usage: ./submit_one_siting.sh <script_number> [--run-all-scenarios]
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <script_number>"
+# --- Parse arguments ---
+RUN_ALL_SCENARIOS=""
+SBATCH_EXPORT=""
+SCRIPT_NUM=""
+
+for arg in "$@"; do
+    case $arg in
+        --run-all-scenarios)
+            RUN_ALL_SCENARIOS="1"
+            SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+            ;;
+        *)
+            if [ -z "$SCRIPT_NUM" ]; then
+                SCRIPT_NUM="$arg"
+            else
+                echo "Unknown argument: $arg"
+                echo "Usage: $0 <script_number> [--run-all-scenarios]"
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+if [ -z "$SCRIPT_NUM" ]; then
+    echo "Usage: $0 <script_number> [--run-all-scenarios]"
     echo "Example: $0 06"
+    echo "Example: $0 06 --run-all-scenarios"
     echo ""
     echo "Available scripts:"
     ls -1 parallel_scripts_siting/submit_parallel_siting_*.sh | sed 's/.*submit_parallel_siting_/  /' | sed 's/.sh//'
     exit 1
 fi
 
-SCRIPT_NUM=$(printf "%02d" $1)
+SCRIPT_NUM=$(printf "%02d" $SCRIPT_NUM)
 SCRIPT_FILE="parallel_scripts_siting/submit_parallel_siting_${SCRIPT_NUM}.sh"
 
 if [ ! -f "$SCRIPT_FILE" ]; then
@@ -830,7 +941,10 @@ if [ ! -f "$SCRIPT_FILE" ]; then
 fi
 
 echo "[INFO] Submitting siting script ${SCRIPT_NUM}..."
-sbatch "$SCRIPT_FILE"
+if [ -n "$RUN_ALL_SCENARIOS" ]; then
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
+sbatch $SBATCH_EXPORT "$SCRIPT_FILE"
 
 echo ""
 echo "Monitor with:"

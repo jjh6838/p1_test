@@ -17,7 +17,11 @@ Used by:
 COMMON_CRS = "EPSG:4326"  # WGS84 for input/output
 ANALYSIS_YEAR = 2030  # Year for supply-demand analysis: 2024, 2030, or 2050
 DEMAND_TYPES = ["Solar", "Wind", "Hydro", "Other Renewables", "Nuclear", "Fossil"]
-SUPPLY_FACTOR = 1.0  # Sensitivity analysis: each facility supplies X% of its capacity (1.0=100%, 0.6=60%)
+
+# Supply factor for sensitivity analysis: each facility supplies X% of its capacity
+# Default value used when running single scenario (no --run-all-scenarios flag)
+# When --run-all-scenarios is used, this is overridden with [1.0, 0.9, 0.8, 0.7, 0.6]
+SUPPLY_FACTOR = 1.0
 
 # =============================================================================
 # GRID RESOLUTION (for population centroids and CMIP6 outputs)

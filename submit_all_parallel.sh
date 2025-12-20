@@ -1,5 +1,25 @@
 #!/bin/bash
 # Submit all parallel jobs immediately (SLURM will queue them automatically)
+# Usage: ./submit_all_parallel.sh [--run-all-scenarios]
+
+# --- Parse arguments ---
+RUN_ALL_SCENARIOS=""
+SBATCH_EXPORT=""
+
+for arg in "$@"; do
+    case $arg in
+        --run-all-scenarios)
+            RUN_ALL_SCENARIOS="1"
+            SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+            echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            echo "Usage: $0 [--run-all-scenarios]"
+            exit 1
+            ;;
+    esac
+done
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -9,12 +29,15 @@ conda activate p1_etl
 
 echo "[INFO] Submitting 40 parallel jobs..."
 echo "[INFO] SLURM will automatically queue and manage job execution (max 8 running at once)"
+if [ -n "$RUN_ALL_SCENARIOS" ]; then
+    echo "[INFO] Each job will run 5 scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
 echo ""
 
 # Submit all jobs
 for i in {01..40}; do
     echo "[$(date +%H:%M:%S)] Submitting job $i..."
-    sbatch parallel_scripts/submit_parallel_${i}.sh
+    sbatch $SBATCH_EXPORT parallel_scripts/submit_parallel_${i}.sh
     sleep 1  # Small delay to avoid overwhelming scheduler
 done
 

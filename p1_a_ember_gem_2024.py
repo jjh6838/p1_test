@@ -157,7 +157,7 @@ def map_iso3_to_country_name(iso3_code):
 
 # Load Ember data
 # Reads the Ember dataset containing yearly energy statistics
-energy_data_csv_path = r"ember_energy_data\yearly_full_release_long_format2025-11-23.csv" 
+energy_data_csv_path = r"data_energy_ember\yearly_full_release_long_format2025-11-23.csv" 
 # Updated on November 23, 2025 (Column name has been changed from 'Country code (old name)' to 'ISO 3 code (new name)' in the downloaded file, so I renamed it back from ISO 3 code' to 'Country code' for consistency)
 # https://ember-energy.org/data/yearly-electricity-data/
 energy_data = pd.read_csv(energy_data_csv_path)
@@ -226,7 +226,7 @@ generation_data = pd.DataFrame(aligned_generation)
 
 # Load GEM data
 # Reads the Global Energy Monitor dataset containing facility-level data
-energy_facilities_path = r"re_data\Global-Integrated-Power-September-2025-II.xlsx" # updated on November 23, 2025
+energy_facilities_path = r"data_facilities_gem\Global-Integrated-Power-September-2025-II.xlsx" # updated on November 23, 2025
 # read the source info and download for update: https://globalenergymonitor.org/about/who-uses-gem-data/
 
 gem_data = pd.read_excel(energy_facilities_path, sheet_name="Power facilities")
