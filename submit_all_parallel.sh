@@ -1,25 +1,47 @@
 #!/bin/bash
 # Submit all parallel jobs immediately (SLURM will queue them automatically)
-# Usage: ./submit_all_parallel.sh [--run-all-scenarios]
+# Usage: ./submit_all_parallel.sh [--run-all-scenarios] [--supply-factor <value>]
 
 # --- Parse arguments ---
 RUN_ALL_SCENARIOS=""
+SUPPLY_FACTOR=""
 SBATCH_EXPORT=""
 
-for arg in "$@"; do
-    case $arg in
+while [ $# -gt 0 ]; do
+    case $1 in
         --run-all-scenarios)
             RUN_ALL_SCENARIOS="1"
-            SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
-            echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+            shift
+            ;;
+        --supply-factor)
+            if [ -z "$2" ] || [[ "$2" == --* ]]; then
+                echo "Error: --supply-factor requires a value (e.g., 0.9)"
+                exit 1
+            fi
+            SUPPLY_FACTOR="$2"
+            shift 2
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--run-all-scenarios] [--supply-factor <value>]"
+            exit 1
             ;;
         *)
-            echo "Unknown argument: $arg"
-            echo "Usage: $0 [--run-all-scenarios]"
+            echo "Unknown argument: $1"
+            echo "Usage: $0 [--run-all-scenarios] [--supply-factor <value>]"
             exit 1
             ;;
     esac
 done
+
+# Build SBATCH_EXPORT based on flags
+if [ -n "$SUPPLY_FACTOR" ]; then
+    SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
+    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor)"
+elif [ -n "$RUN_ALL_SCENARIOS" ]; then
+    SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH

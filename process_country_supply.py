@@ -2369,6 +2369,8 @@ def main():
                        help='Test mode: generate full GPKG with all layers for detailed analysis')
     parser.add_argument('--run-all-scenarios', action='store_true',
                        help='Run all supply scenarios: 100%%, 90%%, 80%%, 70%%, 60%%')
+    parser.add_argument('--supply-factor', type=float, default=None,
+                       help='Run a single supply factor (e.g., 0.9 for 90%%). Overrides --run-all-scenarios.')
     
     args = parser.parse_args()
     
@@ -2376,7 +2378,14 @@ def main():
     all_success = True
     
     # Determine which scenarios to run
-    if args.run_all_scenarios:
+    if args.supply_factor is not None:
+        # Single specific supply factor takes precedence
+        if not 0.0 < args.supply_factor <= 1.0:
+            print(f"Error: --supply-factor must be between 0 and 1 (e.g., 0.9 for 90%)")
+            return 1
+        supply_factors = [args.supply_factor]
+        print(f"\n[INFO] Running single supply scenario: {int(args.supply_factor*100)}%")
+    elif args.run_all_scenarios:
         supply_factors = [1.0, 0.9, 0.8, 0.7, 0.6]
         print("\n" + "="*60)
         print("RUNNING ALL SUPPLY SCENARIOS: 100%, 90%, 80%, 70%, 60%")

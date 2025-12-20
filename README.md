@@ -65,7 +65,7 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── # ═══ Core Analysis Scripts ═══
 ├── process_country_supply.py          # Main supply-demand network analysis
 ├── process_country_siting.py          # Remote settlement siting analysis
-├── get_countries.py                   # Generate country list and HPC scripts
+├── generate_hpc_scripts.py            # Generate country list and HPC scripts
 │
 ├── # ═══ Results Processing ═══
 ├── combine_one_results.py             # Combine single country to GeoPackage
@@ -183,7 +183,7 @@ python combine_global_results.py --input-dir outputs_per_country
 
 ```bash
 # Generate parallel SLURM scripts
-python get_countries.py --create-parallel
+python generate_hpc_scripts.py --create-parallel
 
 # Fix line endings (if prepared on Windows)
 sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
@@ -195,10 +195,53 @@ chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 # OR: Submit with ALL scenarios (100%, 90%, 80%, 70%, 60%)
 ./submit_all_parallel.sh --run-all-scenarios
 
+# OR: Submit with a specific supply factor (e.g., 90% only)
+./submit_all_parallel.sh --supply-factor 0.9
+
 # Monitor progress
 squeue -u $USER
 tail -f outputs_global/logs/parallel_*.out
 ```
+
+### Single Country (HPC Cluster)
+
+Use `submit_one.sh` and `submit_one_siting.sh` to submit individual parallel scripts.
+Each script contains one or more countries grouped by computational tier.
+
+```bash
+# List available scripts and see which countries are in each
+cat parallel_scripts/submit_parallel_01.sh | grep "Processing"
+# Output: Processing 1 countries in this batch: CHN
+
+# Submit a specific supply script by number (single scenario: 100%)
+./submit_one.sh 01              # Submit script 01 (CHN)
+./submit_one.sh 5               # Leading zero optional
+
+# Submit with all 5 scenarios (100%, 90%, 80%, 70%, 60%)
+./submit_one.sh 01 --run-all-scenarios
+
+# Submit with a specific supply factor (e.g., 90% only)
+./submit_one.sh 01 --supply-factor 0.9
+
+# Same for siting analysis
+./submit_one_siting.sh 03
+./submit_one_siting.sh 03 --run-all-scenarios
+./submit_one_siting.sh 03 --supply-factor 0.9
+
+# Check which script contains a specific country
+grep -l "USA" parallel_scripts/*.sh
+# Output: parallel_scripts/submit_parallel_05.sh
+```
+
+**Script-to-Country Mapping (Tier 1-2):**
+| Script | Countries | Tier | Notes |
+|--------|-----------|------|-------|
+| 01 | CHN | T1 | Largest, 168h Interactive |
+| 02 | IND | T2 | Large, 168h Long |
+| 03 | BRA | T2 | Large, 168h Long |
+| 04 | DEU | T2 | Large, 168h Long |
+| 05 | USA | T2 | Large, 168h Long |
+| 06+ | Multiple | T3-T5 | Medium/Small countries |
 
 ---
 
@@ -375,6 +418,9 @@ python process_country_supply.py <ISO3>
 # All supply scenarios (100%, 90%, 80%, 70%, 60%)
 python process_country_supply.py <ISO3> --run-all-scenarios
 
+# Single specific supply factor (e.g., 90% only)
+python process_country_supply.py <ISO3> --supply-factor 0.9
+
 # Multiple countries
 python process_country_supply.py USA CHN IND
 
@@ -405,11 +451,14 @@ Siting analysis for underserved remote settlements.
 > **⚠️ Prerequisite:** Must run AFTER `process_country_supply.py` completes.
 
 ```bash
-# Single scenario
+# Single scenario (100%)
 python process_country_siting.py KEN
 
 # All supply scenarios (100%, 90%, 80%, 70%, 60%)
 python process_country_siting.py KEN --run-all-scenarios
+
+# Single specific supply factor (e.g., 90% only)
+python process_country_siting.py KEN --supply-factor 0.9
 ```
 
 **Pipeline Steps:**
@@ -424,6 +473,44 @@ python process_country_siting.py KEN --run-all-scenarios
 - `siting_clusters_{ISO3}.parquet` — Cluster centers with assignments
 - `siting_networks_{ISO3}.parquet` — Network geometries
 - `siting_summary_{ISO3}.xlsx` — Summary statistics
+
+#### `generate_hpc_scripts.py`
+Generate country list and SLURM batch scripts for HPC cluster execution.
+
+```bash
+# Generate country list only
+python generate_hpc_scripts.py
+
+# Generate 40 parallel supply analysis scripts
+python generate_hpc_scripts.py --create-parallel
+
+# Generate 25 parallel siting analysis scripts
+python generate_hpc_scripts.py --create-parallel-siting
+```
+
+**Features:**
+- Reads country list from energy demand data (`p1_b_ember_2024_30_50.xlsx`)
+- Validates countries against GADM boundaries (excludes HKG, MAC, XKX)
+- Groups countries into computational tiers (T1-T5) based on size/complexity
+- Generates optimized SLURM scripts with appropriate resource allocation
+
+**Generated Scripts:**
+| Script | Description |
+|--------|-------------|
+| `submit_all_parallel.sh` | Submit all 40 supply analysis jobs |
+| `submit_one.sh` | Submit individual supply script by number |
+| `submit_all_parallel_siting.sh` | Submit all 25 siting analysis jobs |
+| `submit_one_siting.sh` | Submit individual siting script by number |
+| `submit_workflow.sh` | Combine results after all jobs complete |
+| `parallel_scripts/*.sh` | 40 individual supply SLURM scripts |
+| `parallel_scripts_siting/*.sh` | 25 individual siting SLURM scripts |
+
+**Scenario Flags (all wrapper scripts support these):**
+| Flag | Description |
+|------|-------------|
+| (none) | Run single scenario (100% supply factor) |
+| `--run-all-scenarios` | Run all 5 scenarios (100%, 90%, 80%, 70%, 60%) |
+| `--supply-factor 0.9` | Run single specific supply factor (e.g., 90%) |
 
 ---
 
@@ -605,8 +692,8 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 # ═══════════════════════════════════════════════════════════════
 
 # Generate parallel scripts
-python get_countries.py --create-parallel         # 40 supply scripts
-python get_countries.py --create-parallel-siting  # 24 siting scripts
+python generate_hpc_scripts.py --create-parallel         # 40 supply scripts
+python generate_hpc_scripts.py --create-parallel-siting  # 25 siting scripts
 
 # Fix line endings (if prepared on Windows)
 sed -i 's/\r$//' submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
@@ -622,6 +709,9 @@ chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # OR: All 5 scenarios (100%, 90%, 80%, 70%, 60%) - takes ~5x longer
 ./submit_all_parallel.sh --run-all-scenarios
+
+# OR: Single specific scenario (e.g., 90% only)
+./submit_all_parallel.sh --supply-factor 0.9
 
 # Monitor
 squeue -u $USER
@@ -639,6 +729,9 @@ find outputs_per_country/parquet -name "facilities_*.parquet" | wc -l
 
 # OR: All 5 scenarios
 ./submit_all_parallel_siting.sh --run-all-scenarios
+
+# OR: Single specific scenario (e.g., 90% only)
+./submit_all_parallel_siting.sh --supply-factor 0.9
 
 # Monitor
 tail -f outputs_global/logs/siting_*.out

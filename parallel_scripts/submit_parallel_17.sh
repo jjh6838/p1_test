@@ -32,9 +32,12 @@ PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
 echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
-# Check if running all scenarios (passed via sbatch --export)
+# Check scenario flags (passed via sbatch --export)
 SCENARIO_FLAG=""
-if [ "$RUN_ALL_SCENARIOS" = "1" ]; then
+if [ -n "$SUPPLY_FACTOR" ]; then
+    SCENARIO_FLAG="--supply-factor $SUPPLY_FACTOR"
+    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor)"
+elif [ "$RUN_ALL_SCENARIOS" = "1" ]; then
     SCENARIO_FLAG="--run-all-scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
