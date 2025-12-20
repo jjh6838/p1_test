@@ -69,13 +69,28 @@ if [ ! -f "$SCRIPT_FILE" ]; then
     exit 1
 fi
 
-echo "[INFO] Submitting script ${SCRIPT_NUM}..."
+# --- Determine log directory based on scenario ---
 if [ -n "$SUPPLY_FACTOR" ]; then
-    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
+    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor ${SCENARIO_PCT}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
+    LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
+    echo "[INFO] Running default scenario: 100%"
 fi
-sbatch $SBATCH_EXPORT "$SCRIPT_FILE"
+
+# Create log directory
+mkdir -p "$LOG_DIR"
+
+echo "[INFO] Submitting script ${SCRIPT_NUM}..."
+echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
+sbatch --output="${LOG_DIR}/parallel_${SCRIPT_NUM}_%j.out" \
+       --error="${LOG_DIR}/parallel_${SCRIPT_NUM}_%j.err" \
+       $SBATCH_EXPORT "$SCRIPT_FILE"
 
 echo ""
 echo "Monitor with:"

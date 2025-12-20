@@ -37,11 +37,23 @@ done
 # Build SBATCH_EXPORT based on flags
 if [ -n "$SUPPLY_FACTOR" ]; then
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
-    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    SCENARIO="2030_supply_${SCENARIO_PCT}%"
+    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor ${SCENARIO_PCT}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+    SCENARIO="all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    SCENARIO="2030_supply_100%"
+    echo "[INFO] Running default scenario: 100%"
 fi
+
+# Create scenario-specific log directory
+LOG_DIR="outputs_per_country/parquet/${SCENARIO}/logs"
+mkdir -p "$LOG_DIR"
+echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -59,7 +71,9 @@ echo ""
 # Submit all jobs
 for i in {01..40}; do
     echo "[$(date +%H:%M:%S)] Submitting job $i..."
-    sbatch $SBATCH_EXPORT parallel_scripts/submit_parallel_${i}.sh
+    sbatch --output="${LOG_DIR}/parallel_${i}_%j.out" \
+           --error="${LOG_DIR}/parallel_${i}_%j.err" \
+           $SBATCH_EXPORT parallel_scripts/submit_parallel_${i}.sh
     sleep 1  # Small delay to avoid overwhelming scheduler
 done
 

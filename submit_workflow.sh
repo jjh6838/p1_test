@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
-#SBATCH --output=outputs_global/logs/test_%j.out
-#SBATCH --error=outputs_global/logs/test_%j.err
+#SBATCH --output=outputs_per_country/logs/workflow_%j.out
+#SBATCH --error=outputs_per_country/logs/workflow_%j.err
 #SBATCH --mail-type=END,FAIL
 
 set -euo pipefail
@@ -17,7 +17,7 @@ echo "[INFO] Starting global results combination at $(date)"
 echo "[INFO] Memory: 64GB | CPUs: 40 | Time limit: 12h"
 
 # --- directories ---
-mkdir -p outputs_global outputs_global/logs
+mkdir -p outputs_per_country/logs outputs_global
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH

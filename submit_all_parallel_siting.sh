@@ -34,14 +34,25 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Build SBATCH_EXPORT based on flags
+# Build SBATCH_EXPORT based on flags and determine log directory
 if [ -n "$SUPPLY_FACTOR" ]; then
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
-    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
+    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor ${SCENARIO_PCT}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+    LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
+    echo "[INFO] Running default scenario: 100%"
 fi
+
+# Create log directory
+mkdir -p "$LOG_DIR"
+echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -59,7 +70,9 @@ echo ""
 # Submit all jobs
 for i in {01..25}; do
     echo "[$(date +%H:%M:%S)] Submitting siting job $i..."
-    sbatch $SBATCH_EXPORT parallel_scripts_siting/submit_parallel_siting_${i}.sh
+    sbatch --output="${LOG_DIR}/siting_${i}_%j.out" \
+           --error="${LOG_DIR}/siting_${i}_%j.err" \
+           $SBATCH_EXPORT parallel_scripts_siting/submit_parallel_siting_${i}.sh
     sleep 1
 done
 

@@ -200,7 +200,7 @@ chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 
 # Monitor progress
 squeue -u $USER
-tail -f outputs_global/logs/parallel_*.out
+tail -f outputs_per_country/logs/parallel_*.out
 ```
 
 ### Single Country (HPC Cluster)
@@ -622,7 +622,8 @@ Generate exposure analysis dataset across scenarios.
 │  └── 2030_supply_100%_add_v2/                                   │
 │      ├── centroids_{ISO3}_add_v2.parquet                        │
 │      ├── facilities_{ISO3}_add_v2.parquet  ← Includes synthetic │
-│      └── grid_lines_{ISO3}_add_v2.parquet  ← Includes networks  │
+│      ├── grid_lines_{ISO3}_add_v2.parquet  ← Includes networks  │
+│      └── polylines_{ISO3}_add_v2.parquet   ← Updated routes     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -715,7 +716,7 @@ chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # Monitor
 squeue -u $USER
-tail -f outputs_global/logs/parallel_*.out
+tail -f outputs_per_country/logs/parallel_*.out
 
 # Verify completion (~189 countries)
 find outputs_per_country/parquet -name "facilities_*.parquet" | wc -l
@@ -734,7 +735,7 @@ find outputs_per_country/parquet -name "facilities_*.parquet" | wc -l
 ./submit_all_parallel_siting.sh --supply-factor 0.9
 
 # Monitor
-tail -f outputs_global/logs/siting_*.out
+tail -f outputs_per_country/logs/siting_*.out
 
 # Verify completion
 find outputs_per_country/parquet -name "siting_clusters_*.parquet" | wc -l
@@ -825,19 +826,19 @@ print(gdf['line_type'].unique())
 
 ```bash
 # Check parallelization in logs
-grep "Using parallel processing" outputs_global/logs/parallel_*.out
+grep "Using parallel processing" outputs_per_country/logs/parallel_*.out
 
 # Verify CPU allocation
-grep "MAX_WORKERS" outputs_global/logs/parallel_*.out
+grep "MAX_WORKERS" outputs_per_country/logs/parallel_*.out
 ```
 
 ### Log Files
 
 | Log | Location | Content |
-|-----|----------|---------|
-| Supply jobs | `outputs_global/logs/parallel_*.out` | Processing output |
-| Siting jobs | `outputs_global/logs/siting_*.out` | Siting output |
-| Combination | `outputs_global/logs/test_*.out` | Merge output |
+|-----|----------|---------|  
+| Supply jobs | `outputs_per_country/logs/parallel_*.out` | Processing output |
+| Siting jobs | `outputs_per_country/logs/siting_*.out` | Siting output |
+| Combination | `outputs_per_country/logs/workflow_*.out` | Merge output |
 | Errors | `*.err` files | Error messages |
 
 ---

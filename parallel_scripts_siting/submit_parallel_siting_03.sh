@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=56
-#SBATCH --output=outputs_global/logs/siting_03_%j.out
-#SBATCH --error=outputs_global/logs/siting_03_%j.err
+#SBATCH --output=outputs_per_country/logs/siting_03_%j.out
+#SBATCH --error=outputs_per_country/logs/siting_03_%j.err
 #SBATCH --mail-type=END,FAIL
 
 set -euo pipefail
@@ -18,7 +18,7 @@ echo "[INFO] Processing 1 countries in this batch: USA"
 echo "[INFO] Tier: T1 | Memory: 95G | CPUs: 56 | Time: 12:00:00"
 
 # --- directories ---
-mkdir -p outputs_per_country outputs_global outputs_global/logs
+mkdir -p outputs_per_country/logs outputs_global
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -33,11 +33,12 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Check scenario flags (passed via sbatch --export)
+# Use ${VAR:-} syntax to avoid 'unbound variable' errors with set -u
 SCENARIO_FLAG=""
-if [ -n "$SUPPLY_FACTOR" ]; then
+if [ -n "${SUPPLY_FACTOR:-}" ]; then
     SCENARIO_FLAG="--supply-factor $SUPPLY_FACTOR"
     echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor)"
-elif [ "$RUN_ALL_SCENARIOS" = "1" ]; then
+elif [ "${RUN_ALL_SCENARIOS:-}" = "1" ]; then
     SCENARIO_FLAG="--run-all-scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi

@@ -150,7 +150,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         return False
     
     print(f"Creating {num_scripts} parallel scripts for {len(countries)} countries with tiered approach")
-    print(f"📊 Cluster optimization: {num_scripts} scripts = {num_scripts} nodes maximum utilization")
+    print(f"[INFO] Cluster optimization: {num_scripts} scripts = {num_scripts} nodes maximum utilization")
     
     # Define tiers based on country size/complexity. This is determined empirically based on
     # the computational intensity (number of centroids, grid lines) of each country.
@@ -290,7 +290,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check if any countries were not assigned
     unassigned_countries = set(countries) - assigned_countries
     if unassigned_countries:
-        print(f"\n⚠️  {len(unassigned_countries)} countries not assigned in first {num_scripts} scripts")
+        print(f"\n[WARNING] {len(unassigned_countries)} countries not assigned in first {num_scripts} scripts")
         print(f"   Creating additional scripts ({num_scripts+1}, {num_scripts+2}, ...) for unassigned countries")
         print(f"   Unassigned countries: {', '.join(sorted(list(unassigned_countries))[:20])}")
         if len(unassigned_countries) > 20:
@@ -330,8 +330,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={config["cpus"]}
-#SBATCH --output=outputs_global/logs/parallel_{i:02d}_%j.out
-#SBATCH --error=outputs_global/logs/parallel_{i:02d}_%j.err
+#SBATCH --output=outputs_per_country/logs/parallel_{i:02d}_%j.out
+#SBATCH --error=outputs_per_country/logs/parallel_{i:02d}_%j.err
 #SBATCH --mail-type=END,FAIL
 
 set -euo pipefail
@@ -342,7 +342,7 @@ echo "[INFO] Processing {len(batch)} countries in this batch: {', '.join(batch)}
 echo "[INFO] Tier: {tier.upper()} | Memory: {config['mem']} | CPUs: {config['cpus']} | Time: {config['time']}"
 
 # --- directories ---
-mkdir -p outputs_per_country outputs_global outputs_global/logs
+mkdir -p outputs_per_country/logs outputs_global
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -357,11 +357,12 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Check scenario flags (passed via sbatch --export)
+# Use ${{VAR:-}} syntax to avoid 'unbound variable' errors with set -u
 SCENARIO_FLAG=""
-if [ -n "$SUPPLY_FACTOR" ]; then
+if [ -n "${{SUPPLY_FACTOR:-}}" ]; then
     SCENARIO_FLAG="--supply-factor $SUPPLY_FACTOR"
     echo "[INFO] Running single scenario: ${{SUPPLY_FACTOR}} (supply factor)"
-elif [ "$RUN_ALL_SCENARIOS" = "1" ]; then
+elif [ "${{RUN_ALL_SCENARIOS:-}}" = "1" ]; then
     SCENARIO_FLAG="--run-all-scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
@@ -433,11 +434,23 @@ done
 # Build SBATCH_EXPORT based on flags
 if [ -n "$SUPPLY_FACTOR" ]; then
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
-    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    SCENARIO="2030_supply_${{SCENARIO_PCT}}%"
+    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor ${{SCENARIO_PCT}}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+    SCENARIO="all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    SCENARIO="2030_supply_100%"
+    echo "[INFO] Running default scenario: 100%"
 fi
+
+# Create scenario-specific log directory
+LOG_DIR="outputs_per_country/parquet/${{SCENARIO}}/logs"
+mkdir -p "$LOG_DIR"
+echo "[INFO] Logs will be saved to: ${{LOG_DIR}}/"
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -455,7 +468,9 @@ echo ""
 # Submit all jobs
 for i in {{01..{len(all_batches):02d}}}; do
     echo "[$(date +%H:%M:%S)] Submitting job $i..."
-    sbatch $SBATCH_EXPORT parallel_scripts/submit_parallel_${{i}}.sh
+    sbatch --output="${{LOG_DIR}}/parallel_${{i}}_%j.out" \\
+           --error="${{LOG_DIR}}/parallel_${{i}}_%j.err" \\
+           $SBATCH_EXPORT parallel_scripts/submit_parallel_${{i}}.sh
     sleep 1  # Small delay to avoid overwhelming scheduler
 done
 
@@ -492,8 +507,8 @@ echo "  Tier 5 (all others):           11 countries/script | Short partition (12
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
-#SBATCH --output=outputs_global/logs/test_%j.out
-#SBATCH --error=outputs_global/logs/test_%j.err
+#SBATCH --output=outputs_per_country/logs/workflow_%j.out
+#SBATCH --error=outputs_per_country/logs/workflow_%j.err
 #SBATCH --mail-type=END,FAIL
 
 set -euo pipefail
@@ -503,7 +518,7 @@ echo "[INFO] Starting global results combination at $(date)"
 echo "[INFO] Memory: 64GB | CPUs: 40 | Time limit: 12h"
 
 # --- directories ---
-mkdir -p outputs_global outputs_global/logs
+mkdir -p outputs_per_country/logs outputs_global
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -611,13 +626,28 @@ if [ ! -f "$SCRIPT_FILE" ]; then
     exit 1
 fi
 
-echo "[INFO] Submitting script ${SCRIPT_NUM}..."
+# --- Determine log directory based on scenario ---
 if [ -n "$SUPPLY_FACTOR" ]; then
-    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
+    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor ${SCENARIO_PCT}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
+    LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
+    echo "[INFO] Running default scenario: 100%"
 fi
-sbatch $SBATCH_EXPORT "$SCRIPT_FILE"
+
+# Create log directory
+mkdir -p "$LOG_DIR"
+
+echo "[INFO] Submitting script ${SCRIPT_NUM}..."
+echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
+sbatch --output="${LOG_DIR}/parallel_${SCRIPT_NUM}_%j.out" \\
+       --error="${LOG_DIR}/parallel_${SCRIPT_NUM}_%j.err" \\
+       $SBATCH_EXPORT "$SCRIPT_FILE"
 
 echo ""
 echo "Monitor with:"
@@ -647,16 +677,16 @@ echo "  watch -n 60 'squeue -u \\$USER'"
     for batch in all_batches:
         unique_countries_in_batches.update(batch["countries"])
     
-    print(f"\n📊 Coverage verification:")
+    print(f"\n[INFO] Coverage verification:")
     print(f"  Total countries to process: {len(countries)}")
     print(f"  Countries in batches: {total_countries_in_batches}")
     print(f"  Unique countries in batches: {len(unique_countries_in_batches)}")
     
     if len(unique_countries_in_batches) == len(countries):
-        print(f"  ✅ All countries covered!")
+        print(f"  [OK] All countries covered!")
     else:
         missing = set(countries) - unique_countries_in_batches
-        print(f"  ⚠️  WARNING: {len(missing)} countries NOT covered!")
+        print(f"  [WARNING] {len(missing)} countries NOT covered!")
         print(f"     Missing: {', '.join(sorted(list(missing))[:10])}")
     
     return True
@@ -781,7 +811,7 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
     # Check if any countries were not assigned
     unassigned_countries = set(countries) - assigned_countries
     if unassigned_countries:
-        print(f"\n⚠️  {len(unassigned_countries)} countries not assigned in first {num_scripts} scripts")
+        print(f"\n[WARNING] {len(unassigned_countries)} countries not assigned in first {num_scripts} scripts")
         print(f"   Creating additional scripts ({num_scripts+1}, {num_scripts+2}, ...) for unassigned countries")
         print(f"   Unassigned countries: {', '.join(sorted(list(unassigned_countries))[:20])}")
         if len(unassigned_countries) > 20:
@@ -819,8 +849,8 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={config["cpus"]}
-#SBATCH --output=outputs_global/logs/siting_{i:02d}_%j.out
-#SBATCH --error=outputs_global/logs/siting_{i:02d}_%j.err
+#SBATCH --output=outputs_per_country/logs/siting_{i:02d}_%j.out
+#SBATCH --error=outputs_per_country/logs/siting_{i:02d}_%j.err
 #SBATCH --mail-type=END,FAIL
 
 set -euo pipefail
@@ -831,7 +861,7 @@ echo "[INFO] Processing {len(batch)} countries in this batch: {', '.join(batch)}
 echo "[INFO] Tier: {tier.upper()} | Memory: {config['mem']} | CPUs: {config['cpus']} | Time: {config['time']}"
 
 # --- directories ---
-mkdir -p outputs_per_country outputs_global outputs_global/logs
+mkdir -p outputs_per_country/logs outputs_global
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -846,11 +876,12 @@ echo "[INFO] Using Python: $PY"
 $PY -c 'import sys; print(sys.executable)'
 
 # Check scenario flags (passed via sbatch --export)
+# Use ${{VAR:-}} syntax to avoid 'unbound variable' errors with set -u
 SCENARIO_FLAG=""
-if [ -n "$SUPPLY_FACTOR" ]; then
+if [ -n "${{SUPPLY_FACTOR:-}}" ]; then
     SCENARIO_FLAG="--supply-factor $SUPPLY_FACTOR"
     echo "[INFO] Running single scenario: ${{SUPPLY_FACTOR}} (supply factor)"
-elif [ "$RUN_ALL_SCENARIOS" = "1" ]; then
+elif [ "${{RUN_ALL_SCENARIOS:-}}" = "1" ]; then
     SCENARIO_FLAG="--run-all-scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
@@ -915,14 +946,25 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Build SBATCH_EXPORT based on flags
+# Build SBATCH_EXPORT based on flags and determine log directory
 if [ -n "$SUPPLY_FACTOR" ]; then
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
-    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${{SCENARIO_PCT}}%/logs"
+    echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor ${{SCENARIO_PCT}}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
+    LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
+    echo "[INFO] Running default scenario: 100%"
 fi
+
+# Create log directory
+mkdir -p "$LOG_DIR"
+echo "[INFO] Logs will be saved to: ${{LOG_DIR}}/"
 
 # --- Conda bootstrap ---
 export PATH=/soge-home/users/lina4376/miniconda3/bin:$PATH
@@ -940,7 +982,9 @@ echo ""
 # Submit all jobs
 for i in {{01..{len(all_batches):02d}}}; do
     echo "[$(date +%H:%M:%S)] Submitting siting job $i..."
-    sbatch $SBATCH_EXPORT parallel_scripts_siting/submit_parallel_siting_${{i}}.sh
+    sbatch --output="${{LOG_DIR}}/siting_${{i}}_%j.out" \\
+           --error="${{LOG_DIR}}/siting_${{i}}_%j.err" \\
+           $SBATCH_EXPORT parallel_scripts_siting/submit_parallel_siting_${{i}}.sh
     sleep 1
 done
 
@@ -1038,13 +1082,28 @@ if [ ! -f "$SCRIPT_FILE" ]; then
     exit 1
 fi
 
-echo "[INFO] Submitting siting script ${SCRIPT_NUM}..."
+# --- Determine log directory based on scenario ---
 if [ -n "$SUPPLY_FACTOR" ]; then
-    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor)"
+    # Convert supply factor to percentage (e.g., 0.9 -> 90)
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
+    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor ${SCENARIO_PCT}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
+    LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+else
+    LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
+    echo "[INFO] Running default scenario: 100%"
 fi
-sbatch $SBATCH_EXPORT "$SCRIPT_FILE"
+
+# Create log directory
+mkdir -p "$LOG_DIR"
+
+echo "[INFO] Submitting siting script ${SCRIPT_NUM}..."
+echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
+sbatch --output="${LOG_DIR}/siting_${SCRIPT_NUM}_%j.out" \\
+       --error="${LOG_DIR}/siting_${SCRIPT_NUM}_%j.err" \\
+       $SBATCH_EXPORT "$SCRIPT_FILE"
 
 echo ""
 echo "Monitor with:"
@@ -1073,16 +1132,16 @@ echo "  watch -n 60 'squeue -u \\$USER'"
     for batch in all_batches:
         unique_countries_in_batches.update(batch["countries"])
     
-    print(f"\n📊 Coverage verification (siting):")
+    print(f"\n[INFO] Coverage verification (siting):")
     print(f"  Total countries to process: {len(countries)}")
     print(f"  Countries in batches: {total_countries_in_batches}")
     print(f"  Unique countries in batches: {len(unique_countries_in_batches)}")
     
     if len(unique_countries_in_batches) == len(countries):
-        print(f"  ✅ All countries covered!")
+        print(f"  [OK] All countries covered!")
     else:
         missing = set(countries) - unique_countries_in_batches
-        print(f"  ⚠️  WARNING: {len(missing)} countries NOT covered!")
+        print(f"  [WARNING] {len(missing)} countries NOT covered!")
         print(f"     Missing: {', '.join(sorted(list(missing))[:10])}")
     
     return True
