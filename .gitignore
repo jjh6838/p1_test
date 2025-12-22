@@ -9,6 +9,7 @@ bigdata_solar_cmip6/
 bigdata_wind_atlas/
 bigdata_wind_cmip6/
 bigdata_wind_era5/
+bigdata_solar_wind_ms/
 bigdata_hydro_atlas/
 bigdata_hydro_cmip6/
 bigdata_hydro_era5_land/

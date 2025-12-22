@@ -171,7 +171,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "170G", "cpus": 36, "time": "168:00:00", "partition": "Interactive"},  # CHN - needs 3+ days, targets cn16 (180GB, 36 CPUs)
+        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 56, "time": "168:00:00", "partition": "Interactive", "nodelist": "ouce-cn09"},  # CHN - targets ouce-cn09 (500GB, 56 CPUs)
         "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU - Long partition (7 days)
         "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h)
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
@@ -320,6 +320,11 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         tier = batch_info["tier"]
         config = batch_info["config"]
         
+        # Build optional nodelist directive
+        nodelist_directive = ""
+        if "nodelist" in config and config["nodelist"]:
+            nodelist_directive = f"\n#SBATCH --nodelist={config['nodelist']}"
+        
         # The script content includes SLURM directives (#SBATCH) which request the necessary
         # resources (time, memory, CPUs) from the cluster scheduler.
         script_content = f"""#!/bin/bash --login
@@ -329,7 +334,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
 #SBATCH --mem={config["mem"]}
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task={config["cpus"]}
+#SBATCH --cpus-per-task={config["cpus"]}{nodelist_directive}
 #SBATCH --output=outputs_per_country/logs/parallel_{i:02d}_%j.out
 #SBATCH --error=outputs_per_country/logs/parallel_{i:02d}_%j.err
 #SBATCH --mail-type=END,FAIL
