@@ -57,10 +57,11 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── # ═══ Data Preparation Scripts ═══
 ├── p1_a_ember_gem_2024.py             # Harmonize Ember + Global Energy Monitor data
 ├── p1_b_ember_2024_30_50.py           # Project 2030/2050 energy scenarios
-├── p1_c_cmip6_solar.py                # CMIP6 solar radiation projections
-├── p1_d_cmip6_wind.py                 # CMIP6 wind power density projections
-├── p1_e_cmip6_hydro.py                # ERA5-Land + CMIP6 runoff projections
-├── p1_f_hydroatlas.py                 # HydroATLAS river reach projections
+├── p1_c_prep_landcover.py             # Download ESA CCI Land Cover 2022 from CDS
+├── p1_d_viable_solar.py               # CMIP6 solar projections + viability filter
+├── p1_e_viable_wind.py                # CMIP6 wind projections + viability filter
+├── p1_f_utils_hydro.py                # Shared utilities for hydro processing
+├── p1_f_viable_hydro.py               # ERA5-Land/CMIP6 runoff + RiverATLAS
 │
 ├── # ═══ Core Analysis Scripts ═══
 ├── process_country_supply.py          # Main supply-demand network analysis
@@ -93,11 +94,14 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── bigdata_eez/                       # Marine Regions EEZ boundaries
 ├── bigdata_gridfinder/                # GridFinder electrical grid data
 ├── bigdata_settlements_jrc/           # JRC GHS-POP population raster
+├── bigdata_landcover/                 # ESA CCI Land Cover 2022
 ├── bigdata_solar_pvout/               # Global Solar Atlas baseline
 ├── bigdata_wind_atlas/                # Global Wind Atlas baseline
-├── bigdata_solar_cmip6/               # CMIP6 solar projections
-├── bigdata_wind_cmip6/                # CMIP6 wind projections
-├── bigdata_hydro_cmip6/               # CMIP6 runoff projections
+├── bigdata_solar_wind_ms/             # Microsoft renewable energy sites
+├── bigdata_landcover_cds/             # ESA CCI Land Cover 2022 (downloads/extracted/outputs)
+├── bigdata_solar_cmip6/               # CMIP6 solar projections + outputs
+├── bigdata_wind_cmip6/                # CMIP6 wind projections + outputs
+├── bigdata_hydro_cmip6/               # CMIP6 runoff projections + outputs
 ├── bigdata_hydro_era5_land/           # ERA5-Land runoff data
 ├── bigdata_hydro_atlas/               # HydroATLAS river datasets
 ├── data_energy_ember/                 # Ember electricity statistics
@@ -110,9 +114,7 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── outputs_global/                    # Combined global GeoPackage outputs
 ├── outputs_processed_data/            # Processed analysis results
 └── outputs_processed_fig/             # Generated figures
-```
-
----
+```---
 
 ## Installation
 
@@ -265,12 +267,28 @@ All configurable parameters are centralized in `config.py`:
 | `POP_AGGREGATION_FACTOR` | 10 | Aggregation factor for population grid |
 | `TARGET_RESOLUTION_ARCSEC` | 300 | Final resolution (~9km at equator) |
 
-> **Note**: After changing `POP_AGGREGATION_FACTOR`, regenerate CMIP6 outputs:
+> **Note**: After changing `POP_AGGREGATION_FACTOR`, regenerate resource outputs:
 > ```bash
-> python p1_c_cmip6_solar.py --process-only
-> python p1_d_cmip6_wind.py --process-only
-> python p1_e_cmip6_hydro.py --process-only
+> python p1_d_viable_solar.py --process-only
+> python p1_e_viable_wind.py --process-only
+> python p1_f_viable_hydro.py --process-only
 > ```
+
+### Viability Thresholds
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `SOLAR_PVOUT_THRESHOLD` | 3.0 | Min PVOUT (kWh/kWp/day) for viable solar |
+| `WIND_WPD_THRESHOLD` | 150 | Min WPD at 100m (W/m²) for viable wind |
+| `HYDRO_RUNOFF_THRESHOLD_MM` | 100 | Min runoff (mm/year) for viable hydro |
+
+### Land Cover Valid Classes (ESA CCI)
+
+| Parameter | Classes | Description |
+|-----------|---------|-------------|
+| `LANDCOVER_VALID_SOLAR` | 10, 20, 30, 40, 130, 150, 200 | Cropland, grassland, sparse veg, bare |
+| `LANDCOVER_VALID_WIND` | 10, 20, 30, 40, 130, 150, 200 | Same as solar (open terrain) |
+| `LANDCOVER_VALID_HYDRO` | 160, 170, 180, 210 | Flooded areas, water bodies |
 
 ### Network Settings
 
@@ -304,6 +322,9 @@ All configurable parameters are centralized in `config.py`:
 | **Solar Baseline** | `bigdata_solar_pvout/PVOUT.tif` | [Global Solar Atlas](https://globalsolaratlas.info/) | PVOUT baseline |
 | **Wind Baseline** | `bigdata_wind_atlas/gasp_*.tif` | [Global Wind Atlas](https://globalwindatlas.info/) | Wind power density |
 | **HydroATLAS** | `bigdata_hydro_atlas/RiverATLAS_Data_v10.gdb` | [HydroATLAS](https://www.hydrosheds.org/hydroatlas) | River reach attributes |
+| **MS Solar Sites** | `bigdata_solar_wind_ms/solar_all_2024q2_v1.gpkg` | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Existing solar installations (polygons, EPSG:3857) |
+| **MS Wind Sites** | `bigdata_solar_wind_ms/wind_all_2024q2_v1.gpkg` | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Existing wind installations (points, EPSG:3857) |
+| **ESA Land Cover** | `bigdata_landcover_cds/outputs/landcover_2022_300arcsec.tif` | [CDS ERA5-Land](https://cds.climate.copernicus.eu/) | ESA CCI Land Cover 2022 (upscaled, GHS-POP aligned) |
 
 ### Energy Statistics
 
@@ -342,67 +363,118 @@ Projects 2030 and 2050 electricity generation scenarios.
 
 **Output:** `data_facilities_gem/p1_b_ember_2024_30_50.xlsx`
 
-#### `p1_c_cmip6_solar.py` / `p1_d_cmip6_wind.py`
-Generate CMIP6-based climate projections for solar and wind resources.
+#### `p1_c_prep_landcover.py`
+Download ESA CCI Land Cover 2022 from Copernicus Climate Data Store.
 
-**Method:**
-1. Download CMIP6 ensemble data (CESM2, EC-Earth3-veg-lr, MPI-ESM1-2-lr)
-2. Calculate delta: Δ = Future_period / Historical_period
-3. Apply to baseline: Future = Baseline × Δ
-4. Compute uncertainty (interquartile range)
+**Features:**
+- Downloads global land cover at ~300m resolution (10 arcsec native)
+- Converts NetCDF to GeoTIFF format
+- Upscales to 300 arcsec with GHS-POP grid alignment (mode resampling)
+- Used for viability filtering in solar/wind/hydro scripts
 
-**Outputs:**
-- `bigdata_solar_cmip6/outputs/PVOUT_{year}_300arcsec.tif`
-- `bigdata_wind_cmip6/outputs/WPD100_{year}_300arcsec.tif`
+**Output:**
+- `bigdata_landcover_cds/extracted/C3S-LC-L4-LCCS-Map-300m-P1Y-2022-v2.1.1.nc` (raw NetCDF)
+- `bigdata_landcover_cds/outputs/landcover_2022_10arcsec.tif` (native resolution)
+- `bigdata_landcover_cds/outputs/landcover_2022_300arcsec.tif` (upscaled, GHS-POP aligned)
 
-#### `p1_e_cmip6_hydro.py`
-Generate ERA5-Land + CMIP6 based runoff projections for hydropower potential.
+#### `p1_d_viable_solar.py` / `p1_e_viable_wind.py`
+Generate CMIP6-based climate projections for solar and wind resources with viability filtering.
+
+**Viability Filter Logic:**
+A cell (300 arcsec) is considered viable if:
+1. **MS site present** — Microsoft renewable energy dataset shows existing installation, OR
+2. **Land cover valid AND resource >= threshold** — ESA CCI land cover is suitable AND resource value meets minimum threshold
+
+**Thresholds (configurable in `config.py`):**
+- Solar: `SOLAR_PVOUT_THRESHOLD = 3.0` kWh/kWp/day
+- Wind: `WIND_WPD_THRESHOLD = 150` W/m²
 
 **Data Sources:**
-- **Baseline**: ERA5-Land monthly runoff (reanalysis, 0.1° resolution)
-- **Climate projections**: CMIP6 `total_runoff` (SSP2-4.5 scenario)
+- **Microsoft Viable Sites**: `bigdata_solar_wind_ms/solar_all_2024q2_v1.gpkg` (polygons), `wind_all_2024q2_v1.gpkg` (points)
+- **ESA CCI Land Cover**: Classes 10-40 (cropland), 130 (grassland), 150 (sparse vegetation), 200 (bare areas)
+- **CMIP6 Models**: CESM2, EC-Earth3-veg-lr, MPI-ESM1-2-lr (ensemble mean + IQR uncertainty)
 
 **Method:**
-1. Download ERA5-Land runoff via CDS API (1995-2014 baseline)
-2. Download CMIP6 total_runoff for historical and future periods
-3. Calculate annual mean baseline from ERA5-Land
-4. Compute delta ratios: Δ = CMIP6_future / CMIP6_historical
-5. Apply deltas to ERA5 baseline: Future = Baseline × Δ
-6. Clip extreme deltas [0.2, 3.0] for robustness
+1. Download CMIP6 ensemble data for historical + SSP245
+2. Calculate delta: Δ = Future_period / Historical_period
+3. Apply to baseline: Future = Baseline × Δ
+4. Apply viability filter: MS_present OR (landcover_valid AND resource >= threshold)
+5. Compute uncertainty (interquartile range)
+
+**Usage:**
+```bash
+# Download only
+python p1_d_viable_solar.py --download-only
+
+# Process only (assumes downloads exist)
+python p1_d_viable_solar.py --process-only
+
+# Full pipeline
+python p1_d_viable_solar.py
+```
+
+**Outputs:**
+- GeoTIFF rasters (global, all cells with viability filter applied):
+  - `bigdata_solar_cmip6/outputs/PVOUT_{2030,2050}_300arcsec.tif`
+  - `bigdata_wind_cmip6/outputs/WPD100_{2030,2050}_300arcsec.tif`
+- Parquet centroids (viable cells only, resource >= threshold):
+  - `bigdata_solar_cmip6/outputs/PVOUT_{2030,2050}_300arcsec.parquet`
+  - `bigdata_wind_cmip6/outputs/WPD100_{2030,2050}_300arcsec.parquet`
+
+#### `p1_f_viable_hydro.py`
+Unified hydro processing: ERA5-Land/CMIP6 runoff projections + RiverATLAS river reach projections.
+
+**Data Sources:**
+- **Runoff Baseline**: ERA5-Land monthly runoff (reanalysis, 0.1° resolution)
+- **Climate Projections**: CMIP6 `total_runoff` (SSP2-4.5 scenario)
+- **River Network**: HydroATLAS RiverATLAS river reach dataset
+
+**Processing Parts:**
+
+1. **Part 1: ERA5-Land + CMIP6 Runoff**
+   - Download ERA5-Land runoff baseline (1995-2014)
+   - Download CMIP6 total_runoff for historical + SSP245
+   - Compute delta: Δ = CMIP6_future / CMIP6_historical
+   - Apply delta to ERA5-Land baseline
+   - Regrid to 300 arcsec (aligned with GHS-POP)
+   - Apply hydro filter (water/wetland OR river proximity)
+
+2. **Part 2: RiverATLAS Projections**
+   - Load RiverATLAS river reaches with discharge (dis_m3_pyr)
+   - Generate 5km river proximity mask
+   - Extract delta values at river reach centroids
+   - Apply delta to baseline discharge: Future_Q = Baseline_Q × Δ
+
+3. **Part 3: Viable Hydro Centroids**
+   - Combine runoff-based centroids (from Part 1 rasters)
+   - Combine river-based centroids (from Part 2 reaches)
+   - Apply runoff threshold filter (configurable in config.py)
 
 **CMIP6 Models:**
 - CESM2, EC-Earth3-veg-lr, MPI-ESM1-2-lr (ensemble mean)
 
+**Usage:**
+```bash
+# Download all data
+python p1_f_viable_hydro.py --download-only
+
+# Process only (assumes downloads exist)
+python p1_f_viable_hydro.py --process-only
+
+# Generate river proximity mask only
+python p1_f_viable_hydro.py --mask-only
+
+# Full pipeline
+python p1_f_viable_hydro.py
+```
+
 **Outputs:**
 - `bigdata_hydro_cmip6/outputs/HYDRO_RUNOFF_baseline_300arcsec.tif`
 - `bigdata_hydro_cmip6/outputs/HYDRO_RUNOFF_{2030,2050}_300arcsec.tif`
-- `bigdata_hydro_cmip6/outputs/HYDRO_DELTA_{2030,2050}_300arcsec.tif`
-
-#### `p1_f_hydroatlas.py`
-Apply CMIP6 runoff change factors to HydroATLAS river reach data.
-
-**Prerequisites:**
-- RiverATLAS dataset from [HydroATLAS](https://www.hydrosheds.org/hydroatlas)
-- Delta rasters from `p1_e_cmip6_hydro.py`
-
-**Method:**
-1. Load RiverATLAS river reach geometries and attributes
-2. Extract CMIP6 delta values at each river reach centroid
-3. Apply deltas to baseline discharge: Future_Q = Baseline_Q × Δ
-4. Compute hydropower potential indicator: P ∝ Q × gradient × elevation
-5. Filter by minimum discharge and stream order thresholds
-
-**Key Attributes Used:**
-- `dis_m3_pyr`: Mean annual discharge (m³/year)
-- `run_mm_cyr`: Land surface runoff (mm/year)
-- `sgr_dk_rav`: Stream gradient (‰)
-- `ele_mt_uav`: Upstream mean elevation (m)
-- `ord_stra`: Strahler stream order
-
-**Outputs:**
-- `bigdata_hydro_atlas/outputs/RiverATLAS_projected_{2030,2050}.parquet`
-- `bigdata_hydro_atlas/outputs/RiverATLAS_baseline.parquet`
-- `bigdata_hydro_atlas/outputs/RiverATLAS_projected.gpkg`
+- `bigdata_hydro_cmip6/outputs/HYDRO_ATLAS_DELTA_{2030,2050}_300arcsec.tif`
+- `bigdata_hydro_cmip6/outputs/river_proximity_mask_5km.tif`
+- `bigdata_hydro_cmip6/outputs/RiverATLAS_projected_{2030,2050}.parquet`
+- `bigdata_hydro_cmip6/outputs/HYDRO_VIABLE_CENTROIDS_{2030,2050}.parquet`
 
 ---
 

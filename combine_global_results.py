@@ -63,7 +63,7 @@ def get_cmip6_layer_paths(year: int) -> dict:
         # Wind layers
         "wpd": wind_dir / f"WPD100_{year}_{suffix}.parquet",
         "wpd_uncertainty": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.parquet",
-        "wpd_baseline": wind_dir / f"WPD100_ERA5_baseline_{suffix}.parquet",
+        "wpd_baseline": wind_dir / f"WPD100_baseline_{suffix}.parquet",
         # Solar layers
         "pvout": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
         "pvout_uncertainty": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
@@ -71,10 +71,14 @@ def get_cmip6_layer_paths(year: int) -> dict:
         # Hydro runoff layers (gridded)
         "runoff": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
         "runoff_uncertainty": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
-        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_ERA5_baseline_{suffix}.parquet",
+        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
         # HydroATLAS river reach layers
         "riveratlas": hydro_atlas_dir / f"RiverATLAS_projected_{year}.parquet",
         "riveratlas_baseline": hydro_atlas_dir / "RiverATLAS_baseline.parquet",
+        # Unified viable centroids
+        "solar_viable": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.parquet",
+        "wind_viable": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.parquet",
+        "hydro_viable": hydro_dir / f"HYDRO_VIABLE_CENTROIDS_{year}.parquet",
     }
 
 
@@ -90,7 +94,7 @@ def load_cmip6_layers_global(year: int, logger) -> dict:
     # Check if any CMIP6 files exist
     existing_files = {k: v for k, v in cmip6_paths.items() if v.exists()}
     if not existing_files:
-        logger.warning("No CMIP6 parquet files found. Run p1_c_cmip6_solar.py, p1_d_cmip6_wind.py, and p1_e_cmip6_hydro.py first.")
+        logger.warning("No CMIP6 parquet files found. Run p1_d_viable_solar.py, p1_e_viable_wind.py, and p1_f_viable_hydro.py first.")
         return {}
     
     loaded_layers = {}

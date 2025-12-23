@@ -1,6 +1,6 @@
 """
-p1_c_cmip6_solar.py
-===================
+p1_d_viable_solar.py
+====================
 CMIP6 Delta Method for Solar PV Output (PVOUT) Projections
 
 Methodology:
@@ -32,6 +32,7 @@ import xarray as xr
 import rasterio
 from rasterio.transform import from_bounds
 from rasterio.warp import reproject, Resampling
+from rasterio.features import rasterize
 from scipy.interpolate import RegularGridInterpolator
 
 import cdsapi
@@ -90,6 +91,13 @@ SCENARIO = "ssp2_4_5"
 
 # Output resolution settings - imported from shared config for consistency
 from config import POP_AGGREGATION_FACTOR, TARGET_RESOLUTION_ARCSEC, GHS_POP_NATIVE_RESOLUTION_ARCSEC
+from config import LANDCOVER_VALID_SOLAR, SOLAR_PVOUT_THRESHOLD
+
+# Land cover data path
+LANDCOVER_PATH = Path(get_bigdata_path("bigdata_landcover_cds")) / "outputs" / "landcover_2022_300arcsec.tif"
+
+# Microsoft viable solar sites (pre-identified solar installations)
+MS_SOLAR_PATH = Path(get_bigdata_path("bigdata_solar_wind_ms")) / "solar_all_2024q2_v1.gpkg"
 
 
 # =============================================================================
@@ -504,7 +512,7 @@ def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
 
 def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
                     out_path: Path, value_column: str = "value", nodata: float = 0) -> None:
-    """Save data array as Parquet centroids (points with values)."""
+    """Save data array as Parquet centroids (points with values > 0)."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Ensure lats are in correct order for grid creation
@@ -532,6 +540,194 @@ def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
     # Save as parquet
     gdf.to_parquet(out_path)
     print(f"  Saved: {out_path} ({len(gdf):,} points)")
+
+
+def save_viable_centroids(data_projected: np.ndarray, data_baseline: np.ndarray,
+                          data_uncertainty: np.ndarray, lons: np.ndarray, lats: np.ndarray,
+                          out_path: Path, year: str, resource_name: str = "pvout") -> None:
+    """
+    Save viable centroids with unified schema across solar/wind/hydro.
+    
+    Schema: geometry, source, value_{year}, value_baseline, delta, uncertainty
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Ensure lats are in correct order for grid creation
+    if lats[0] > lats[-1]:
+        lats = lats[::-1]
+        data_projected = data_projected[::-1, :]
+        data_baseline = data_baseline[::-1, :]
+        data_uncertainty = data_uncertainty[::-1, :]
+    
+    # Create meshgrid of coordinates
+    lon_grid, lat_grid = np.meshgrid(lons, lats)
+    
+    # Flatten arrays
+    lon_flat = lon_grid.ravel()
+    lat_flat = lat_grid.ravel()
+    proj_flat = data_projected.ravel()
+    base_flat = data_baseline.ravel()
+    unc_flat = data_uncertainty.ravel()
+    
+    # Filter to valid cells (projected value > 0)
+    valid_mask = ~np.isnan(proj_flat) & (proj_flat > 0)
+    
+    # Compute delta
+    with np.errstate(divide='ignore', invalid='ignore'):
+        delta = np.where(base_flat > 0, proj_flat / base_flat, 1.0)
+    
+    # Create GeoDataFrame with unified schema
+    gdf = gpd.GeoDataFrame({
+        'geometry': gpd.points_from_xy(lon_flat[valid_mask], lat_flat[valid_mask]),
+        'source': resource_name,
+        f'value_{year}': proj_flat[valid_mask],
+        'value_baseline': base_flat[valid_mask],
+        'delta': delta[valid_mask],
+        'uncertainty': unc_flat[valid_mask],
+    }, crs="EPSG:4326")
+    
+    # Save as parquet
+    gdf.to_parquet(out_path)
+    print(f"  Saved: {out_path} ({len(gdf):,} centroids)")
+
+
+def apply_viability_filter(data: np.ndarray, 
+                            target_lons: np.ndarray, 
+                            target_lats: np.ndarray,
+                            landcover_path: Path,
+                            valid_classes: list,
+                            resource_threshold: float,
+                            ms_viable_path: Path = None,
+                            nodata_value: float = 0) -> np.ndarray:
+    """
+    Apply combined viability filter:
+    Keep cell if (MS site present) OR (land cover valid AND resource >= threshold).
+    
+    Args:
+        data: Input data array at target resolution (resource values)
+        target_lons: Target longitude coordinates (1D array)
+        target_lats: Target latitude coordinates (1D array, descending)
+        landcover_path: Path to ESA CCI land cover GeoTIFF
+        valid_classes: List of valid land cover class codes
+        resource_threshold: Minimum resource value for viability (when using land cover)
+        ms_viable_path: Path to Microsoft viable sites GeoPackage (optional)
+        nodata_value: Value to use for masked cells
+    
+    Returns:
+        Filtered data array with invalid areas set to nodata_value
+    """
+    height, width = data.shape
+    
+    # Ensure lats are descending for standard GeoTIFF orientation
+    if target_lats[0] < target_lats[-1]:
+        target_lats = target_lats[::-1]
+    
+    target_transform = from_bounds(
+        target_lons.min(), target_lats.min(), 
+        target_lons.max(), target_lats.max(),
+        width, height
+    )
+    
+    # Initialize masks
+    ms_mask = np.zeros((height, width), dtype=bool)
+    lc_mask = np.zeros((height, width), dtype=bool)
+    
+    # -------------------------------------------------------------------------
+    # 1. Microsoft viable sites (unconditionally viable if present)
+    # -------------------------------------------------------------------------
+    if ms_viable_path is not None and ms_viable_path.exists():
+        print(f"\n--- Loading MS viable sites ---")
+        print(f"  Loading: {ms_viable_path.name}")
+        
+        gdf_ms = gpd.read_file(ms_viable_path)
+        print(f"  Loaded {len(gdf_ms):,} features (CRS: {gdf_ms.crs})")
+        
+        gdf_ms = gdf_ms.to_crs("EPSG:4326")
+        
+        # Filter out None and empty geometries to avoid rasterization warnings
+        shapes = [(geom, 1) for geom in gdf_ms.geometry 
+                  if geom is not None and not geom.is_empty and geom.is_valid]
+        n_skipped = len(gdf_ms) - len(shapes)
+        if n_skipped > 0:
+            print(f"  Skipped {n_skipped:,} invalid/empty geometries")
+        
+        if shapes:
+            ms_rasterized = rasterize(
+                shapes=shapes,
+                out_shape=(height, width),
+                transform=target_transform,
+                fill=0,
+                dtype=np.uint8,
+                all_touched=True
+            )
+            ms_mask = ms_rasterized > 0
+            n_ms_valid = np.sum(ms_mask)
+            print(f"  Cells with MS sites: {n_ms_valid:,}")
+    elif ms_viable_path is not None:
+        print(f"  [WARNING] MS viable sites not found: {ms_viable_path}")
+    
+    # -------------------------------------------------------------------------
+    # 2. Land cover filter (requires resource threshold)
+    # -------------------------------------------------------------------------
+    if landcover_path.exists():
+        print(f"\n--- Loading land cover (valid classes: {valid_classes}) ---")
+        print(f"  Loading: {landcover_path.name}")
+        
+        with rasterio.open(landcover_path) as src:
+            lc_data = src.read(1)
+            lc_transform = src.transform
+            lc_crs = src.crs
+        
+        # Create binary mask: 1 if in valid_classes
+        binary_mask = np.zeros_like(lc_data, dtype=np.uint8)
+        for cls in valid_classes:
+            binary_mask[lc_data == cls] = 1
+        
+        # Reproject to target grid using max (any presence)
+        lc_mask_reprojected = np.zeros((height, width), dtype=np.uint8)
+        reproject(
+            source=binary_mask,
+            destination=lc_mask_reprojected,
+            src_transform=lc_transform,
+            src_crs=lc_crs,
+            dst_transform=target_transform,
+            dst_crs="EPSG:4326",
+            resampling=Resampling.max
+        )
+        lc_mask = lc_mask_reprojected > 0
+        n_lc_valid = np.sum(lc_mask)
+        print(f"  Cells with valid land cover: {n_lc_valid:,}")
+    else:
+        print(f"  [WARNING] Land cover file not found: {landcover_path}")
+    
+    # -------------------------------------------------------------------------
+    # 3. Apply combined viability logic
+    # -------------------------------------------------------------------------
+    # Resource threshold mask
+    resource_valid = data >= resource_threshold
+    n_resource_valid = np.sum(resource_valid & (data > 0))
+    print(f"\n--- Applying viability filter (threshold >= {resource_threshold}) ---")
+    print(f"  Cells meeting resource threshold: {n_resource_valid:,}")
+    
+    # Combined logic: MS_present OR (landcover_valid AND resource >= threshold)
+    combined_mask = ms_mask | (lc_mask & resource_valid)
+    
+    n_ms_only = np.sum(ms_mask & ~(lc_mask & resource_valid))
+    n_lc_resource = np.sum(~ms_mask & lc_mask & resource_valid)
+    n_both = np.sum(ms_mask & lc_mask & resource_valid)
+    n_total = np.sum(combined_mask)
+    pct_total = 100 * n_total / combined_mask.size
+    
+    print(f"  Viable by MS sites only: {n_ms_only:,}")
+    print(f"  Viable by land cover + resource: {n_lc_resource:,}")
+    print(f"  Viable by both criteria: {n_both:,}")
+    print(f"  Total viable cells: {n_total:,} ({pct_total:.2f}%)")
+    
+    # Apply mask
+    data_filtered = data.copy()
+    data_filtered[~combined_mask] = nodata_value
+    
+    return data_filtered
 
 
 # =============================================================================
@@ -689,6 +885,31 @@ def run_processing(workdir: Path, pvout_path: Path):
     print(f"\n--- Output shape: {pvout_2030_ensemble.shape} ---")
     
     # -------------------------------------------------------------------------
+    # Apply viability filter: MS_present OR (landcover_valid AND resource >= threshold)
+    # -------------------------------------------------------------------------
+    pvout_2030_ensemble = apply_viability_filter(
+        pvout_2030_ensemble, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_SOLAR,
+        resource_threshold=SOLAR_PVOUT_THRESHOLD, ms_viable_path=MS_SOLAR_PATH, nodata_value=0
+    )
+    pvout_2050_ensemble = apply_viability_filter(
+        pvout_2050_ensemble, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_SOLAR,
+        resource_threshold=SOLAR_PVOUT_THRESHOLD, ms_viable_path=MS_SOLAR_PATH, nodata_value=0
+    )
+    pvout_baseline = apply_viability_filter(
+        pvout_baseline, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_SOLAR,
+        resource_threshold=SOLAR_PVOUT_THRESHOLD, ms_viable_path=MS_SOLAR_PATH, nodata_value=0
+    )
+    # Uncertainty rasters: use threshold=0 to keep all cells that pass viability
+    pvout_2030_iqr = apply_viability_filter(
+        pvout_2030_iqr, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_SOLAR,
+        resource_threshold=0, ms_viable_path=MS_SOLAR_PATH, nodata_value=0
+    )
+    pvout_2050_iqr = apply_viability_filter(
+        pvout_2050_iqr, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_SOLAR,
+        resource_threshold=0, ms_viable_path=MS_SOLAR_PATH, nodata_value=0
+    )
+    
+    # -------------------------------------------------------------------------
     # Save outputs (GeoTIFF and Parquet)
     # -------------------------------------------------------------------------
     print("\n--- Saving outputs (GeoTIFF) ---")
@@ -701,13 +922,20 @@ def run_processing(workdir: Path, pvout_path: Path):
     save_geotiff(pvout_2050_iqr, lons, lats, out_dir / f"PVOUT_UNCERTAINTY_2050_{suffix}.tif")
     save_geotiff(pvout_baseline, lons, lats, out_dir / f"PVOUT_baseline_{suffix}.tif")
     
-    print("\n--- Saving outputs (Parquet centroids) ---")
+    print("\n--- Saving outputs (Parquet viable centroids) ---")
     
     save_as_parquet(pvout_2030_ensemble, lons, lats, out_dir / f"PVOUT_2030_{suffix}.parquet", "PVOUT_2030")
     save_as_parquet(pvout_2050_ensemble, lons, lats, out_dir / f"PVOUT_2050_{suffix}.parquet", "PVOUT_2050")
     save_as_parquet(pvout_2030_iqr, lons, lats, out_dir / f"PVOUT_UNCERTAINTY_2030_{suffix}.parquet", "PVOUT_UNC_2030")
     save_as_parquet(pvout_2050_iqr, lons, lats, out_dir / f"PVOUT_UNCERTAINTY_2050_{suffix}.parquet", "PVOUT_UNC_2050")
     save_as_parquet(pvout_baseline, lons, lats, out_dir / f"PVOUT_baseline_{suffix}.parquet", "PVOUT_baseline")
+    
+    # Save unified viable centroids (consistent schema with wind/hydro)
+    print("\n--- Saving unified viable centroids ---")
+    save_viable_centroids(pvout_2030_ensemble, pvout_baseline, pvout_2030_iqr, lons, lats,
+                          out_dir / "SOLAR_VIABLE_CENTROIDS_2030.parquet", "2030", "solar")
+    save_viable_centroids(pvout_2050_ensemble, pvout_baseline, pvout_2050_iqr, lons, lats,
+                          out_dir / "SOLAR_VIABLE_CENTROIDS_2050.parquet", "2050", "solar")
     
     print(f"\n{'='*70}")
     print("PROCESSING COMPLETE!")
@@ -725,6 +953,9 @@ def run_processing(workdir: Path, pvout_path: Path):
     print(f"    - PVOUT_UNCERTAINTY_2030_{suffix}.parquet")
     print(f"    - PVOUT_UNCERTAINTY_2050_{suffix}.parquet")
     print(f"    - PVOUT_baseline_{suffix}.parquet")
+    print(f"  Unified viable centroids:")
+    print(f"    - SOLAR_VIABLE_CENTROIDS_2030.parquet")
+    print(f"    - SOLAR_VIABLE_CENTROIDS_2050.parquet")
 
 
 def run(workdir: str = None,
@@ -771,13 +1002,13 @@ if __name__ == "__main__":
         epilog="""
 Examples:
   # Download all CMIP6 data
-  python p1_c_cmip6_solar.py --download-only
+  python p1_d_viable_solar.py --download-only
   
   # Process with custom PVOUT baseline
-  python p1_c_cmip6_solar.py --process-only --pvout-baseline ./bigdata_solar_pvout/PVOUT.tif
+  python p1_d_viable_solar.py --process-only --pvout-baseline ./bigdata_solar_pvout/PVOUT.tif
   
   # Full pipeline
-  python p1_c_cmip6_solar.py
+  python p1_d_viable_solar.py
         """
     )
     

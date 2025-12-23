@@ -50,7 +50,7 @@ def get_cmip6_layer_paths(year: int) -> dict:
         # Wind layers (clip to GADM + EEZ)
         "wpd": wind_dir / f"WPD100_{year}_{suffix}.parquet",
         "wpd_uncertainty": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.parquet",
-        "wpd_baseline": wind_dir / f"WPD100_ERA5_baseline_{suffix}.parquet",
+        "wpd_baseline": wind_dir / f"WPD100_baseline_{suffix}.parquet",
         # Solar layers (clip to GADM only)
         "pvout": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
         "pvout_uncertainty": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
@@ -58,10 +58,14 @@ def get_cmip6_layer_paths(year: int) -> dict:
         # Hydro runoff layers (clip to GADM only - land-based)
         "runoff": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
         "runoff_uncertainty": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
-        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_ERA5_baseline_{suffix}.parquet",
+        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
         # HydroATLAS river reach layers (clip to GADM only)
         "riveratlas": hydro_atlas_dir / f"RiverATLAS_projected_{year}.parquet",
         "riveratlas_baseline": hydro_atlas_dir / "RiverATLAS_baseline.parquet",
+        # Unified viable centroids
+        "solar_viable": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.parquet",
+        "wind_viable": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.parquet",
+        "hydro_viable": hydro_dir / f"HYDRO_VIABLE_CENTROIDS_{year}.parquet",
     }
 
 
@@ -114,7 +118,7 @@ def load_cmip6_layers_clipped(iso3: str, year: int) -> dict:
     # Check if any CMIP6 files exist
     existing_files = {k: v for k, v in cmip6_paths.items() if v.exists()}
     if not existing_files:
-        print(f"[WARN] No CMIP6 parquet files found. Run p1_c_cmip6_solar.py, p1_d_cmip6_wind.py, and p1_e_cmip6_hydro.py first.")
+        print(f"[WARN] No CMIP6 parquet files found. Run p1_d_viable_solar.py, p1_e_viable_wind.py, and p1_f_viable_hydro.py first.")
         return {}
     
     # Load country boundaries
@@ -144,12 +148,12 @@ def load_cmip6_layers_clipped(iso3: str, year: int) -> dict:
             gdf = gpd.read_parquet(parquet_path)
             
             # Determine which boundary to use
-            if layer_name.startswith("wpd"):
-                # Wind: use GADM + EEZ
+            if layer_name.startswith("wpd") or layer_name == "wind_viable":
+                # Wind: use GADM + EEZ (offshore wind)
                 clip_gdf = gadm_eez_gdf
                 boundary_type = "GADM+EEZ"
             else:
-                # Solar, Runoff, RiverATLAS: use GADM only
+                # Solar, Hydro, Runoff, RiverATLAS: use GADM only (land-based)
                 clip_gdf = gadm_gdf
                 boundary_type = "GADM"
             
