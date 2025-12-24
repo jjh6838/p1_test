@@ -530,12 +530,20 @@ def run_part4_centroids(runoff_baseline: np.ndarray, runoff_2030: np.ndarray, ru
     print(f"  Combined 2030: {len(combined_2030):,} centroids")
     print(f"  Combined 2050: {len(combined_2050):,} centroids")
     
-    # Save
+    # Save parquet
     print("\n--- Saving Part 4 outputs ---")
     combined_2030.to_parquet(out_dir / "HYDRO_VIABLE_CENTROIDS_2030.parquet")
     combined_2050.to_parquet(out_dir / "HYDRO_VIABLE_CENTROIDS_2050.parquet")
     print(f"  Saved: HYDRO_VIABLE_CENTROIDS_2030.parquet")
     print(f"  Saved: HYDRO_VIABLE_CENTROIDS_2050.parquet")
+    
+    # Save TIF rasters showing viable hydro areas (based on runoff threshold)
+    print("\n--- Saving viable centroids TIF rasters ---")
+    # Create masked runoff data where values below threshold are set to 0
+    viable_2030 = np.where((runoff_2030 > runoff_threshold) & ~np.isnan(runoff_2030), runoff_2030, 0)
+    viable_2050 = np.where((runoff_2050 > runoff_threshold) & ~np.isnan(runoff_2050), runoff_2050, 0)
+    save_geotiff(viable_2030, lons, lats, out_dir / "HYDRO_VIABLE_CENTROIDS_2030.tif", nodata=0)
+    save_geotiff(viable_2050, lons, lats, out_dir / "HYDRO_VIABLE_CENTROIDS_2050.tif", nodata=0)
     
     return combined_2030, combined_2050
 

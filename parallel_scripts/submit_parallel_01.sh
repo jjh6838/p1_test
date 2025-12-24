@@ -1,12 +1,11 @@
 #!/bin/bash --login
 #SBATCH --job-name=p01_t1
-#SBATCH --partition=Interactive
+#SBATCH --partition=Long
 #SBATCH --time=168:00:00
-#SBATCH --mem=450G
+#SBATCH --mem=850G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=56
-#SBATCH --nodelist=ouce-cn09
+#SBATCH --cpus-per-task=40
 #SBATCH --output=outputs_per_country/logs/parallel_01_%j.out
 #SBATCH --error=outputs_per_country/logs/parallel_01_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -16,7 +15,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 1/40 (T1) at $(date)"
 echo "[INFO] Processing 1 countries in this batch: CHN"
-echo "[INFO] Tier: T1 | Memory: 450G | CPUs: 56 | Time: 168:00:00"
+echo "[INFO] Tier: T1 | Memory: 850G | CPUs: 40 | Time: 168:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country/logs outputs_global

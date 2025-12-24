@@ -69,7 +69,7 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── generate_hpc_scripts.py            # Generate country list and HPC scripts
 │
 ├── # ═══ Results Processing ═══
-├── combine_one_results.py             # Combine single country to GeoPackage
+├── combine_one_results.py             # Combine single country to GeoPackage + clip TIFs
 ├── combine_global_results.py          # Combine all countries to global GeoPackage
 ├── p1_y_results_data_etl.py           # Exposure analysis ETL pipeline
 │
@@ -100,8 +100,11 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── bigdata_solar_wind_ms/             # Microsoft renewable energy sites
 ├── bigdata_landcover_cds/             # ESA CCI Land Cover 2022 (downloads/extracted/outputs)
 ├── bigdata_solar_cmip6/               # CMIP6 solar projections + outputs
+│   └── outputs/                       # Solar TIFs + viable centroids
 ├── bigdata_wind_cmip6/                # CMIP6 wind projections + outputs
+│   └── outputs/                       # Wind TIFs + viable centroids
 ├── bigdata_hydro_cmip6/               # CMIP6 runoff projections + outputs
+│   └── outputs/                       # Hydro TIFs + river projections + viable centroids
 ├── bigdata_hydro_era5_land/           # ERA5-Land runoff data
 ├── bigdata_hydro_atlas/               # HydroATLAS river datasets
 ├── data_energy_ember/                 # Ember electricity statistics
@@ -110,7 +113,8 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── data_country_class_wb/             # World Bank country classifications
 │
 ├── # ═══ Output Directories ═══
-├── outputs_per_country/               # Country-level Parquet outputs
+├── outputs_per_country/               # Country-level Parquet + GeoPackage outputs
+│   └── parquet/{scenario}/            # Parquet files per scenario
 ├── outputs_global/                    # Combined global GeoPackage outputs
 ├── outputs_processed_data/            # Processed analysis results
 └── outputs_processed_fig/             # Generated figures
@@ -238,11 +242,11 @@ grep -l "USA" parallel_scripts/*.sh
 **Script-to-Country Mapping (Tier 1-2):**
 | Script | Countries | Tier | Notes |
 |--------|-----------|------|-------|
-| 01 | CHN | T1 | Largest, 168h Interactive |
-| 02 | IND | T2 | Large, 168h Long |
-| 03 | BRA | T2 | Large, 168h Long |
-| 04 | DEU | T2 | Large, 168h Long |
-| 05 | USA | T2 | Large, 168h Long |
+| 01 | CHN | T1 | 168h Long, ouce-cn64 (450GB dedicated) |
+| 02 | USA | T2 | 168h Long |
+| 03 | IND | T2 | 168h Long |
+| 04 | BRA | T2 | 168h Long |
+| 05 | DEU | T2 | 168h Long |
 | 06+ | Multiple | T3-T5 | Medium/Small countries |
 
 ---
@@ -250,6 +254,32 @@ grep -l "USA" parallel_scripts/*.sh
 ## Configuration
 
 All configurable parameters are centralized in `config.py`:
+
+### Data Regeneration Guide
+
+When you modify configuration parameters, certain outputs need to be regenerated:
+
+| Change | Scripts to Re-run |
+|--------|-------------------|
+| `POP_AGGREGATION_FACTOR` | `p1_d_viable_solar.py`, `p1_e_viable_wind.py`, `p1_f_viable_hydro.py`, then all country supply/siting |
+| `SOLAR_PVOUT_THRESHOLD` | `p1_d_viable_solar.py --process-only` |
+| `WIND_WPD_THRESHOLD` | `p1_e_viable_wind.py --process-only` |
+| `HYDRO_RUNOFF_THRESHOLD_MM` | `p1_f_viable_hydro.py --process-only` |
+| `LANDCOVER_VALID_*` | Respective viable script with `--process-only` |
+| Network settings | Country supply analysis only (`process_country_supply.py`) |
+| Siting settings | Country siting analysis only (`process_country_siting.py`) |
+
+**Typical regeneration workflow:**
+```bash
+# After modifying viability thresholds:
+python p1_d_viable_solar.py --process-only
+python p1_e_viable_wind.py --process-only
+python p1_f_viable_hydro.py --process-only
+
+# Then re-run country analysis and combine:
+python process_country_supply.py KEN
+python combine_one_results.py KEN
+```
 
 ### Core Settings
 
@@ -281,6 +311,7 @@ All configurable parameters are centralized in `config.py`:
 | `SOLAR_PVOUT_THRESHOLD` | 3.0 | Min PVOUT (kWh/kWp/day) for viable solar |
 | `WIND_WPD_THRESHOLD` | 150 | Min WPD at 100m (W/m²) for viable wind |
 | `HYDRO_RUNOFF_THRESHOLD_MM` | 100 | Min runoff (mm/year) for viable hydro |
+| `HYDRO_RIVER_BUFFER_M` | 5000 | Buffer distance (m) around rivers for hydro siting |
 
 ### Land Cover Valid Classes (ESA CCI)
 
@@ -322,8 +353,8 @@ All configurable parameters are centralized in `config.py`:
 | **Solar Baseline** | `bigdata_solar_pvout/PVOUT.tif` | [Global Solar Atlas](https://globalsolaratlas.info/) | PVOUT baseline |
 | **Wind Baseline** | `bigdata_wind_atlas/gasp_*.tif` | [Global Wind Atlas](https://globalwindatlas.info/) | Wind power density |
 | **HydroATLAS** | `bigdata_hydro_atlas/RiverATLAS_Data_v10.gdb` | [HydroATLAS](https://www.hydrosheds.org/hydroatlas) | River reach attributes |
-| **MS Solar Sites** | `bigdata_solar_wind_ms/solar_all_2024q2_v1.gpkg` | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Existing solar installations (polygons, EPSG:3857) |
-| **MS Wind Sites** | `bigdata_solar_wind_ms/wind_all_2024q2_v1.gpkg` | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Existing wind installations (points, EPSG:3857) |
+| **MS Solar Sites** | `bigdata_solar_wind_ms/solar_all_2024q2_v1.gpkg` | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Existing solar installations |
+| **MS Wind Sites** | `bigdata_solar_wind_ms/wind_all_2024q2_v1.gpkg` | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Existing wind installations |
 | **ESA Land Cover** | `bigdata_landcover_cds/outputs/landcover_2022_300arcsec.tif` | [CDS ERA5-Land](https://cds.climate.copernicus.eu/) | ESA CCI Land Cover 2022 (upscaled, GHS-POP aligned) |
 
 ### Energy Statistics
@@ -334,6 +365,52 @@ All configurable parameters are centralized in `config.py`:
 | **IEA Projections** | `data_energy_projections_iea/WEO*.csv` | [IEA WEO 2024](https://www.iea.org/) |
 | **UN Population** | `data_pop_un/` | [UN WPP 2024](https://population.un.org/) |
 | **World Bank** | `data_country_class_wb/` | [World Bank](https://datahelpdesk.worldbank.org/) |
+
+### Generated CMIP6 Outputs
+
+These files are generated by the data preparation scripts and used by combine scripts:
+
+**Solar (`bigdata_solar_cmip6/outputs/`):**
+| File | Description |
+|------|-------------|
+| `PVOUT_2030_300arcsec.tif` | Projected PVOUT for 2030 (kWh/kWp/day) |
+| `PVOUT_2050_300arcsec.tif` | Projected PVOUT for 2050 |
+| `PVOUT_baseline_300arcsec.tif` | Baseline PVOUT (Global Solar Atlas) |
+| `PVOUT_2030_uncertainty_300arcsec.tif` | IQR uncertainty for 2030 |
+| `PVOUT_2050_uncertainty_300arcsec.tif` | IQR uncertainty for 2050 |
+| `SOLAR_VIABLE_CENTROIDS_2030.tif` | Viable solar cells raster for 2030 |
+| `SOLAR_VIABLE_CENTROIDS_2050.tif` | Viable solar cells raster for 2050 |
+| `SOLAR_VIABLE_CENTROIDS_2030.parquet` | Viable solar centroids point layer for 2030 |
+| `SOLAR_VIABLE_CENTROIDS_2050.parquet` | Viable solar centroids point layer for 2050 |
+
+**Wind (`bigdata_wind_cmip6/outputs/`):**
+| File | Description |
+|------|-------------|
+| `WPD100_2030_300arcsec.tif` | Projected WPD at 100m for 2030 (W/m²) |
+| `WPD100_2050_300arcsec.tif` | Projected WPD at 100m for 2050 |
+| `WPD100_baseline_300arcsec.tif` | Baseline WPD (Global Wind Atlas) |
+| `WPD100_2030_uncertainty_300arcsec.tif` | IQR uncertainty for 2030 |
+| `WPD100_2050_uncertainty_300arcsec.tif` | IQR uncertainty for 2050 |
+| `WIND_VIABLE_CENTROIDS_2030.tif` | Viable wind cells raster for 2030 |
+| `WIND_VIABLE_CENTROIDS_2050.tif` | Viable wind cells raster for 2050 |
+| `WIND_VIABLE_CENTROIDS_2030.parquet` | Viable wind centroids point layer for 2030 |
+| `WIND_VIABLE_CENTROIDS_2050.parquet` | Viable wind centroids point layer for 2050 |
+
+**Hydro (`bigdata_hydro_cmip6/outputs/`):**
+| File | Description |
+|------|-------------|
+| `HYDRO_RUNOFF_2030_300arcsec.tif` | Projected runoff for 2030 (mm/year) |
+| `HYDRO_RUNOFF_2050_300arcsec.tif` | Projected runoff for 2050 |
+| `HYDRO_RUNOFF_baseline_300arcsec.tif` | Baseline runoff (ERA5-Land) |
+| `HYDRO_ATLAS_DELTA_2030_300arcsec.tif` | Climate delta for rivers for 2030 |
+| `HYDRO_ATLAS_DELTA_2050_300arcsec.tif` | Climate delta for rivers for 2050 |
+| `river_proximity_mask_5km.tif` | Boolean river proximity mask |
+| `HYDRO_VIABLE_CENTROIDS_2030.tif` | Viable hydro cells raster for 2030 |
+| `HYDRO_VIABLE_CENTROIDS_2050.tif` | Viable hydro cells raster for 2050 |
+| `HYDRO_VIABLE_CENTROIDS_2030.parquet` | Viable hydro centroids point layer for 2030 |
+| `HYDRO_VIABLE_CENTROIDS_2050.parquet` | Viable hydro centroids point layer for 2050 |
+| `RiverATLAS_projected_2030.parquet` | River reaches with projected discharge for 2030 |
+| `RiverATLAS_projected_2050.parquet` | River reaches with projected discharge for 2050 |
 
 ---
 
@@ -413,13 +490,25 @@ python p1_d_viable_solar.py --process-only
 python p1_d_viable_solar.py
 ```
 
-**Outputs:**
+**Solar Outputs (`bigdata_solar_cmip6/outputs/`):**
 - GeoTIFF rasters (global, all cells with viability filter applied):
-  - `bigdata_solar_cmip6/outputs/PVOUT_{2030,2050}_300arcsec.tif`
-  - `bigdata_wind_cmip6/outputs/WPD100_{2030,2050}_300arcsec.tif`
+  - `PVOUT_{2030,2050}_300arcsec.tif` — Full grid with projected PVOUT
+  - `PVOUT_baseline_300arcsec.tif` — Baseline PVOUT (Global Solar Atlas)
+  - `PVOUT_{2030,2050}_uncertainty_300arcsec.tif` — IQR uncertainty from ensemble
+  - `SOLAR_VIABLE_CENTROIDS_{2030,2050}.tif` — Viable cells only raster (for ArcGIS)
 - Parquet centroids (viable cells only, resource >= threshold):
-  - `bigdata_solar_cmip6/outputs/PVOUT_{2030,2050}_300arcsec.parquet`
-  - `bigdata_wind_cmip6/outputs/WPD100_{2030,2050}_300arcsec.parquet`
+  - `PVOUT_{2030,2050}_300arcsec.parquet` — Point layer with projected values
+  - `SOLAR_VIABLE_CENTROIDS_{2030,2050}.parquet` — Viable centroids with baseline + uncertainty
+
+**Wind Outputs (`bigdata_wind_cmip6/outputs/`):**
+- GeoTIFF rasters:
+  - `WPD100_{2030,2050}_300arcsec.tif` — Full grid with projected WPD
+  - `WPD100_baseline_300arcsec.tif` — Baseline WPD (Global Wind Atlas)
+  - `WPD100_{2030,2050}_uncertainty_300arcsec.tif` — IQR uncertainty from ensemble
+  - `WIND_VIABLE_CENTROIDS_{2030,2050}.tif` — Viable cells only raster (for ArcGIS)
+- Parquet centroids:
+  - `WPD100_{2030,2050}_300arcsec.parquet` — Point layer with projected values
+  - `WIND_VIABLE_CENTROIDS_{2030,2050}.parquet` — Viable centroids with baseline + uncertainty
 
 #### `p1_f_viable_hydro.py`
 Unified hydro processing: ERA5-Land/CMIP6 runoff projections + RiverATLAS river reach projections.
@@ -468,13 +557,16 @@ python p1_f_viable_hydro.py --mask-only
 python p1_f_viable_hydro.py
 ```
 
-**Outputs:**
-- `bigdata_hydro_cmip6/outputs/HYDRO_RUNOFF_baseline_300arcsec.tif`
-- `bigdata_hydro_cmip6/outputs/HYDRO_RUNOFF_{2030,2050}_300arcsec.tif`
-- `bigdata_hydro_cmip6/outputs/HYDRO_ATLAS_DELTA_{2030,2050}_300arcsec.tif`
-- `bigdata_hydro_cmip6/outputs/river_proximity_mask_5km.tif`
-- `bigdata_hydro_cmip6/outputs/RiverATLAS_projected_{2030,2050}.parquet`
-- `bigdata_hydro_cmip6/outputs/HYDRO_VIABLE_CENTROIDS_{2030,2050}.parquet`
+**Hydro Outputs (`bigdata_hydro_cmip6/outputs/`):**
+- GeoTIFF rasters:
+  - `HYDRO_RUNOFF_baseline_300arcsec.tif` — ERA5-Land baseline runoff
+  - `HYDRO_RUNOFF_{2030,2050}_300arcsec.tif` — Projected runoff
+  - `HYDRO_ATLAS_DELTA_{2030,2050}_300arcsec.tif` — Climate delta for river reaches
+  - `river_proximity_mask_5km.tif` — Boolean mask for river proximity
+  - `HYDRO_VIABLE_CENTROIDS_{2030,2050}.tif` — Viable cells only raster (for ArcGIS)
+- Parquet outputs:
+  - `RiverATLAS_projected_{2030,2050}.parquet` — River reaches with projected discharge
+  - `HYDRO_VIABLE_CENTROIDS_{2030,2050}.parquet` — Viable hydro centroids (runoff + river-based)
 
 ---
 
@@ -604,11 +696,31 @@ python combine_one_results.py KEN --scenario 2050_supply_100%
 
 **Output:** `outputs_per_country/{scenario}_{ISO3}.gpkg`
 
-**CMIP6 Climate Layers (auto-included if available):**
-- Wind: `wpd`, `wpd_uncertainty`, `wpd_baseline`
-- Solar: `pvout`, `pvout_uncertainty`, `pvout_baseline`
-- Hydro: `runoff`, `runoff_uncertainty`, `runoff_baseline`
-- Rivers: `riveratlas`, `riveratlas_baseline`
+**Layers included:**
+- Core supply analysis: `centroids`, `facilities`, `grid_lines`, `polylines`
+- Siting analysis (if available): `siting_clusters`, `siting_networks`
+- Viable centroids (CMIP6-based, if available): `SOLAR_VIABLE_CENTROIDS_{year}`, `WIND_VIABLE_CENTROIDS_{year}`, `HYDRO_VIABLE_CENTROIDS_{year}`
+
+**CMIP6 Climate TIF Layers (auto-clipped if global TIFs exist):**
+
+The combine script automatically clips 12 CMIP6 TIF layers to the country extent for each target year:
+
+| Layer | Description | Source |
+|-------|-------------|--------|
+| `PVOUT_{year}` | Projected solar PVOUT (kWh/kWp/day) | p1_d_viable_solar.py |
+| `PVOUT_{year}_uncertainty` | IQR uncertainty from CMIP6 ensemble | p1_d_viable_solar.py |
+| `PVOUT_baseline` | Baseline PVOUT from Global Solar Atlas | p1_d_viable_solar.py |
+| `SOLAR_VIABLE_CENTROIDS_{year}` | Viable solar cells raster | p1_d_viable_solar.py |
+| `WPD100_{year}` | Projected wind power density (W/m²) | p1_e_viable_wind.py |
+| `WPD100_{year}_uncertainty` | IQR uncertainty from CMIP6 ensemble | p1_e_viable_wind.py |
+| `WPD100_baseline` | Baseline WPD from Global Wind Atlas | p1_e_viable_wind.py |
+| `WIND_VIABLE_CENTROIDS_{year}` | Viable wind cells raster | p1_e_viable_wind.py |
+| `HYDRO_RUNOFF_{year}` | Projected runoff (mm/year) | p1_f_viable_hydro.py |
+| `HYDRO_RUNOFF_baseline` | Baseline runoff from ERA5-Land | p1_f_viable_hydro.py |
+| `HYDRO_ATLAS_DELTA_{year}` | Climate delta for river reaches | p1_f_viable_hydro.py |
+| `HYDRO_VIABLE_CENTROIDS_{year}` | Viable hydro cells raster | p1_f_viable_hydro.py |
+
+> **Note**: GPKG raster layers are visible in QGIS but may not display in ArcGIS. For ArcGIS users, the global TIF files in `bigdata_*/outputs/` directories can be used directly.
 
 #### `combine_global_results.py`
 Merge all country outputs into global GeoPackage.
@@ -750,12 +862,13 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 
 ### Resource Allocation
 
-| Tier | Countries | CPUs | Memory | Time | Partition | Examples |
-|------|-----------|------|--------|------|-----------|----------|
-| **1** | 7 largest | 56 | 100GB | 12h | Short | USA, CHN, IND, RUS, BRA, CAN, AUS |
-| **2** | 22 large | 40 | 100GB | 48h | Medium | ARG, KAZ, DZA, MEX, IDN, SDN |
-| **3** | ~50 medium | 40 | 100GB | 12h | Short | KOR, FRA, DEU, JPN, GBR, ESP |
-| **4** | ~110 small | 40 | 100GB | 12h | Short | Island nations, small countries |
+| Tier | Countries | CPUs | Memory | Time | Partition | Node | Examples |
+|------|-----------|------|--------|------|-----------|------|----------|
+| **1** | CHN | 40 | 450GB | 168h | Long | ouce-cn64 | China (dedicated node) |
+| **2** | 4 large | 40 | 95GB | 168h | Long | - | USA, IND, BRA, DEU |
+| **3** | 11 medium-large | 40 | 95GB | 48h | Medium | - | CAN, MEX, RUS, AUS, ARG, etc. |
+| **4** | ~19 medium | 40 | 95GB | 12h | Short | - | TUR, NGA, COL, PAK, etc. (2/script) |
+| **5** | ~150 small | 40 | 25GB | 12h | Short | - | All others (11/script) |
 
 ### Complete HPC Workflow
 

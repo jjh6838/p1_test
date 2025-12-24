@@ -39,34 +39,113 @@ def get_cmip6_layer_paths(year: int) -> dict:
     """
     Get paths to CMIP6 WPD, PVOUT, and HYDRO parquet files for given year.
     Returns dict with layer names as keys and paths as values.
+    Layer names match the output file naming convention.
     """
     wind_dir = Path(get_bigdata_path("bigdata_wind_cmip6")) / "outputs"
     solar_dir = Path(get_bigdata_path("bigdata_solar_cmip6")) / "outputs"
     hydro_dir = Path(get_bigdata_path("bigdata_hydro_cmip6")) / "outputs"
-    hydro_atlas_dir = Path(get_bigdata_path("bigdata_hydro_atlas")) / "outputs"
     suffix = "300arcsec"
     
     return {
         # Wind layers (clip to GADM + EEZ)
-        "wpd": wind_dir / f"WPD100_{year}_{suffix}.parquet",
-        "wpd_uncertainty": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.parquet",
-        "wpd_baseline": wind_dir / f"WPD100_baseline_{suffix}.parquet",
+        f"WPD100_{year}_{suffix}": wind_dir / f"WPD100_{year}_{suffix}.parquet",
+        f"WPD100_UNCERTAINTY_{year}_{suffix}": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.parquet",
+        f"WPD100_baseline_{suffix}": wind_dir / f"WPD100_baseline_{suffix}.parquet",
         # Solar layers (clip to GADM only)
-        "pvout": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
-        "pvout_uncertainty": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
-        "pvout_baseline": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
+        f"PVOUT_{year}_{suffix}": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
+        f"PVOUT_UNCERTAINTY_{year}_{suffix}": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
+        f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
         # Hydro runoff layers (clip to GADM only - land-based)
-        "runoff": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
-        "runoff_uncertainty": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
-        "runoff_baseline": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
-        # HydroATLAS river reach layers (clip to GADM only)
-        "riveratlas": hydro_atlas_dir / f"RiverATLAS_projected_{year}.parquet",
-        "riveratlas_baseline": hydro_atlas_dir / "RiverATLAS_baseline.parquet",
+        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
+        f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
+        f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
+        # HydroATLAS river reach layers (clip to GADM only) - stored in hydro_dir
+        f"RiverATLAS_projected_{year}": hydro_dir / f"RiverATLAS_projected_{year}.parquet",
+        "RiverATLAS_baseline": hydro_dir / "RiverATLAS_baseline.parquet",
         # Unified viable centroids
-        "solar_viable": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.parquet",
-        "wind_viable": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.parquet",
-        "hydro_viable": hydro_dir / f"HYDRO_VIABLE_CENTROIDS_{year}.parquet",
+        f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.parquet",
+        f"WIND_VIABLE_CENTROIDS_{year}": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.parquet",
+        f"HYDRO_VIABLE_CENTROIDS_{year}": hydro_dir / f"HYDRO_VIABLE_CENTROIDS_{year}.parquet",
     }
+
+
+def get_cmip6_tif_paths(year: int) -> dict:
+    """
+    Get paths to CMIP6 TIF files for given year.
+    Only includes year-matching files + baseline.
+    """
+    wind_dir = Path(get_bigdata_path("bigdata_wind_cmip6")) / "outputs"
+    solar_dir = Path(get_bigdata_path("bigdata_solar_cmip6")) / "outputs"
+    hydro_dir = Path(get_bigdata_path("bigdata_hydro_cmip6")) / "outputs"
+    suffix = "300arcsec"
+    
+    return {
+        # Wind TIFs
+        f"WPD100_{year}_{suffix}": wind_dir / f"WPD100_{year}_{suffix}.tif",
+        f"WPD100_UNCERTAINTY_{year}_{suffix}": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.tif",
+        f"WPD100_baseline_{suffix}": wind_dir / f"WPD100_baseline_{suffix}.tif",
+        f"WIND_VIABLE_CENTROIDS_{year}": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.tif",
+        # Solar TIFs
+        f"PVOUT_{year}_{suffix}": solar_dir / f"PVOUT_{year}_{suffix}.tif",
+        f"PVOUT_UNCERTAINTY_{year}_{suffix}": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.tif",
+        f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.tif",
+        f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.tif",
+        # Hydro runoff TIFs
+        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.tif",
+        f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.tif",
+        f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.tif",
+        f"HYDRO_VIABLE_CENTROIDS_{year}": hydro_dir / f"HYDRO_VIABLE_CENTROIDS_{year}.tif",
+    }
+
+
+def add_tifs_to_gpkg(year: int, gpkg_path: Path) -> int:
+    """
+    Add CMIP6 TIF files as raster layers to GPKG.
+    
+    Args:
+        year: Target year (2030 or 2050)
+        gpkg_path: Path to the GPKG file to add rasters to
+        
+    Returns:
+        Number of TIFs added
+    """
+    import subprocess
+    
+    tif_paths = get_cmip6_tif_paths(year)
+    added_count = 0
+    
+    for layer_name, tif_path in tif_paths.items():
+        if not tif_path.exists():
+            print(f"[WARN] TIF not found: {tif_path.name}")
+            continue
+        
+        try:
+            # Use gdal_translate to add raster to GPKG
+            # Add _raster suffix to avoid conflict with vector layer names
+            raster_layer_name = tif_path.stem + "_raster"
+            
+            # Build gdal_translate command
+            cmd = [
+                "gdal_translate",
+                "-of", "GPKG",
+                "-co", f"RASTER_TABLE={raster_layer_name}",
+                "-co", "APPEND_SUBDATASET=YES",
+                str(tif_path),
+                str(gpkg_path)
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"[INFO] Added TIF to GPKG: {raster_layer_name}")
+                added_count += 1
+            else:
+                print(f"[WARN] Failed to add {tif_path.name}: {result.stderr}")
+                
+        except Exception as e:
+            print(f"[WARN] Failed to add {tif_path.name}: {e}")
+    
+    return added_count
 
 
 def load_country_boundary(iso3: str) -> tuple:
@@ -148,7 +227,7 @@ def load_cmip6_layers_clipped(iso3: str, year: int) -> dict:
             gdf = gpd.read_parquet(parquet_path)
             
             # Determine which boundary to use
-            if layer_name.startswith("wpd") or layer_name == "wind_viable":
+            if layer_name.startswith("WPD100") or layer_name.startswith("WIND_VIABLE"):
                 # Wind: use GADM + EEZ (offshore wind)
                 clip_gdf = gadm_eez_gdf
                 boundary_type = "GADM+EEZ"
@@ -284,6 +363,11 @@ def parquet_to_gpkg(base_dir, scenario, iso3):
         print(f"[INFO] Added {len(cmip6_layers)} CMIP6 layers to GPKG")
     else:
         print(f"[WARN] No CMIP6 layers added (files not found or empty)")
+
+    # Add CMIP6 TIF files as raster layers in GPKG
+    print(f"\n--- Adding CMIP6 TIF rasters to GPKG ---")
+    tif_count = add_tifs_to_gpkg(year, out_gpkg)
+    print(f"[INFO] Added {tif_count} TIF rasters to GPKG")
 
     print(f"[DONE] Created {out_gpkg}")
 

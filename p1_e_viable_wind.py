@@ -670,6 +670,50 @@ def save_viable_centroids(data_projected: np.ndarray, data_baseline: np.ndarray,
     print(f"  Saved: {out_path} ({len(gdf):,} centroids)")
 
 
+def save_viable_tif(data_projected: np.ndarray, lons: np.ndarray, lats: np.ndarray,
+                    out_path: Path) -> None:
+    """
+    Save viable centroids as a GeoTIFF raster.
+    The raster contains projected values where viable, 0 elsewhere.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    height, width = data_projected.shape
+    
+    # Ensure lats are in correct order for GeoTIFF (top-left origin)
+    if lats[0] < lats[-1]:
+        data_projected = data_projected[::-1, :]
+        lats = lats[::-1]
+    
+    transform = from_bounds(
+        lons.min(), lats.min(), lons.max(), lats.max(),
+        width, height
+    )
+    
+    profile = {
+        "driver": "GTiff",
+        "height": height,
+        "width": width,
+        "count": 1,
+        "dtype": "float32",
+        "crs": "EPSG:4326",
+        "transform": transform,
+        "compress": "deflate",
+        "nodata": 0,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    
+    # Replace NaN with 0
+    data_out = np.nan_to_num(data_projected, nan=0).astype("float32")
+    
+    with rasterio.open(out_path, "w", **profile) as dst:
+        dst.write(data_out, 1)
+    
+    print(f"  Saved: {out_path}")
+
+
 def apply_viability_filter(data: np.ndarray, 
                             target_lons: np.ndarray, 
                             target_lats: np.ndarray,
@@ -1029,6 +1073,11 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
     save_viable_centroids(wpd_2050_data, era5_wpd_data, iqr_2050_data, lons, lats,
                           out_dir / "WIND_VIABLE_CENTROIDS_2050.parquet", "2050", "wind")
     
+    # Save viable centroids as TIF rasters
+    print("\n--- Saving viable centroids TIF rasters ---")
+    save_viable_tif(wpd_2030_data, lons, lats, out_dir / "WIND_VIABLE_CENTROIDS_2030.tif")
+    save_viable_tif(wpd_2050_data, lons, lats, out_dir / "WIND_VIABLE_CENTROIDS_2050.tif")
+    
     print(f"\n{'='*70}")
     print("PROCESSING COMPLETE!")
     print(f"{'='*70}")
@@ -1048,6 +1097,8 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
     print(f"  Unified viable centroids:")
     print(f"    - WIND_VIABLE_CENTROIDS_2030.parquet")
     print(f"    - WIND_VIABLE_CENTROIDS_2050.parquet")
+    print(f"    - WIND_VIABLE_CENTROIDS_2030.tif")
+    print(f"    - WIND_VIABLE_CENTROIDS_2050.tif")
 
 
 def run(workdir: str = None,

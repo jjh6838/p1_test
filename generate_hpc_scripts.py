@@ -171,11 +171,11 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 56, "time": "168:00:00", "partition": "Interactive", "nodelist": "ouce-cn09"},  # CHN - targets ouce-cn09 (500GB, 56 CPUs)
+        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 40, "time": "168:00:00", "partition": "Long", "nodelist": "ouce-cn64"},  # CHN - dedicated node cn60 and 64 - Long, 40 cpus, max 900G
         "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU - Long partition (7 days)
         "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h)
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
-        "t5": {"max_countries_per_script": 11, "mem": "30G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
+        "t5": {"max_countries_per_script": 11, "mem": "25G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
     }
     
     
