@@ -63,10 +63,12 @@ def get_cmip6_layer_paths(year: int) -> dict:
         # Wind layers
         f"WPD100_{year}_{suffix}": wind_dir / f"WPD100_{year}_{suffix}.parquet",
         f"WPD100_UNCERTAINTY_{year}_{suffix}": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.parquet",
+        f"WPD100_DELTA_{year}_{suffix}": wind_dir / f"WPD100_DELTA_{year}_{suffix}.parquet",
         f"WPD100_baseline_{suffix}": wind_dir / f"WPD100_baseline_{suffix}.parquet",
         # Solar layers
         f"PVOUT_{year}_{suffix}": solar_dir / f"PVOUT_{year}_{suffix}.parquet",
         f"PVOUT_UNCERTAINTY_{year}_{suffix}": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.parquet",
+        f"PVOUT_DELTA_{year}_{suffix}": solar_dir / f"PVOUT_DELTA_{year}_{suffix}.parquet",
         f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
         # Hydro runoff layers (gridded)
         f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
@@ -96,11 +98,13 @@ def get_cmip6_tif_paths(year: int) -> dict:
         # Wind TIFs
         f"WPD100_{year}_{suffix}": wind_dir / f"WPD100_{year}_{suffix}.tif",
         f"WPD100_UNCERTAINTY_{year}_{suffix}": wind_dir / f"WPD100_UNCERTAINTY_{year}_{suffix}.tif",
+        f"WPD100_DELTA_{year}_{suffix}": wind_dir / f"WPD100_DELTA_{year}_{suffix}.tif",
         f"WPD100_baseline_{suffix}": wind_dir / f"WPD100_baseline_{suffix}.tif",
         f"WIND_VIABLE_CENTROIDS_{year}": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.tif",
         # Solar TIFs
         f"PVOUT_{year}_{suffix}": solar_dir / f"PVOUT_{year}_{suffix}.tif",
         f"PVOUT_UNCERTAINTY_{year}_{suffix}": solar_dir / f"PVOUT_UNCERTAINTY_{year}_{suffix}.tif",
+        f"PVOUT_DELTA_{year}_{suffix}": solar_dir / f"PVOUT_DELTA_{year}_{suffix}.tif",
         f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.tif",
         f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.tif",
         # Hydro runoff TIFs

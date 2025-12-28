@@ -30,7 +30,7 @@ import pandas as pd
 import geopandas as gpd
 import xarray as xr
 import rasterio
-from rasterio.transform import from_bounds
+from rasterio.transform import from_bounds, Affine
 from rasterio.warp import reproject, Resampling
 from rasterio.features import rasterize
 from scipy.interpolate import RegularGridInterpolator
@@ -433,24 +433,27 @@ def get_ghs_pop_grid_params() -> dict:
     return _GHS_POP_GRID_PARAMS
 
 
-def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, 'Affine']:
     """
-    Regrid DataArray to target resolution.
+    Regrid DataArray to target resolution using nearest resampling.
     Grid is aligned with GHS-POP raster for consistency with settlement centroids.
-    Returns (data, lons, lats) at target resolution.
+    Returns (data, lons, lats, transform) at target resolution.
+    
+    Uses Resampling.nearest to preserve original ERA5 coarse values without
+    interpolation smoothing when downscaling from ~900 arcsec to 300 arcsec.
     
     The output grid exactly matches what process_country_supply.py produces via
     rasterio.transform.xy() after aggregating GHS-POP by POP_AGGREGATION_FACTOR.
+    
+    The transform is the authoritative source for pixel-to-coordinate mapping,
+    ensuring alignment between rasters and centroids.
     """
+    from rasterio.transform import from_origin
+    
     # Source grid
     src_data = da.values
     src_lons = da.lon.values
     src_lats = da.lat.values
-    
-    # Ensure source lats are ascending for interpolation
-    if src_lats[0] > src_lats[-1]:
-        src_lats = src_lats[::-1]
-        src_data = src_data[::-1, :]
     
     # Get GHS-POP grid parameters (origin and pixel size)
     ghs_params = get_ghs_pop_grid_params()
@@ -463,11 +466,6 @@ def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarr
     agg_pixel_lon = ghs_params['pixel_size_lon'] * agg_factor
     agg_pixel_lat = ghs_params['pixel_size_lat'] * agg_factor  # negative
     
-    # Generate target grid matching rasterio.transform.xy() output
-    # For aggregated GHS-POP: xy(row, col) gives pixel center at:
-    #   x = origin_lon + agg_pixel_lon * (col + 0.5)
-    #   y = origin_lat + agg_pixel_lat * (row + 0.5)  # agg_pixel_lat is negative
-    
     # Number of pixels in aggregated grid
     n_cols = int(np.ceil(360 / abs(agg_pixel_lon)))
     n_rows = int(np.ceil(180 / abs(agg_pixel_lat)))
@@ -476,28 +474,60 @@ def regrid_to_target(da: xr.DataArray, target_res_arcsec: int) -> tuple[np.ndarr
     target_lons = ghs_params['origin_lon'] + agg_pixel_lon * (np.arange(n_cols) + 0.5)
     target_lats = ghs_params['origin_lat'] + agg_pixel_lat * (np.arange(n_rows) + 0.5)  # descending
     
-    # For interpolation, need ascending lats
-    target_lats_asc = target_lats[::-1]
+    # Ensure source data has north-up orientation (row 0 = north)
+    if src_lats[0] < src_lats[-1]:
+        src_lats = src_lats[::-1]
+        src_data = src_data[::-1, :]
     
-    # Interpolate using ascending lats for correct results
-    interp_func = RegularGridInterpolator(
-        (src_lats, src_lons),
-        src_data,
-        method='linear',
-        bounds_error=False,
-        fill_value=np.nan
+    # Build source transform (top-left corner, pixel sizes)
+    src_res_lon = abs(src_lons[1] - src_lons[0]) if len(src_lons) > 1 else abs(agg_pixel_lon)
+    src_res_lat = abs(src_lats[0] - src_lats[1]) if len(src_lats) > 1 else abs(agg_pixel_lat)
+    src_transform = from_origin(
+        src_lons.min() - src_res_lon / 2,  # west edge
+        src_lats.max() + src_res_lat / 2,  # north edge
+        src_res_lon,
+        src_res_lat
     )
     
-    lon_grid, lat_grid = np.meshgrid(target_lons, target_lats_asc)
-    points = np.column_stack([lat_grid.ravel(), lon_grid.ravel()])
+    # Build destination transform (GHS-POP aligned)
+    dst_transform = from_origin(
+        ghs_params['origin_lon'],  # west edge
+        ghs_params['origin_lat'],  # north edge
+        abs(agg_pixel_lon),
+        abs(agg_pixel_lat)
+    )
     
-    target_data = interp_func(points).reshape(lat_grid.shape).astype("float32")
+    # Prepare destination array
+    target_data = np.empty((n_rows, n_cols), dtype=np.float32)
     
-    # Flip data back to match descending lats (row 0 = north)
-    target_data = target_data[::-1, :]
+    # Reproject using max resampling to preserve peak resource values
+    # Use NaN as nodata to properly handle source NaN values and out-of-extent pixels
+    reproject(
+        source=src_data.astype(np.float32),
+        destination=target_data,
+        src_transform=src_transform,
+        src_crs="EPSG:4326",
+        dst_transform=dst_transform,
+        dst_crs="EPSG:4326",
+        resampling=Resampling.max,
+        src_nodata=np.nan,
+        dst_nodata=np.nan
+    )
+    
+    # Replace invalid values with NaN:
+    # - 0 values outside valid source extent
+    # - float32 min (-3.4e38) from reproject when dst pixels have no valid src overlap
+    # - any non-finite values
+    FLOAT32_MIN = np.float32(-3.4e38)
+    target_data = np.where(
+        (target_data == 0) | (target_data <= FLOAT32_MIN) | ~np.isfinite(target_data),
+        np.nan,
+        target_data
+    )
     
     # Return descending lats (standard GeoTIFF order: row 0 = north)
-    return target_data, target_lons, target_lats
+    # Also return the transform as the authoritative source for pixel mapping
+    return target_data, target_lons, target_lats, dst_transform
 
 
 def apply_gwa_mask(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
@@ -548,22 +578,12 @@ def apply_gwa_mask(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
     return data_masked
 
 
-def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
+def save_geotiff(data: np.ndarray, transform: 'Affine',
                  out_path: Path, nodata: float = 0) -> None:
-    """Save data array as GeoTIFF."""
+    """Save data array as GeoTIFF using authoritative transform."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     height, width = data.shape
-    
-    # Flip data if lats are ascending (GeoTIFF expects top-left origin)
-    if lats[0] < lats[-1]:
-        data = data[::-1, :]
-        lats = lats[::-1]
-    
-    transform = from_bounds(
-        lons.min(), lats.min(), lons.max(), lats.max(),
-        width, height
-    )
     
     profile = {
         "driver": "GTiff",
@@ -589,22 +609,20 @@ def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
     print(f"  Saved: {out_path}")
 
 
-def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
+def save_as_parquet(data: np.ndarray, transform: 'Affine',
                     out_path: Path, value_column: str = "value", nodata: float = 0) -> None:
     """Save data array as Parquet centroids (points with values > 0)."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Ensure lats are in correct order for grid creation
-    if lats[0] > lats[-1]:
-        lats = lats[::-1]
-        data = data[::-1, :]
+    height, width = data.shape
     
-    # Create meshgrid of coordinates
-    lon_grid, lat_grid = np.meshgrid(lons, lats)
+    # Generate pixel center coordinates using transform (authoritative source)
+    rows, cols = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+    lon_flat, lat_flat = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
+    lon_flat = np.array(lon_flat)
+    lat_flat = np.array(lat_flat)
     
-    # Flatten arrays
-    lon_flat = lon_grid.ravel()
-    lat_flat = lat_grid.ravel()
+    # Flatten data
     data_flat = data.ravel()
     
     # Filter out nodata/NaN values
@@ -622,34 +640,42 @@ def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
 
 
 def save_viable_centroids(data_projected: np.ndarray, data_baseline: np.ndarray,
-                          data_uncertainty: np.ndarray, lons: np.ndarray, lats: np.ndarray,
-                          out_path: Path, year: str, resource_name: str = "wind") -> None:
+                          data_uncertainty: np.ndarray, transform: 'Affine',
+                          out_path: Path, year: str, resource_name: str = "wind",
+                          ms_mask: np.ndarray = None, lc_mask: np.ndarray = None,
+                          threshold_mask: np.ndarray = None) -> None:
     """
     Save viable centroids with unified schema across solar/wind/hydro.
+    Only cells where is_viable=True are saved (matching TIF output).
     
-    Schema: geometry, source, value_{year}, value_baseline, delta, uncertainty
+    Schema: geometry, source, value_{year}, value_baseline, delta, uncertainty,
+            is_ms_viable, is_lc_valid, meets_threshold, is_viable
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Ensure lats are in correct order for grid creation
-    if lats[0] > lats[-1]:
-        lats = lats[::-1]
-        data_projected = data_projected[::-1, :]
-        data_baseline = data_baseline[::-1, :]
-        data_uncertainty = data_uncertainty[::-1, :]
+    height, width = data_projected.shape
     
-    # Create meshgrid of coordinates
-    lon_grid, lat_grid = np.meshgrid(lons, lats)
+    # Generate pixel center coordinates using transform (authoritative source)
+    rows, cols = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+    lon_flat, lat_flat = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
+    lon_flat = np.array(lon_flat)
+    lat_flat = np.array(lat_flat)
     
-    # Flatten arrays
-    lon_flat = lon_grid.ravel()
-    lat_flat = lat_grid.ravel()
+    # Flatten data arrays
     proj_flat = data_projected.ravel()
     base_flat = data_baseline.ravel()
     unc_flat = data_uncertainty.ravel()
     
-    # Filter to valid cells (projected value > 0)
-    valid_mask = ~np.isnan(proj_flat) & (proj_flat > 0)
+    # Flatten masks
+    ms_flat = ms_mask.ravel() if ms_mask is not None else np.zeros(proj_flat.shape, dtype=bool)
+    lc_flat = lc_mask.ravel() if lc_mask is not None else np.zeros(proj_flat.shape, dtype=bool)
+    thresh_flat = threshold_mask.ravel() if threshold_mask is not None else np.zeros(proj_flat.shape, dtype=bool)
+    
+    # Compute is_viable: MS_viable OR (lc_valid AND meets_threshold)
+    is_viable_flat = ms_flat | (lc_flat & thresh_flat)
+    
+    # Filter to cells that are valid AND viable (ensures parquet matches TIF)
+    valid_mask = ~np.isnan(proj_flat) & (proj_flat > 0) & is_viable_flat
     
     # Compute delta
     with np.errstate(divide='ignore', invalid='ignore'):
@@ -663,6 +689,10 @@ def save_viable_centroids(data_projected: np.ndarray, data_baseline: np.ndarray,
         'value_baseline': base_flat[valid_mask],
         'delta': delta[valid_mask],
         'uncertainty': unc_flat[valid_mask],
+        'is_ms_viable': ms_flat[valid_mask],
+        'is_lc_valid': lc_flat[valid_mask],
+        'meets_threshold': thresh_flat[valid_mask],
+        'is_viable': is_viable_flat[valid_mask],  # Always True by construction
     }, crs="EPSG:4326")
     
     # Save as parquet
@@ -670,7 +700,7 @@ def save_viable_centroids(data_projected: np.ndarray, data_baseline: np.ndarray,
     print(f"  Saved: {out_path} ({len(gdf):,} centroids)")
 
 
-def save_viable_tif(data_projected: np.ndarray, lons: np.ndarray, lats: np.ndarray,
+def save_viable_tif(data_projected: np.ndarray, transform: 'Affine',
                     out_path: Path) -> None:
     """
     Save viable centroids as a GeoTIFF raster.
@@ -679,16 +709,6 @@ def save_viable_tif(data_projected: np.ndarray, lons: np.ndarray, lats: np.ndarr
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     height, width = data_projected.shape
-    
-    # Ensure lats are in correct order for GeoTIFF (top-left origin)
-    if lats[0] < lats[-1]:
-        data_projected = data_projected[::-1, :]
-        lats = lats[::-1]
-    
-    transform = from_bounds(
-        lons.min(), lats.min(), lons.max(), lats.max(),
-        width, height
-    )
     
     profile = {
         "driver": "GTiff",
@@ -715,21 +735,19 @@ def save_viable_tif(data_projected: np.ndarray, lons: np.ndarray, lats: np.ndarr
 
 
 def apply_viability_filter(data: np.ndarray, 
-                            target_lons: np.ndarray, 
-                            target_lats: np.ndarray,
+                            transform: 'Affine',
                             landcover_path: Path,
                             valid_classes: list,
                             resource_threshold: float,
                             ms_viable_path: Path = None,
-                            nodata_value: float = 0) -> np.ndarray:
+                            nodata_value: float = 0) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Apply combined viability filter:
     Keep cell if (MS site present) OR (land cover valid AND resource >= threshold).
     
     Args:
         data: Input data array at target resolution (resource values)
-        target_lons: Target longitude coordinates (1D array)
-        target_lats: Target latitude coordinates (1D array, descending)
+        transform: Affine transform for the data grid (authoritative source)
         landcover_path: Path to ESA CCI land cover GeoTIFF
         valid_classes: List of valid land cover class codes
         resource_threshold: Minimum resource value for viability (when using land cover)
@@ -737,19 +755,14 @@ def apply_viability_filter(data: np.ndarray,
         nodata_value: Value to use for masked cells
     
     Returns:
-        Filtered data array with invalid areas set to nodata_value
+        tuple: (filtered_data, ms_mask, lc_mask, threshold_mask)
+            - filtered_data: Data array with invalid areas set to nodata_value
+            - ms_mask: Boolean array indicating MS viable sites
+            - lc_mask: Boolean array indicating valid land cover
+            - threshold_mask: Boolean array indicating resource >= threshold
     """
     height, width = data.shape
-    
-    # Ensure lats are descending for standard GeoTIFF orientation
-    if target_lats[0] < target_lats[-1]:
-        target_lats = target_lats[::-1]
-    
-    target_transform = from_bounds(
-        target_lons.min(), target_lats.min(), 
-        target_lons.max(), target_lats.max(),
-        width, height
-    )
+    target_transform = transform
     
     # Initialize masks
     ms_mask = np.zeros((height, width), dtype=bool)
@@ -850,7 +863,7 @@ def apply_viability_filter(data: np.ndarray,
     data_filtered = data.copy()
     data_filtered[~combined_mask] = nodata_value
     
-    return data_filtered
+    return data_filtered, ms_mask, lc_mask, resource_valid
 
 
 # =============================================================================
@@ -1000,10 +1013,10 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
     # -------------------------------------------------------------------------
     print(f"\n--- Regridding to {TARGET_RESOLUTION_ARCSEC} arcsec ---")
     
-    wpd_2030_data, lons, lats = regrid_to_target(wpd_2030_ensemble, TARGET_RESOLUTION_ARCSEC)
-    wpd_2050_data, _, _ = regrid_to_target(wpd_2050_ensemble, TARGET_RESOLUTION_ARCSEC)
-    iqr_2030_data, _, _ = regrid_to_target(wpd_2030_iqr, TARGET_RESOLUTION_ARCSEC)
-    iqr_2050_data, _, _ = regrid_to_target(wpd_2050_iqr, TARGET_RESOLUTION_ARCSEC)
+    wpd_2030_data, lons, lats, grid_transform = regrid_to_target(wpd_2030_ensemble, TARGET_RESOLUTION_ARCSEC)
+    wpd_2050_data, _, _, _ = regrid_to_target(wpd_2050_ensemble, TARGET_RESOLUTION_ARCSEC)
+    iqr_2030_data, _, _, _ = regrid_to_target(wpd_2030_iqr, TARGET_RESOLUTION_ARCSEC)
+    iqr_2050_data, _, _, _ = regrid_to_target(wpd_2050_iqr, TARGET_RESOLUTION_ARCSEC)
     
     print(f"  Output shape: {wpd_2030_data.shape}")
     
@@ -1015,68 +1028,85 @@ def run_processing(workdir: Path, gwa_mask_path: Optional[Path] = None):
         iqr_2050_data = apply_gwa_mask(iqr_2050_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
     
     # -------------------------------------------------------------------------
-    # Apply viability filter: MS_present OR (landcover_valid AND resource >= threshold)
+    # Save raw WPD outputs (GeoTIFF) - NO viability filter applied
+    # These are pure resource data: regridded + GWA mask only
     # -------------------------------------------------------------------------
-    wpd_2030_data = apply_viability_filter(
-        wpd_2030_data, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
-        resource_threshold=WIND_WPD_THRESHOLD, ms_viable_path=MS_WIND_PATH, nodata_value=0
-    )
-    wpd_2050_data = apply_viability_filter(
-        wpd_2050_data, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
-        resource_threshold=WIND_WPD_THRESHOLD, ms_viable_path=MS_WIND_PATH, nodata_value=0
-    )
-    # Uncertainty rasters: use threshold=0 to keep all cells that pass viability
-    iqr_2030_data = apply_viability_filter(
-        iqr_2030_data, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
-        resource_threshold=0, ms_viable_path=MS_WIND_PATH, nodata_value=0
-    )
-    iqr_2050_data = apply_viability_filter(
-        iqr_2050_data, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
-        resource_threshold=0, ms_viable_path=MS_WIND_PATH, nodata_value=0
-    )
-    
-    # -------------------------------------------------------------------------
-    # Save outputs (GeoTIFF and Parquet)
-    # -------------------------------------------------------------------------
-    print("\n--- Saving outputs (GeoTIFF) ---")
+    print("\n--- Saving outputs (GeoTIFF - raw resource, no viability filter) ---")
     
     suffix = f"{TARGET_RESOLUTION_ARCSEC}arcsec"
     
-    save_geotiff(wpd_2030_data, lons, lats, out_dir / f"WPD100_2030_{suffix}.tif")
-    save_geotiff(wpd_2050_data, lons, lats, out_dir / f"WPD100_2050_{suffix}.tif")
-    save_geotiff(iqr_2030_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2030_{suffix}.tif")
-    save_geotiff(iqr_2050_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2050_{suffix}.tif")
+    save_geotiff(wpd_2030_data, grid_transform, out_dir / f"WPD100_2030_{suffix}.tif")
+    save_geotiff(wpd_2050_data, grid_transform, out_dir / f"WPD100_2050_{suffix}.tif")
+    save_geotiff(iqr_2030_data, grid_transform, out_dir / f"WPD100_UNCERTAINTY_2030_{suffix}.tif")
+    save_geotiff(iqr_2050_data, grid_transform, out_dir / f"WPD100_UNCERTAINTY_2050_{suffix}.tif")
     
-    # Also save ERA5 baseline WPD for reference
+    # Also save ERA5 baseline WPD for reference (raw, no viability filter)
     era5_wpd = compute_wpd(era5_baseline)
-    era5_wpd_data, _, _ = regrid_to_target(era5_wpd, TARGET_RESOLUTION_ARCSEC)
+    era5_wpd_data, _, _, _ = regrid_to_target(era5_wpd, TARGET_RESOLUTION_ARCSEC)
     if gwa_mask_path and gwa_mask_path.exists():
         era5_wpd_data = apply_gwa_mask(era5_wpd_data, lons, lats, gwa_mask_path, GWA_EXCLUDE_CLASS)
-    era5_wpd_data = apply_viability_filter(
-        era5_wpd_data, lons, lats, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
+    save_geotiff(era5_wpd_data, grid_transform, out_dir / f"WPD100_baseline_{suffix}.tif")
+    
+    # Compute climate delta (ratio of projected to baseline)
+    print("\n--- Computing climate delta (projected / baseline) ---")
+    with np.errstate(divide='ignore', invalid='ignore'):
+        delta_2030 = np.where(era5_wpd_data > 0, wpd_2030_data / era5_wpd_data, np.nan)
+        delta_2050 = np.where(era5_wpd_data > 0, wpd_2050_data / era5_wpd_data, np.nan)
+    print(f"  Delta 2030 mean: {np.nanmean(delta_2030):.4f}")
+    print(f"  Delta 2050 mean: {np.nanmean(delta_2050):.4f}")
+    save_geotiff(delta_2030, grid_transform, out_dir / f"WPD100_DELTA_2030_{suffix}.tif")
+    save_geotiff(delta_2050, grid_transform, out_dir / f"WPD100_DELTA_2050_{suffix}.tif")
+    
+    print("\n--- Saving outputs (Parquet - raw resource, no viability filter) ---")
+    
+    save_as_parquet(wpd_2030_data, grid_transform, out_dir / f"WPD100_2030_{suffix}.parquet", "WPD_2030")
+    save_as_parquet(wpd_2050_data, grid_transform, out_dir / f"WPD100_2050_{suffix}.parquet", "WPD_2050")
+    save_as_parquet(iqr_2030_data, grid_transform, out_dir / f"WPD100_UNCERTAINTY_2030_{suffix}.parquet", "WPD_UNC_2030")
+    save_as_parquet(iqr_2050_data, grid_transform, out_dir / f"WPD100_UNCERTAINTY_2050_{suffix}.parquet", "WPD_UNC_2050")
+    save_as_parquet(era5_wpd_data, grid_transform, out_dir / f"WPD100_baseline_{suffix}.parquet", "WPD_baseline")
+    save_as_parquet(delta_2030, grid_transform, out_dir / f"WPD100_DELTA_2030_{suffix}.parquet", "DELTA_2030")
+    save_as_parquet(delta_2050, grid_transform, out_dir / f"WPD100_DELTA_2050_{suffix}.parquet", "DELTA_2050")
+    
+    # -------------------------------------------------------------------------
+    # Apply viability filter for viable centroids outputs only
+    # Viability: MS_present OR (landcover_valid AND resource >= threshold)
+    # -------------------------------------------------------------------------
+    print("\n--- Applying viability filter for viable centroids ---")
+    wpd_2030_viable, ms_mask_2030, lc_mask_2030, thresh_mask_2030 = apply_viability_filter(
+        wpd_2030_data.copy(), grid_transform, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
         resource_threshold=WIND_WPD_THRESHOLD, ms_viable_path=MS_WIND_PATH, nodata_value=0
     )
-    save_geotiff(era5_wpd_data, lons, lats, out_dir / f"WPD100_baseline_{suffix}.tif")
-    
-    print("\n--- Saving outputs (Parquet viable centroids) ---")
-    
-    save_as_parquet(wpd_2030_data, lons, lats, out_dir / f"WPD100_2030_{suffix}.parquet", "WPD_2030")
-    save_as_parquet(wpd_2050_data, lons, lats, out_dir / f"WPD100_2050_{suffix}.parquet", "WPD_2050")
-    save_as_parquet(iqr_2030_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2030_{suffix}.parquet", "WPD_UNC_2030")
-    save_as_parquet(iqr_2050_data, lons, lats, out_dir / f"WPD100_UNCERTAINTY_2050_{suffix}.parquet", "WPD_UNC_2050")
-    save_as_parquet(era5_wpd_data, lons, lats, out_dir / f"WPD100_baseline_{suffix}.parquet", "WPD_baseline")
+    wpd_2050_viable, ms_mask_2050, lc_mask_2050, thresh_mask_2050 = apply_viability_filter(
+        wpd_2050_data.copy(), grid_transform, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
+        resource_threshold=WIND_WPD_THRESHOLD, ms_viable_path=MS_WIND_PATH, nodata_value=0
+    )
+    era5_wpd_viable, _, _, _ = apply_viability_filter(
+        era5_wpd_data.copy(), grid_transform, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
+        resource_threshold=WIND_WPD_THRESHOLD, ms_viable_path=MS_WIND_PATH, nodata_value=0
+    )
+    # Uncertainty rasters: use threshold=0 to keep all cells that pass viability
+    iqr_2030_viable, _, _, _ = apply_viability_filter(
+        iqr_2030_data.copy(), grid_transform, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
+        resource_threshold=0, ms_viable_path=MS_WIND_PATH, nodata_value=0
+    )
+    iqr_2050_viable, _, _, _ = apply_viability_filter(
+        iqr_2050_data.copy(), grid_transform, LANDCOVER_PATH, LANDCOVER_VALID_WIND,
+        resource_threshold=0, ms_viable_path=MS_WIND_PATH, nodata_value=0
+    )
     
     # Save unified viable centroids (consistent schema with solar/hydro)
     print("\n--- Saving unified viable centroids ---")
-    save_viable_centroids(wpd_2030_data, era5_wpd_data, iqr_2030_data, lons, lats,
-                          out_dir / "WIND_VIABLE_CENTROIDS_2030.parquet", "2030", "wind")
-    save_viable_centroids(wpd_2050_data, era5_wpd_data, iqr_2050_data, lons, lats,
-                          out_dir / "WIND_VIABLE_CENTROIDS_2050.parquet", "2050", "wind")
+    save_viable_centroids(wpd_2030_viable, era5_wpd_viable, iqr_2030_viable, grid_transform,
+                          out_dir / "WIND_VIABLE_CENTROIDS_2030.parquet", "2030", "wind",
+                          ms_mask=ms_mask_2030, lc_mask=lc_mask_2030, threshold_mask=thresh_mask_2030)
+    save_viable_centroids(wpd_2050_viable, era5_wpd_viable, iqr_2050_viable, grid_transform,
+                          out_dir / "WIND_VIABLE_CENTROIDS_2050.parquet", "2050", "wind",
+                          ms_mask=ms_mask_2050, lc_mask=lc_mask_2050, threshold_mask=thresh_mask_2050)
     
     # Save viable centroids as TIF rasters
     print("\n--- Saving viable centroids TIF rasters ---")
-    save_viable_tif(wpd_2030_data, lons, lats, out_dir / "WIND_VIABLE_CENTROIDS_2030.tif")
-    save_viable_tif(wpd_2050_data, lons, lats, out_dir / "WIND_VIABLE_CENTROIDS_2050.tif")
+    save_viable_tif(wpd_2030_viable, grid_transform, out_dir / "WIND_VIABLE_CENTROIDS_2030.tif")
+    save_viable_tif(wpd_2050_viable, grid_transform, out_dir / "WIND_VIABLE_CENTROIDS_2050.tif")
     
     print(f"\n{'='*70}")
     print("PROCESSING COMPLETE!")
