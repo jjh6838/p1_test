@@ -2,7 +2,7 @@
 #SBATCH --job-name=p36_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=30G
+#SBATCH --mem=25G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 36/40 (T5) at $(date)"
-echo "[INFO] Processing 10 countries in this batch: NER, NIC, NLD, NPL, NZL, OMN, PAN, PNG, POL, PRI"
-echo "[INFO] Tier: T5 | Memory: 30G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 12 countries in this batch: MOZ, MRT, MUS, MWI, MYS, NAM, NCL, NER, NIC, NLD, NPL, NZL"
+echo "[INFO] Tier: T5 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country/logs outputs_global
@@ -44,6 +44,55 @@ elif [ "${RUN_ALL_SCENARIOS:-}" = "1" ]; then
 fi
 
 # Process countries in this batch
+
+echo "[INFO] Processing MOZ (T5)..."
+if $PY process_country_supply.py MOZ $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] MOZ completed"
+else
+    echo "[ERROR] MOZ failed"
+fi
+
+echo "[INFO] Processing MRT (T5)..."
+if $PY process_country_supply.py MRT $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] MRT completed"
+else
+    echo "[ERROR] MRT failed"
+fi
+
+echo "[INFO] Processing MUS (T5)..."
+if $PY process_country_supply.py MUS $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] MUS completed"
+else
+    echo "[ERROR] MUS failed"
+fi
+
+echo "[INFO] Processing MWI (T5)..."
+if $PY process_country_supply.py MWI $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] MWI completed"
+else
+    echo "[ERROR] MWI failed"
+fi
+
+echo "[INFO] Processing MYS (T5)..."
+if $PY process_country_supply.py MYS $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] MYS completed"
+else
+    echo "[ERROR] MYS failed"
+fi
+
+echo "[INFO] Processing NAM (T5)..."
+if $PY process_country_supply.py NAM $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] NAM completed"
+else
+    echo "[ERROR] NAM failed"
+fi
+
+echo "[INFO] Processing NCL (T5)..."
+if $PY process_country_supply.py NCL $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] NCL completed"
+else
+    echo "[ERROR] NCL failed"
+fi
 
 echo "[INFO] Processing NER (T5)..."
 if $PY process_country_supply.py NER $SCENARIO_FLAG --output-dir outputs_per_country; then
@@ -78,41 +127,6 @@ if $PY process_country_supply.py NZL $SCENARIO_FLAG --output-dir outputs_per_cou
     echo "[SUCCESS] NZL completed"
 else
     echo "[ERROR] NZL failed"
-fi
-
-echo "[INFO] Processing OMN (T5)..."
-if $PY process_country_supply.py OMN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] OMN completed"
-else
-    echo "[ERROR] OMN failed"
-fi
-
-echo "[INFO] Processing PAN (T5)..."
-if $PY process_country_supply.py PAN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PAN completed"
-else
-    echo "[ERROR] PAN failed"
-fi
-
-echo "[INFO] Processing PNG (T5)..."
-if $PY process_country_supply.py PNG $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PNG completed"
-else
-    echo "[ERROR] PNG failed"
-fi
-
-echo "[INFO] Processing POL (T5)..."
-if $PY process_country_supply.py POL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] POL completed"
-else
-    echo "[ERROR] POL failed"
-fi
-
-echo "[INFO] Processing PRI (T5)..."
-if $PY process_country_supply.py PRI $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PRI completed"
-else
-    echo "[ERROR] PRI failed"
 fi
 
 echo "[INFO] Batch 36/40 (T5) completed at $(date)"

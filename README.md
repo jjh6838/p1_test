@@ -1,6 +1,6 @@
 # Global Electricity Supply-Demand Analysis Framework
 
-A comprehensive geospatial analysis pipeline for modeling electricity supply networks, projecting future energy demand, and identifying optimal locations for renewable energy infrastructure across 189+ countries.
+A comprehensive geospatial analysis pipeline for modeling electricity supply networks, projecting future energy demand, and identifying optimal locations for renewable energy infrastructure across 190 countries.
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -83,8 +83,8 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── # ═══ HPC Execution Scripts ═══
 ├── submit_all_parallel.sh             # Submit all supply analysis jobs
 ├── submit_all_parallel_siting.sh      # Submit all siting analysis jobs
-├── submit_one.sh                      # Submit single supply script
-├── submit_one_siting.sh               # Submit single siting script
+├── submit_one_direct.sh               # Submit any single country directly
+├── submit_one_direct_siting.sh        # Submit any single country siting directly
 ├── submit_workflow.sh                 # Submit results combination job
 ├── parallel_scripts/                  # 40 supply analysis SLURM scripts
 ├── parallel_scripts_siting/           # 24 siting analysis SLURM scripts
@@ -211,32 +211,23 @@ tail -f outputs_per_country/logs/parallel_*.out
 
 ### Single Country (HPC Cluster)
 
-Use `submit_one.sh` and `submit_one_siting.sh` to submit individual parallel scripts.
-Each script contains one or more countries grouped by computational tier.
+Use `submit_one_direct.sh` for supply analysis or `submit_one_direct_siting.sh` for siting analysis.
 
 ```bash
-# List available scripts and see which countries are in each
-cat parallel_scripts/submit_parallel_01.sh | grep "Processing"
-# Output: Processing 1 countries in this batch: CHN
+# Submit any single country supply analysis (auto-detects tier and resources)
+./submit_one_direct.sh KEN                      # Auto-detect tier, 100% scenario
+./submit_one_direct.sh KEN --run-all-scenarios  # All 5 scenarios
+./submit_one_direct.sh KEN --supply-factor 0.9  # Specific supply factor
+./submit_one_direct.sh CHN --tier 1             # Override tier (use T1 resources)
 
-# Submit a specific supply script by number (single scenario: 100%)
-./submit_one.sh 01              # Submit script 01 (CHN)
-./submit_one.sh 5               # Leading zero optional
+# Submit any single country siting analysis
+./submit_one_direct_siting.sh KEN
+./submit_one_direct_siting.sh KEN --run-all-scenarios
+./submit_one_direct_siting.sh KEN --supply-factor 0.9
 
-# Submit with all 5 scenarios (100%, 90%, 80%, 70%, 60%)
-./submit_one.sh 01 --run-all-scenarios
-
-# Submit with a specific supply factor (e.g., 90% only)
-./submit_one.sh 01 --supply-factor 0.9
-
-# Same for siting analysis
-./submit_one_siting.sh 03
-./submit_one_siting.sh 03 --run-all-scenarios
-./submit_one_siting.sh 03 --supply-factor 0.9
-
-# Check which script contains a specific country
+# Check which batch script contains a specific country
 grep -l "USA" parallel_scripts/*.sh
-# Output: parallel_scripts/submit_parallel_05.sh
+# Output: parallel_scripts/submit_parallel_06.sh
 ```
 
 **Script-to-Country Mapping (Tier 1-2):**
@@ -247,7 +238,8 @@ grep -l "USA" parallel_scripts/*.sh
 | 03 | IND | T2 | 168h Long |
 | 04 | BRA | T2 | 168h Long |
 | 05 | DEU | T2 | 168h Long |
-| 06+ | Multiple | T3-T5 | Medium/Small countries |
+| 06 | FRA | T2 | 168h Long |
+| 07+ | Multiple | T3-T5 | Medium/Small countries |
 
 ---
 
@@ -680,9 +672,9 @@ python generate_hpc_scripts.py --create-parallel-siting
 | Script | Description |
 |--------|-------------|
 | `submit_all_parallel.sh` | Submit all 40 supply analysis jobs |
-| `submit_one.sh` | Submit individual supply script by number |
+| `submit_one_direct.sh` | Submit any single country supply analysis |
 | `submit_all_parallel_siting.sh` | Submit all 25 siting analysis jobs |
-| `submit_one_siting.sh` | Submit individual siting script by number |
+| `submit_one_direct_siting.sh` | Submit any single country siting analysis |
 | `submit_workflow.sh` | Combine results after all jobs complete |
 | `parallel_scripts/*.sh` | 40 individual supply SLURM scripts |
 | `parallel_scripts_siting/*.sh` | 25 individual siting SLURM scripts |
@@ -883,10 +875,10 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 | Tier | Countries | CPUs | Memory | Time | Partition | Node | Examples |
 |------|-----------|------|--------|------|-----------|------|----------|
 | **1** | CHN | 40 | 450GB | 168h | Long | ouce-cn64 | China (dedicated node) |
-| **2** | 4 large | 40 | 95GB | 168h | Long | - | USA, IND, BRA, DEU |
+| **2** | 5 large | 40 | 95GB | 168h | Long | - | USA, IND, BRA, DEU, FRA |
 | **3** | 11 medium-large | 40 | 95GB | 48h | Medium | - | CAN, MEX, RUS, AUS, ARG, etc. |
-| **4** | ~19 medium | 40 | 95GB | 12h | Short | - | TUR, NGA, COL, PAK, etc. (2/script) |
-| **5** | ~150 small | 40 | 25GB | 12h | Short | - | All others (11/script) |
+| **4** | 20 medium | 40 | 95GB | 12h | Short | - | TUR, NGA, COL, PAK, VEN, etc. (2/script) |
+| **5** | ~156 small | 40 | 25GB | 12h | Short | - | All others (12/script) |
 
 ### Complete HPC Workflow
 
@@ -900,8 +892,8 @@ python generate_hpc_scripts.py --create-parallel         # 40 supply scripts
 python generate_hpc_scripts.py --create-parallel-siting  # 25 siting scripts
 
 # Fix line endings (if prepared on Windows)
-sed -i 's/\r$//' submit_all_parallel.sh submit_one.sh parallel_scripts/*.sh
-sed -i 's/\r$//' submit_all_parallel_siting.sh submit_one_siting.sh parallel_scripts_siting/*.sh
+sed -i 's/\r$//' submit_all_parallel.sh submit_one_direct.sh parallel_scripts/*.sh
+sed -i 's/\r$//' submit_all_parallel_siting.sh submit_one_direct_siting.sh parallel_scripts_siting/*.sh
 chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # ═══════════════════════════════════════════════════════════════
@@ -921,7 +913,7 @@ chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 squeue -u $USER
 tail -f outputs_per_country/logs/parallel_*.out
 
-# Verify completion (~189 countries)
+# Verify completion (~190 countries)
 find outputs_per_country/parquet -name "facilities_*.parquet" | wc -l
 
 # ═══════════════════════════════════════════════════════════════
@@ -966,9 +958,9 @@ ls -lh outputs_global/*_global.gpkg
 
 | Phase | Single Scenario | All 5 Scenarios | Output |
 |-------|-----------------|-----------------|--------|
-| Supply Analysis | 8-12 hours | 40-60 hours | ~189 country parquets |
-| Siting Analysis | 4-6 hours | 20-30 hours | ~150 siting parquets |
-| ADD_V2 Integration | 8-12 hours | 40-60 hours | ~150 integrated parquets |
+| Supply Analysis | 8-12 hours | 40-60 hours | ~190 country parquets |
+| Siting Analysis | 4-6 hours | 20-30 hours | ~190 siting parquets |
+| ADD_V2 Integration | 8-12 hours | 40-60 hours | ~190 integrated parquets |
 | Results Combination | 1-2 hours | 1-2 hours | Global GeoPackages |
 | **Total (full)** | **21-32 hours** | **101-152 hours** | |
 | **Total (no ADD_V2)** | **13-20 hours** | **61-92 hours** | |
@@ -978,17 +970,17 @@ ls -lh outputs_global/*_global.gpkg
 ### Single Job Submission
 
 ```bash
-# Submit specific supply script (single scenario)
-./submit_one.sh 06
+# Submit any single country supply analysis (auto-detects tier)
+./submit_one_direct.sh KEN
 
-# Submit specific supply script (all 5 scenarios)
-./submit_one.sh 06 --run-all-scenarios
+# Submit single country with all 5 scenarios
+./submit_one_direct.sh KEN --run-all-scenarios
 
-# Submit specific siting script (single scenario)
-./submit_one_siting.sh 03
+# Submit any single country siting analysis
+./submit_one_direct_siting.sh KEN
 
-# Submit specific siting script (all 5 scenarios)
-./submit_one_siting.sh 03 --run-all-scenarios
+# Submit siting with all 5 scenarios
+./submit_one_direct_siting.sh KEN --run-all-scenarios
 ```
 
 ---

@@ -2,7 +2,7 @@
 #SBATCH --job-name=p39_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=30G
+#SBATCH --mem=25G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 39/40 (T5) at $(date)"
-echo "[INFO] Processing 10 countries in this batch: TGO, THA, TJK, TKM, TLS, TON, TTO, TUN, TWN, TZA"
-echo "[INFO] Tier: T5 | Memory: 30G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 11 countries in this batch: SYC, SYR, TGO, THA, TJK, TKM, TLS, TON, TTO, TUN, TWN"
+echo "[INFO] Tier: T5 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country/logs outputs_global
@@ -44,6 +44,20 @@ elif [ "${RUN_ALL_SCENARIOS:-}" = "1" ]; then
 fi
 
 # Process countries in this batch
+
+echo "[INFO] Processing SYC (T5)..."
+if $PY process_country_supply.py SYC $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] SYC completed"
+else
+    echo "[ERROR] SYC failed"
+fi
+
+echo "[INFO] Processing SYR (T5)..."
+if $PY process_country_supply.py SYR $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] SYR completed"
+else
+    echo "[ERROR] SYR failed"
+fi
 
 echo "[INFO] Processing TGO (T5)..."
 if $PY process_country_supply.py TGO $SCENARIO_FLAG --output-dir outputs_per_country; then
@@ -106,13 +120,6 @@ if $PY process_country_supply.py TWN $SCENARIO_FLAG --output-dir outputs_per_cou
     echo "[SUCCESS] TWN completed"
 else
     echo "[ERROR] TWN failed"
-fi
-
-echo "[INFO] Processing TZA (T5)..."
-if $PY process_country_supply.py TZA $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TZA completed"
-else
-    echo "[ERROR] TZA failed"
 fi
 
 echo "[INFO] Batch 39/40 (T5) completed at $(date)"

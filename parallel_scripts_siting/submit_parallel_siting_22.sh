@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting siting analysis script 22/25 (T3) at $(date)"
-echo "[INFO] Processing 10 countries in this batch: RWA, SDN, SEN, SGP, SLE, SLV, SOM, SRB, SSD, SUR"
+echo "[INFO] Processing 10 countries in this batch: SDN, SEN, SGP, SLE, SLV, SOM, SRB, SSD, SUR, SVK"
 echo "[INFO] Tier: T3 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
@@ -44,13 +44,6 @@ elif [ "${RUN_ALL_SCENARIOS:-}" = "1" ]; then
 fi
 
 # Process countries in this batch
-
-echo "[INFO] Processing siting analysis for RWA (T3)..."
-if $PY process_country_siting.py RWA $SCENARIO_FLAG; then
-    echo "[SUCCESS] RWA siting analysis completed"
-else
-    echo "[ERROR] RWA siting analysis failed"
-fi
 
 echo "[INFO] Processing siting analysis for SDN (T3)..."
 if $PY process_country_siting.py SDN $SCENARIO_FLAG; then
@@ -113,6 +106,13 @@ if $PY process_country_siting.py SUR $SCENARIO_FLAG; then
     echo "[SUCCESS] SUR siting analysis completed"
 else
     echo "[ERROR] SUR siting analysis failed"
+fi
+
+echo "[INFO] Processing siting analysis for SVK (T3)..."
+if $PY process_country_siting.py SVK $SCENARIO_FLAG; then
+    echo "[SUCCESS] SVK siting analysis completed"
+else
+    echo "[ERROR] SVK siting analysis failed"
 fi
 
 echo "[INFO] Siting batch 22/25 (T3) completed at $(date)"

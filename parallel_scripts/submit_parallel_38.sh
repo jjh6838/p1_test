@@ -2,7 +2,7 @@
 #SBATCH --job-name=p38_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=30G
+#SBATCH --mem=25G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 38/40 (T5) at $(date)"
-echo "[INFO] Processing 10 countries in this batch: SLV, SOM, SRB, SSD, SUR, SVK, SVN, SWZ, SYC, SYR"
-echo "[INFO] Tier: T5 | Memory: 30G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 11 countries in this batch: SEN, SGP, SLE, SLV, SOM, SRB, SSD, SUR, SVK, SVN, SWZ"
+echo "[INFO] Tier: T5 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country/logs outputs_global
@@ -44,6 +44,27 @@ elif [ "${RUN_ALL_SCENARIOS:-}" = "1" ]; then
 fi
 
 # Process countries in this batch
+
+echo "[INFO] Processing SEN (T5)..."
+if $PY process_country_supply.py SEN $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] SEN completed"
+else
+    echo "[ERROR] SEN failed"
+fi
+
+echo "[INFO] Processing SGP (T5)..."
+if $PY process_country_supply.py SGP $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] SGP completed"
+else
+    echo "[ERROR] SGP failed"
+fi
+
+echo "[INFO] Processing SLE (T5)..."
+if $PY process_country_supply.py SLE $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] SLE completed"
+else
+    echo "[ERROR] SLE failed"
+fi
 
 echo "[INFO] Processing SLV (T5)..."
 if $PY process_country_supply.py SLV $SCENARIO_FLAG --output-dir outputs_per_country; then
@@ -99,20 +120,6 @@ if $PY process_country_supply.py SWZ $SCENARIO_FLAG --output-dir outputs_per_cou
     echo "[SUCCESS] SWZ completed"
 else
     echo "[ERROR] SWZ failed"
-fi
-
-echo "[INFO] Processing SYC (T5)..."
-if $PY process_country_supply.py SYC $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SYC completed"
-else
-    echo "[ERROR] SYC failed"
-fi
-
-echo "[INFO] Processing SYR (T5)..."
-if $PY process_country_supply.py SYR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SYR completed"
-else
-    echo "[ERROR] SYR failed"
 fi
 
 echo "[INFO] Batch 38/40 (T5) completed at $(date)"

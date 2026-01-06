@@ -19,13 +19,20 @@
 # WHY THIS IS NEEDED:
 # - Consistency: Ensures that the workflow only attempts to process countries for which all
 #   necessary input data is available.
-# - Efficiency: Processing over 150 countries sequentially would take weeks. By generating
+# - Efficiency: Processing 190 countries sequentially would take weeks. By generating
 #   parallel scripts, the workload can be distributed across dozens or hundreds of CPU cores,
 #   reducing the total runtime to hours.
 # - Resource Optimization: The script uses a "tiered" approach, grouping countries by their
 #   expected computational load (e.g., large, complex countries like China get a dedicated
 #   script with maximum resources, while many small countries are batched together). This
 #   ensures efficient use of cluster resources.
+#
+# TIER BREAKDOWN (40 total scripts for 190 countries):
+#   T1: 1 country (CHN) → 1 script
+#   T2: 5 large countries (USA, IND, BRA, DEU, FRA) → 5 scripts
+#   T3: 11 medium-large countries (CAN, MEX, RUS, etc.) → 11 scripts
+#   T4: 20 medium countries (TUR, NGA, VEN, ETH, etc.) → 10 scripts (2 per script)
+#   T5: ~153 remaining countries → 13 scripts (12 per script)
 # ==================================================================================================
 """
 import pandas as pd
@@ -154,28 +161,28 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     
     # Define tiers based on country size/complexity. This is determined empirically based on
     # the computational intensity (number of centroids, grid lines) of each country.
-    TIER_1 = {"CHN"}  # Largest countries, require maximum resources. CHN = 3 days
-    TIER_2 = {"USA", "IND", "BRA", "DEU"}  # Large countries. USD = 20 hours+, IND = 6 hours+, Others = 2-4 hours for one scenario. 
-    TIER_3 = {"CAN", "MEX", "RUS", "AUS", "ARG", "KAZ", "SAU", "IDN", "IRN", "ZAF", "EGY"}  # Medium-large countries.
+    # Total: 190 countries → 40 scripts (1 + 5 + 11 + 10 + 13 = 40)
+    TIER_1 = {"CHN"}  # 1 country → 1 script. Largest, requires maximum resources. CHN = 3 days
+    TIER_2 = {"USA", "IND", "BRA", "DEU", "FRA"}  # 5 countries → 5 scripts. Large countries. USD = 20h+, IND = 6h+, Others = 2-4h for one scenario. 
+    TIER_3 = {"CAN", "MEX", "RUS", "AUS", "ARG", "KAZ", "SAU", "IDN", "IRN", "ZAF", "EGY"}  # 11 countries → 11 scripts. Medium-large countries.
     TIER_4 = {
-        "TUR", "NGA", "COL", "PAK", "PER", "DZA", "VEN", "UKR", "ETH", "PHL", "MLI", "TCD", "SDN", "FRA",
-        "SWE", "NOR", "IRQ", "MMR", "JPN"
-    }  # Medium countries.
+        "TUR", "NGA", "COL", "PAK", "PER", "DZA", "VEN", "UKR", "ETH", "PHL", "MLI", "TCD", "SDN",
+        "SWE", "NOR", "IRQ", "MMR", "JPN", "GHA", "GEO"
+    }  # 20 countries → 10 scripts (2 per script). Medium countries.
     
     # Tier-based resource allocation. This configuration is tailored for a specific HPC cluster node specification.
     # The goal is to pack jobs efficiently onto nodes based on computational requirements.
-    # Memory allocation: Tier 1 uses 200GB (high-memory nodes), Tier 2/4 use 90GB, Tier 3/5 use 30GB
-    # Partition strategy: Interactive (168h) for Tier 1, Medium (48h) for Tier 2-3, Short (12h) for Tiers 4-5
-    # CPU count: Tier 1 uses 56 CPUs, others use 40 CPUs
-    # Cluster Spec as of 12/01/2025: Interactive nodes 56CPUs/480G, Medium nodes 40CPUs/100G, Short nodes 40CPUs/100GB
+    # Tier 5: ~156 remaining countries → 13 scripts (12 countries per script)
+    # Partition strategy: Long (168h) for Tier 1-2, Medium (48h) for Tier 3, Short (12h) for Tiers 4-5
+    # Cluster Spec as of 01/2025: Long nodes 40CPUs/900G (cn60,cn64), Medium nodes 40CPUs/100G, Short nodes 40CPUs/100GB
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
         "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 40, "time": "168:00:00", "partition": "Long", "nodelist": "ouce-cn64"},  # CHN - dedicated node cn60 and 64 - Long, 40 cpus, max 900G
-        "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU - Long partition (7 days)
+        "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU, FRA - Long partition (7 days)
         "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h)
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
-        "t5": {"max_countries_per_script": 11, "mem": "25G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 11 countries per script
+        "t5": {"max_countries_per_script": 12, "mem": "25G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 12 countries per script
     }
     
     
@@ -559,16 +566,27 @@ fi
     
     print(f"Created {workflow_file} for combining results")
     
-    # Create individual script runner for re-running specific scripts
-    single_script = """#!/bin/bash
-# Run a single parallel script by number (e.g., ./submit_one.sh 06)
-# Usage: ./submit_one.sh <script_number> [--run-all-scenarios] [--supply-factor <value>]
+    # Create submit_one_direct.sh for running any single country directly
+    direct_script = f"""#!/bin/bash --login
+# ==============================================================================
+# Run any country with scenario options - useful for filling gaps or re-running
+# Usage: ./submit_one_direct.sh <ISO3> [--run-all-scenarios] [--supply-factor <value>]
+#        ./submit_one_direct.sh <ISO3> [--tier <1-5>] [options]
+#
+# Examples:
+#   ./submit_one_direct.sh KEN                      # Single country, 100% scenario
+#   ./submit_one_direct.sh KEN --run-all-scenarios  # Single country, all 5 scenarios
+#   ./submit_one_direct.sh KEN --supply-factor 0.9  # Single country, 90% scenario
+#   ./submit_one_direct.sh CHN --tier 1             # Use Tier 1 resources (high memory)
+#   ./submit_one_direct.sh USA --tier 2             # Use Tier 2 resources
+# ==============================================================================
 
 # --- Parse arguments ---
 RUN_ALL_SCENARIOS=""
 SUPPLY_FACTOR=""
 SBATCH_EXPORT=""
-SCRIPT_NUM=""
+ISO3=""
+TIER=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -584,17 +602,25 @@ while [ $# -gt 0 ]; do
             SUPPLY_FACTOR="$2"
             shift 2
             ;;
+        --tier)
+            if [ -z "$2" ] || [[ "$2" == --* ]]; then
+                echo "Error: --tier requires a value (1-5)"
+                exit 1
+            fi
+            TIER="$2"
+            shift 2
+            ;;
         -*)
             echo "Unknown option: $1"
-            echo "Usage: $0 <script_number> [--run-all-scenarios] [--supply-factor <value>]"
+            echo "Usage: $0 <ISO3> [--run-all-scenarios] [--supply-factor <value>] [--tier <1-5>]"
             exit 1
             ;;
         *)
-            if [ -z "$SCRIPT_NUM" ]; then
-                SCRIPT_NUM="$1"
+            if [ -z "$ISO3" ]; then
+                ISO3="$1"
             else
                 echo "Unknown argument: $1"
-                echo "Usage: $0 <script_number> [--run-all-scenarios] [--supply-factor <value>]"
+                echo "Usage: $0 <ISO3> [--run-all-scenarios] [--supply-factor <value>] [--tier <1-5>]"
                 exit 1
             fi
             shift
@@ -602,69 +628,187 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Build SBATCH_EXPORT based on flags
+# Validate ISO3
+if [ -z "$ISO3" ]; then
+    echo "Usage: $0 <ISO3> [--run-all-scenarios] [--supply-factor <value>] [--tier <1-5>]"
+    echo ""
+    echo "Examples:"
+    echo "  $0 KEN                      # Single country, 100% scenario, auto-detect tier"
+    echo "  $0 KEN --run-all-scenarios  # Single country, all 5 scenarios"
+    echo "  $0 KEN --supply-factor 0.9  # Single country, 90% scenario"
+    echo "  $0 CHN --tier 1             # Use Tier 1 resources (450G memory)"
+    echo "  $0 USA --tier 2             # Use Tier 2 resources (95G memory)"
+    echo ""
+    echo "Tier resources:"
+    echo "  T1: {TIER_CONFIG['t1']['mem']}, {TIER_CONFIG['t1']['cpus']} CPUs, {TIER_CONFIG['t1']['time']} ({TIER_CONFIG['t1']['partition']})  - CHN"
+    echo "  T2: {TIER_CONFIG['t2']['mem']}, {TIER_CONFIG['t2']['cpus']} CPUs, {TIER_CONFIG['t2']['time']} ({TIER_CONFIG['t2']['partition']})   - USA, IND, BRA, DEU, FRA"
+    echo "  T3: {TIER_CONFIG['t3']['mem']}, {TIER_CONFIG['t3']['cpus']} CPUs, {TIER_CONFIG['t3']['time']} ({TIER_CONFIG['t3']['partition']})  - CAN, MEX, RUS, AUS, etc."
+    echo "  T4: {TIER_CONFIG['t4']['mem']}, {TIER_CONFIG['t4']['cpus']} CPUs, {TIER_CONFIG['t4']['time']} ({TIER_CONFIG['t4']['partition']})   - TUR, NGA, VEN, ETH, etc."
+    echo "  T5: {TIER_CONFIG['t5']['mem']}, {TIER_CONFIG['t5']['cpus']} CPUs, {TIER_CONFIG['t5']['time']} ({TIER_CONFIG['t5']['partition']})   - All others (default)"
+    exit 1
+fi
+
+# Convert to uppercase
+ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
+
+# --- Auto-detect tier based on country if not specified ---
+TIER_1="{' '.join(TIER_1)}"
+TIER_2="{' '.join(TIER_2)}"
+TIER_3="{' '.join(TIER_3)}"
+TIER_4="{' '.join(TIER_4)}"
+
+if [ -z "$TIER" ]; then
+    if [[ " $TIER_1 " =~ " $ISO3 " ]]; then
+        TIER="1"
+    elif [[ " $TIER_2 " =~ " $ISO3 " ]]; then
+        TIER="2"
+    elif [[ " $TIER_3 " =~ " $ISO3 " ]]; then
+        TIER="3"
+    elif [[ " $TIER_4 " =~ " $ISO3 " ]]; then
+        TIER="4"
+    else
+        TIER="5"
+    fi
+    echo "[INFO] Auto-detected tier: T${{TIER}} for ${{ISO3}}"
+fi
+
+# --- Set SLURM resources based on tier ---
+case $TIER in
+    1)
+        PARTITION="{TIER_CONFIG['t1']['partition']}"
+        TIME="{TIER_CONFIG['t1']['time']}"
+        MEM="{TIER_CONFIG['t1']['mem']}"
+        CPUS="{TIER_CONFIG['t1']['cpus']}"
+        ;;
+    2)
+        PARTITION="{TIER_CONFIG['t2']['partition']}"
+        TIME="{TIER_CONFIG['t2']['time']}"
+        MEM="{TIER_CONFIG['t2']['mem']}"
+        CPUS="{TIER_CONFIG['t2']['cpus']}"
+        ;;
+    3)
+        PARTITION="{TIER_CONFIG['t3']['partition']}"
+        TIME="{TIER_CONFIG['t3']['time']}"
+        MEM="{TIER_CONFIG['t3']['mem']}"
+        CPUS="{TIER_CONFIG['t3']['cpus']}"
+        ;;
+    4)
+        PARTITION="{TIER_CONFIG['t4']['partition']}"
+        TIME="{TIER_CONFIG['t4']['time']}"
+        MEM="{TIER_CONFIG['t4']['mem']}"
+        CPUS="{TIER_CONFIG['t4']['cpus']}"
+        ;;
+    5|*)
+        PARTITION="{TIER_CONFIG['t5']['partition']}"
+        TIME="{TIER_CONFIG['t5']['time']}"
+        MEM="{TIER_CONFIG['t5']['mem']}"
+        CPUS="{TIER_CONFIG['t5']['cpus']}"
+        ;;
+esac
+
+echo "[INFO] Resources: Partition=$PARTITION, Time=$TIME, Memory=$MEM, CPUs=$CPUS"
+
+# --- Determine scenario flag and log directory ---
 if [ -n "$SUPPLY_FACTOR" ]; then
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${{SCENARIO_PCT}}%/logs"
+    SCENARIO_DESC="supply factor ${{SCENARIO_PCT}}%"
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
-    SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
-fi
-
-if [ -z "$SCRIPT_NUM" ]; then
-    echo "Usage: $0 <script_number> [--run-all-scenarios] [--supply-factor <value>]"
-    echo "Example: $0 06"
-    echo "Example: $0 06 --run-all-scenarios"
-    echo "Example: $0 06 --supply-factor 0.9"
-    echo ""
-    echo "Available scripts:"
-    ls -1 parallel_scripts/submit_parallel_*.sh | sed 's/.*submit_parallel_/  /' | sed 's/.sh//'
-    exit 1
-fi
-
-SCRIPT_NUM=$(printf "%02d" $SCRIPT_NUM)
-SCRIPT_FILE="parallel_scripts/submit_parallel_${SCRIPT_NUM}.sh"
-
-if [ ! -f "$SCRIPT_FILE" ]; then
-    echo "Error: Script not found: $SCRIPT_FILE"
-    echo ""
-    echo "Available scripts:"
-    ls -1 parallel_scripts/submit_parallel_*.sh | sed 's/.*submit_parallel_/  /' | sed 's/.sh//'
-    exit 1
-fi
-
-# --- Determine log directory based on scenario ---
-if [ -n "$SUPPLY_FACTOR" ]; then
-    # Convert supply factor to percentage (e.g., 0.9 -> 90)
-    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
-    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
-    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor ${SCENARIO_PCT}%)"
-elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
-    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+    SCENARIO_DESC="ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+    SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
 else
     LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
-    echo "[INFO] Running default scenario: 100%"
+    SCENARIO_DESC="100% (default)"
+    SBATCH_EXPORT=""
 fi
 
-# Create log directory
 mkdir -p "$LOG_DIR"
 
-echo "[INFO] Submitting script ${SCRIPT_NUM}..."
-echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
-sbatch --output="${LOG_DIR}/parallel_${SCRIPT_NUM}_%j.out" \\
-       --error="${LOG_DIR}/parallel_${SCRIPT_NUM}_%j.err" \\
-       $SBATCH_EXPORT "$SCRIPT_FILE"
+echo "[INFO] Country: ${{ISO3}}"
+echo "[INFO] Scenario: ${{SCENARIO_DESC}}"
+echo "[INFO] Logs: ${{LOG_DIR}}/"
+
+# --- Create temporary SLURM script ---
+TEMP_SCRIPT=$(mktemp /tmp/submit_${{ISO3}}_XXXXXX.sh)
+
+cat > "$TEMP_SCRIPT" << 'HEREDOC_HEADER'
+#!/bin/bash --login
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+cd "$SLURM_SUBMIT_DIR"
+
+HEREDOC_HEADER
+
+cat >> "$TEMP_SCRIPT" << HEREDOC_BODY
+echo "[INFO] Starting ${{ISO3}} (T${{TIER}}) at \\$(date)"
+echo "[INFO] Resources: ${{PARTITION}} partition, ${{MEM}} memory, ${{CPUS}} CPUs, ${{TIME}} time limit"
+
+# --- directories ---
+mkdir -p outputs_per_country/logs outputs_global
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:\\$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+conda activate p1_etl || true
+
+# Use the env's absolute python path to avoid activation issues in batch shells
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: \\$PY"
+\\$PY -c 'import sys; print(sys.executable)'
+
+# Check scenario flags (passed via sbatch --export)
+SCENARIO_FLAG=""
+if [ -n "\\${{SUPPLY_FACTOR:-}}" ]; then
+    SCENARIO_FLAG="--supply-factor \\$SUPPLY_FACTOR"
+    echo "[INFO] Running single scenario: \\${{SUPPLY_FACTOR}} (supply factor)"
+elif [ "\\${{RUN_ALL_SCENARIOS:-}}" = "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
+
+# Process country
+echo "[INFO] Processing ${{ISO3}} (T${{TIER}})..."
+if \\$PY process_country_supply.py ${{ISO3}} \\$SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] ${{ISO3}} completed at \\$(date)"
+else
+    echo "[ERROR] ${{ISO3}} failed at \\$(date)"
+    exit 1
+fi
+HEREDOC_BODY
+
+# --- Submit the job ---
+echo "[INFO] Submitting ${{ISO3}}..."
+sbatch --job-name="d_${{ISO3}}" \\
+       --partition="$PARTITION" \\
+       --time="$TIME" \\
+       --mem="$MEM" \\
+       --ntasks=1 \\
+       --nodes=1 \\
+       --cpus-per-task="$CPUS" \\
+       --output="${{LOG_DIR}}/${{ISO3}}_%j.out" \\
+       --error="${{LOG_DIR}}/${{ISO3}}_%j.err" \\
+       $SBATCH_EXPORT \\
+       "$TEMP_SCRIPT"
+
+# Clean up temp script after a delay (give sbatch time to read it)
+(sleep 5 && rm -f "$TEMP_SCRIPT") &
 
 echo ""
 echo "Monitor with:"
 echo "  squeue -u \\$USER"
-echo "  watch -n 60 'squeue -u \\$USER'"
+echo "  tail -f ${{LOG_DIR}}/${{ISO3}}_*.out"
 """
     
-    single_file = Path("submit_one.sh")
-    single_file.write_text(single_script, encoding='utf-8')
-    single_file.chmod(0o755)
+    direct_file = Path("submit_one_direct.sh")
+    direct_file.write_text(direct_script, encoding='utf-8')
+    direct_file.chmod(0o755)
     
-    print(f"Created {single_file} for submitting individual scripts")
+    print(f"Created {direct_file} for submitting any single country directly")
     
     print(f"\nTotal resource allocation:")
     
@@ -1015,16 +1159,26 @@ echo "  Tier 3 (all others):           11 countries/script | Short partition (12
     
     print(f"\nCreated {master_file} to submit all parallel siting jobs")
     
-    # Create single script runner
-    single_script = """#!/bin/bash
-# Run a single parallel siting script by number
-# Usage: ./submit_one_siting.sh <script_number> [--run-all-scenarios] [--supply-factor <value>]
+    # Create submit_one_direct_siting.sh for running any single country's siting analysis directly
+    direct_siting_script = f"""#!/bin/bash --login
+# ==============================================================================
+# Run siting analysis for any country - useful for filling gaps or re-running
+# Usage: ./submit_one_direct_siting.sh <ISO3> [--run-all-scenarios] [--supply-factor <value>]
+#        ./submit_one_direct_siting.sh <ISO3> [--tier <1-3>] [options]
+#
+# Examples:
+#   ./submit_one_direct_siting.sh KEN                      # Single country, 100% scenario
+#   ./submit_one_direct_siting.sh KEN --run-all-scenarios  # Single country, all 5 scenarios
+#   ./submit_one_direct_siting.sh KEN --supply-factor 0.9  # Single country, 90% scenario
+#   ./submit_one_direct_siting.sh CHN --tier 1             # Use Tier 1 resources (high memory)
+# ==============================================================================
 
 # --- Parse arguments ---
 RUN_ALL_SCENARIOS=""
 SUPPLY_FACTOR=""
 SBATCH_EXPORT=""
-SCRIPT_NUM=""
+ISO3=""
+TIER=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -1040,17 +1194,25 @@ while [ $# -gt 0 ]; do
             SUPPLY_FACTOR="$2"
             shift 2
             ;;
+        --tier)
+            if [ -z "$2" ] || [[ "$2" == --* ]]; then
+                echo "Error: --tier requires a value (1-3)"
+                exit 1
+            fi
+            TIER="$2"
+            shift 2
+            ;;
         -*)
             echo "Unknown option: $1"
-            echo "Usage: $0 <script_number> [--run-all-scenarios] [--supply-factor <value>]"
+            echo "Usage: $0 <ISO3> [--run-all-scenarios] [--supply-factor <value>] [--tier <1-3>]"
             exit 1
             ;;
         *)
-            if [ -z "$SCRIPT_NUM" ]; then
-                SCRIPT_NUM="$1"
+            if [ -z "$ISO3" ]; then
+                ISO3="$1"
             else
                 echo "Unknown argument: $1"
-                echo "Usage: $0 <script_number> [--run-all-scenarios] [--supply-factor <value>]"
+                echo "Usage: $0 <ISO3> [--run-all-scenarios] [--supply-factor <value>] [--tier <1-3>]"
                 exit 1
             fi
             shift
@@ -1058,69 +1220,166 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Build SBATCH_EXPORT based on flags
+# Validate ISO3
+if [ -z "$ISO3" ]; then
+    echo "Usage: $0 <ISO3> [--run-all-scenarios] [--supply-factor <value>] [--tier <1-3>]"
+    echo ""
+    echo "Examples:"
+    echo "  $0 KEN                      # Single country, 100% scenario, auto-detect tier"
+    echo "  $0 KEN --run-all-scenarios  # Single country, all 5 scenarios"
+    echo "  $0 KEN --supply-factor 0.9  # Single country, 90% scenario"
+    echo "  $0 CHN --tier 1             # Use Tier 1 resources (95G memory)"
+    echo ""
+    echo "Tier resources (siting analysis):"
+    echo "  T1: {SITING_TIER_CONFIG['t1']['mem']}, {SITING_TIER_CONFIG['t1']['cpus']} CPUs, {SITING_TIER_CONFIG['t1']['time']} ({SITING_TIER_CONFIG['t1']['partition']})  - CHN, USA, IND"
+    echo "  T2: {SITING_TIER_CONFIG['t2']['mem']}, {SITING_TIER_CONFIG['t2']['cpus']} CPUs, {SITING_TIER_CONFIG['t2']['time']} ({SITING_TIER_CONFIG['t2']['partition']})  - CAN, MEX, RUS, BRA, etc."
+    echo "  T3: {SITING_TIER_CONFIG['t3']['mem']}, {SITING_TIER_CONFIG['t3']['cpus']} CPUs, {SITING_TIER_CONFIG['t3']['time']} ({SITING_TIER_CONFIG['t3']['partition']})  - All others (default)"
+    exit 1
+fi
+
+# Convert to uppercase
+ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
+
+# --- Auto-detect tier based on country if not specified ---
+SITING_TIER_1="{' '.join(TIER_1)}"
+SITING_TIER_2="{' '.join(TIER_2)}"
+
+if [ -z "$TIER" ]; then
+    if [[ " $SITING_TIER_1 " =~ " $ISO3 " ]]; then
+        TIER="1"
+    elif [[ " $SITING_TIER_2 " =~ " $ISO3 " ]]; then
+        TIER="2"
+    else
+        TIER="3"
+    fi
+    echo "[INFO] Auto-detected tier: T${{TIER}} for ${{ISO3}}"
+fi
+
+# --- Set SLURM resources based on tier ---
+case $TIER in
+    1)
+        PARTITION="{SITING_TIER_CONFIG['t1']['partition']}"
+        TIME="{SITING_TIER_CONFIG['t1']['time']}"
+        MEM="{SITING_TIER_CONFIG['t1']['mem']}"
+        CPUS="{SITING_TIER_CONFIG['t1']['cpus']}"
+        ;;
+    2)
+        PARTITION="{SITING_TIER_CONFIG['t2']['partition']}"
+        TIME="{SITING_TIER_CONFIG['t2']['time']}"
+        MEM="{SITING_TIER_CONFIG['t2']['mem']}"
+        CPUS="{SITING_TIER_CONFIG['t2']['cpus']}"
+        ;;
+    3|*)
+        PARTITION="{SITING_TIER_CONFIG['t3']['partition']}"
+        TIME="{SITING_TIER_CONFIG['t3']['time']}"
+        MEM="{SITING_TIER_CONFIG['t3']['mem']}"
+        CPUS="{SITING_TIER_CONFIG['t3']['cpus']}"
+        ;;
+esac
+
+echo "[INFO] Resources: Partition=$PARTITION, Time=$TIME, Memory=$MEM, CPUs=$CPUS"
+
+# --- Determine scenario flag and log directory ---
 if [ -n "$SUPPLY_FACTOR" ]; then
+    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
+    LOG_DIR="outputs_per_country/parquet/2030_supply_${{SCENARIO_PCT}}%/logs"
+    SCENARIO_DESC="supply factor ${{SCENARIO_PCT}}%"
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
-    SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
-fi
-
-if [ -z "$SCRIPT_NUM" ]; then
-    echo "Usage: $0 <script_number> [--run-all-scenarios] [--supply-factor <value>]"
-    echo "Example: $0 06"
-    echo "Example: $0 06 --run-all-scenarios"
-    echo "Example: $0 06 --supply-factor 0.9"
-    echo ""
-    echo "Available scripts:"
-    ls -1 parallel_scripts_siting/submit_parallel_siting_*.sh | sed 's/.*submit_parallel_siting_/  /' | sed 's/.sh//'
-    exit 1
-fi
-
-SCRIPT_NUM=$(printf "%02d" $SCRIPT_NUM)
-SCRIPT_FILE="parallel_scripts_siting/submit_parallel_siting_${SCRIPT_NUM}.sh"
-
-if [ ! -f "$SCRIPT_FILE" ]; then
-    echo "Error: Script not found: $SCRIPT_FILE"
-    echo ""
-    echo "Available scripts:"
-    ls -1 parallel_scripts_siting/submit_parallel_siting_*.sh | sed 's/.*submit_parallel_siting_/  /' | sed 's/.sh//'
-    exit 1
-fi
-
-# --- Determine log directory based on scenario ---
-if [ -n "$SUPPLY_FACTOR" ]; then
-    # Convert supply factor to percentage (e.g., 0.9 -> 90)
-    SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
-    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
-    echo "[INFO] Running single scenario: ${SUPPLY_FACTOR} (supply factor ${SCENARIO_PCT}%)"
-elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
-    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+    SCENARIO_DESC="ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+    SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
 else
     LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
-    echo "[INFO] Running default scenario: 100%"
+    SCENARIO_DESC="100% (default)"
+    SBATCH_EXPORT=""
 fi
 
-# Create log directory
 mkdir -p "$LOG_DIR"
 
-echo "[INFO] Submitting siting script ${SCRIPT_NUM}..."
-echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
-sbatch --output="${LOG_DIR}/siting_${SCRIPT_NUM}_%j.out" \\
-       --error="${LOG_DIR}/siting_${SCRIPT_NUM}_%j.err" \\
-       $SBATCH_EXPORT "$SCRIPT_FILE"
+echo "[INFO] Country: ${{ISO3}}"
+echo "[INFO] Scenario: ${{SCENARIO_DESC}}"
+echo "[INFO] Logs: ${{LOG_DIR}}/"
+
+# --- Create temporary SLURM script ---
+TEMP_SCRIPT=$(mktemp /tmp/siting_${{ISO3}}_XXXXXX.sh)
+
+cat > "$TEMP_SCRIPT" << 'HEREDOC_HEADER'
+#!/bin/bash --login
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+cd "$SLURM_SUBMIT_DIR"
+
+HEREDOC_HEADER
+
+cat >> "$TEMP_SCRIPT" << HEREDOC_BODY
+echo "[INFO] Starting siting analysis for ${{ISO3}} (T${{TIER}}) at \\$(date)"
+echo "[INFO] Resources: ${{PARTITION}} partition, ${{MEM}} memory, ${{CPUS}} CPUs, ${{TIME}} time limit"
+
+# --- directories ---
+mkdir -p outputs_per_country/logs outputs_global
+
+# --- Conda bootstrap ---
+export PATH=/soge-home/users/lina4376/miniconda3/bin:\\$PATH
+source /soge-home/users/lina4376/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+conda activate p1_etl || true
+
+# Use the env's absolute python path to avoid activation issues in batch shells
+PY=/soge-home/users/lina4376/miniconda3/envs/p1_etl/bin/python
+echo "[INFO] Using Python: \\$PY"
+\\$PY -c 'import sys; print(sys.executable)'
+
+# Check scenario flags (passed via sbatch --export)
+SCENARIO_FLAG=""
+if [ -n "\\${{SUPPLY_FACTOR:-}}" ]; then
+    SCENARIO_FLAG="--supply-factor \\$SUPPLY_FACTOR"
+    echo "[INFO] Running single scenario: \\${{SUPPLY_FACTOR}} (supply factor)"
+elif [ "\\${{RUN_ALL_SCENARIOS:-}}" = "1" ]; then
+    SCENARIO_FLAG="--run-all-scenarios"
+    echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
+fi
+
+# Process siting analysis
+echo "[INFO] Processing siting for ${{ISO3}} (T${{TIER}})..."
+if \\$PY process_country_siting.py ${{ISO3}} \\$SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] Siting for ${{ISO3}} completed at \\$(date)"
+else
+    echo "[ERROR] Siting for ${{ISO3}} failed at \\$(date)"
+    exit 1
+fi
+HEREDOC_BODY
+
+# --- Submit the job ---
+echo "[INFO] Submitting siting analysis for ${{ISO3}}..."
+sbatch --job-name="ds_${{ISO3}}" \\
+       --partition="$PARTITION" \\
+       --time="$TIME" \\
+       --mem="$MEM" \\
+       --ntasks=1 \\
+       --nodes=1 \\
+       --cpus-per-task="$CPUS" \\
+       --output="${{LOG_DIR}}/siting_${{ISO3}}_%j.out" \\
+       --error="${{LOG_DIR}}/siting_${{ISO3}}_%j.err" \\
+       $SBATCH_EXPORT \\
+       "$TEMP_SCRIPT"
+
+# Clean up temp script after a delay (give sbatch time to read it)
+(sleep 5 && rm -f "$TEMP_SCRIPT") &
 
 echo ""
 echo "Monitor with:"
 echo "  squeue -u \\$USER"
-echo "  watch -n 60 'squeue -u \\$USER'"
+echo "  tail -f ${{LOG_DIR}}/siting_${{ISO3}}_*.out"
 """
     
-    single_file = Path("submit_one_siting.sh")
-    single_file.write_text(single_script, encoding='utf-8')
-    single_file.chmod(0o755)
+    direct_siting_file = Path("submit_one_direct_siting.sh")
+    direct_siting_file.write_text(direct_siting_script, encoding='utf-8')
+    direct_siting_file.chmod(0o755)
     
-    print(f"Created {single_file} for submitting individual siting scripts")
+    print(f"Created {direct_siting_file} for submitting any single country's siting analysis directly")
     
     # Calculate total resources
     total_mem = sum(int(batch_info["config"]["mem"].replace("G", "")) for batch_info in all_batches)

@@ -1,7 +1,7 @@
 #!/bin/bash --login
-#SBATCH --job-name=p06_t3
-#SBATCH --partition=Medium
-#SBATCH --time=48:00:00
+#SBATCH --job-name=p06_t2
+#SBATCH --partition=Long
+#SBATCH --time=168:00:00
 #SBATCH --mem=95G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-echo "[INFO] Starting parallel script 6/40 (T3) at $(date)"
-echo "[INFO] Processing 1 countries in this batch: ARG"
-echo "[INFO] Tier: T3 | Memory: 95G | CPUs: 40 | Time: 48:00:00"
+echo "[INFO] Starting parallel script 6/40 (T2) at $(date)"
+echo "[INFO] Processing 1 countries in this batch: USA"
+echo "[INFO] Tier: T2 | Memory: 95G | CPUs: 40 | Time: 168:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country/logs outputs_global
@@ -45,11 +45,11 @@ fi
 
 # Process countries in this batch
 
-echo "[INFO] Processing ARG (T3)..."
-if $PY process_country_supply.py ARG $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ARG completed"
+echo "[INFO] Processing USA (T2)..."
+if $PY process_country_supply.py USA $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] USA completed"
 else
-    echo "[ERROR] ARG failed"
+    echo "[ERROR] USA failed"
 fi
 
-echo "[INFO] Batch 6/40 (T3) completed at $(date)"
+echo "[INFO] Batch 6/40 (T2) completed at $(date)"

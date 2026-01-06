@@ -2,7 +2,7 @@
 #SBATCH --job-name=p40_t5
 #SBATCH --partition=Short
 #SBATCH --time=12:00:00
-#SBATCH --mem=30G
+#SBATCH --mem=25G
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
@@ -14,8 +14,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 40/40 (T5) at $(date)"
-echo "[INFO] Processing 10 countries in this batch: UGA, URY, UZB, VIR, VNM, VUT, WSM, YEM, ZMB, ZWE"
-echo "[INFO] Tier: T5 | Memory: 30G | CPUs: 40 | Time: 12:00:00"
+echo "[INFO] Processing 11 countries in this batch: TZA, UGA, URY, UZB, VIR, VNM, VUT, WSM, YEM, ZMB, ZWE"
+echo "[INFO] Tier: T5 | Memory: 25G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
 mkdir -p outputs_per_country/logs outputs_global
@@ -44,6 +44,13 @@ elif [ "${RUN_ALL_SCENARIOS:-}" = "1" ]; then
 fi
 
 # Process countries in this batch
+
+echo "[INFO] Processing TZA (T5)..."
+if $PY process_country_supply.py TZA $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] TZA completed"
+else
+    echo "[ERROR] TZA failed"
+fi
 
 echo "[INFO] Processing UGA (T5)..."
 if $PY process_country_supply.py UGA $SCENARIO_FLAG --output-dir outputs_per_country; then

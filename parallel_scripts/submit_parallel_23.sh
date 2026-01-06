@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 echo "[INFO] Starting parallel script 23/40 (T4) at $(date)"
-echo "[INFO] Processing 2 countries in this batch: PHL, SDN"
+echo "[INFO] Processing 2 countries in this batch: NOR, PAK"
 echo "[INFO] Tier: T4 | Memory: 95G | CPUs: 40 | Time: 12:00:00"
 
 # --- directories ---
@@ -45,18 +45,18 @@ fi
 
 # Process countries in this batch
 
-echo "[INFO] Processing PHL (T4)..."
-if $PY process_country_supply.py PHL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PHL completed"
+echo "[INFO] Processing NOR (T4)..."
+if $PY process_country_supply.py NOR $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] NOR completed"
 else
-    echo "[ERROR] PHL failed"
+    echo "[ERROR] NOR failed"
 fi
 
-echo "[INFO] Processing SDN (T4)..."
-if $PY process_country_supply.py SDN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SDN completed"
+echo "[INFO] Processing PAK (T4)..."
+if $PY process_country_supply.py PAK $SCENARIO_FLAG --output-dir outputs_per_country; then
+    echo "[SUCCESS] PAK completed"
 else
-    echo "[ERROR] SDN failed"
+    echo "[ERROR] PAK failed"
 fi
 
 echo "[INFO] Batch 23/40 (T4) completed at $(date)"
