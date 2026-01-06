@@ -34,7 +34,8 @@ warnings.filterwarnings("ignore")
 from config import (
     COMMON_CRS, ANALYSIS_YEAR, DEMAND_TYPES, SUPPLY_FACTOR,
     CLUSTER_RADIUS_KM, CLUSTER_MIN_SAMPLES,
-    GRID_DISTANCE_THRESHOLD_KM, DROP_PERCENTAGE
+    GRID_DISTANCE_THRESHOLD_KM, DROP_PERCENTAGE,
+    MIN_SETTLEMENTS_PER_COMPONENT
 )
 
 def get_bigdata_path(folder_name):
@@ -213,11 +214,14 @@ def load_centroids(country_iso3, scenario_suffix, output_dir="outputs_per_countr
 
 
 def load_grid_lines(country_iso3, scenario_suffix, output_dir="outputs_per_country"):
-    """Load grid lines data from parquet file."""
+    """Load grid lines data from parquet file. Returns empty GeoDataFrame if no grid exists."""
     parquet_path = Path(output_dir) / "parquet" / scenario_suffix / f"grid_lines_{country_iso3}.parquet"
     
     if not parquet_path.exists():
-        raise FileNotFoundError(f"Grid lines file not found: {parquet_path}")
+        print(f"No grid lines file found for {country_iso3} (country has no grid infrastructure)")
+        # Return empty GeoDataFrame with expected columns
+        return gpd.GeoDataFrame(columns=['geometry', 'GID_0', 'line_type', 'line_id', 'distance_km'], 
+                                 geometry='geometry', crs="EPSG:4326")
     
     grid_lines_gdf = gpd.read_parquet(parquet_path)
     print(f"Loaded {len(grid_lines_gdf)} grid lines from {parquet_path}")
@@ -225,11 +229,15 @@ def load_grid_lines(country_iso3, scenario_suffix, output_dir="outputs_per_count
 
 
 def load_facilities(country_iso3, scenario_suffix, output_dir="outputs_per_country"):
-    """Load facilities data from parquet file."""
+    """Load facilities data from parquet file. Returns empty GeoDataFrame if no facilities exist."""
     parquet_path = Path(output_dir) / "parquet" / scenario_suffix / f"facilities_{country_iso3}.parquet"
     
     if not parquet_path.exists():
-        raise FileNotFoundError(f"Facilities file not found: {parquet_path}")
+        print(f"No facilities file found for {country_iso3} (country has no existing facilities)")
+        # Return empty GeoDataFrame with expected columns
+        return gpd.GeoDataFrame(columns=['geometry', 'GID_0', 'GEM unit/phase ID', 'Grouped_Type', 
+                                          'Latitude', 'Longitude', 'Adjusted_Capacity_MW', 'total_mwh'],
+                                 geometry='geometry', crs="EPSG:4326")
     
     facilities_gdf = gpd.read_parquet(parquet_path)
     print(f"Loaded {len(facilities_gdf)} facilities from {parquet_path}")
@@ -369,7 +377,13 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=No
             print(f"  {energy_type}: {shortfall:,.2f} MWh")
     
     # Filter facilities with remaining capacity (for reference/logging only)
-    facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy()
+    # Handle case where facilities_gdf is empty or missing 'remaining_mwh' column
+    if not facilities_gdf.empty and 'remaining_mwh' in facilities_gdf.columns:
+        facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy()
+    else:
+        # No facilities or no remaining capacity column - create empty dataframe
+        facilities_with_capacity = gpd.GeoDataFrame(columns=facilities_gdf.columns if not facilities_gdf.empty else ['geometry'], 
+                                                     geometry='geometry', crs="EPSG:4326")
     
     print(f"\nExisting facilities with remaining capacity: {len(facilities_with_capacity)}")
     
@@ -395,12 +409,12 @@ def calculate_num_clusters(facilities_gdf, settlements_gdf, all_centroids_gdf=No
     # Calculate demand per component
     component_demand_gap = settlements_gdf_temp.groupby('geo_component')['demand_gap_mwh'].sum().to_dict()
     
-    # Filter out small components (< 5 settlements) and get viable components
+    # Filter out small components and get viable components
     component_sizes = settlements_gdf_temp.groupby('geo_component').size()
-    viable_components = component_sizes[component_sizes >= 5].index.tolist()
+    viable_components = component_sizes[component_sizes >= MIN_SETTLEMENTS_PER_COMPONENT].index.tolist()
     
     print(f"\nCreating synthetic facilities (distributing shortfall across components):")
-    print(f"  Viable components (≥5 settlements): {len(viable_components)}")
+    print(f"  Viable components (>={MIN_SETTLEMENTS_PER_COMPONENT} settlements): {len(viable_components)}")
     
     synthetic_facilities = []
     
@@ -716,8 +730,12 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
                                         'Grouped_Type', 'remaining_mwh', 'center_lon', 'center_lat'],
                                crs=COMMON_CRS)
     
-    # Get facilities with remaining capacity
-    facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy().reset_index(drop=True)
+    # Get facilities with remaining capacity - handle empty facilities_gdf
+    if facilities_gdf.empty or 'remaining_mwh' not in facilities_gdf.columns:
+        facilities_with_capacity = gpd.GeoDataFrame(columns=['geometry', 'Grouped_Type', 'remaining_mwh'],
+                                                     geometry='geometry', crs=COMMON_CRS)
+    else:
+        facilities_with_capacity = facilities_gdf[facilities_gdf['remaining_mwh'] > 0].copy().reset_index(drop=True)
     
     print(f"\nMatching facilities to demand-weighted clusters (greedy allocation):")
     print(f"  Total settlements: {len(settlements_gdf)}")
@@ -847,7 +865,9 @@ def calculate_cluster_centers(settlements_gdf, facilities_gdf, clusters_per_type
     # Create output from allocations
     if len(allocations) == 0:
         print("\n⚠ Warning: No facilities were allocated to any clusters")
-        return gpd.GeoDataFrame(crs=COMMON_CRS)
+        return gpd.GeoDataFrame(columns=['cluster_id', 'geometry', 'num_settlements', 
+                                         'Grouped_Type', 'remaining_mwh', 'center_lon', 'center_lat'],
+                                geometry='geometry', crs=COMMON_CRS)
     
     # Convert allocations to output format
     cluster_output = []
@@ -967,54 +987,147 @@ def compute_grid_distances(cluster_centers_gdf, grid_lines_gdf):
 def build_remote_networks(settlements_gdf, cluster_centers_gdf, grid_lines_gdf):
     """Build connections from remote cluster centers to nearest grid points.
     
-    Only creates facility-to-grid connections for remote clusters (>50km from grid).
-    Intra-cluster connections will be created naturally by process_country_supply.py
-    during the supply allocation process (web-looking gridlines from facility to settlements).
+    For clusters with grid access: creates facility-to-grid connections.
+    For clusters without grid (no grid infrastructure): creates Euclidean lines 
+    from cluster center (synthetic facility) to each settlement in the cluster.
     """
     print("\n" + "="*60)
     print("STEP 4: BUILD NETWORK CONNECTIONS FOR REMOTE CLUSTERS")
     print("="*60)
+    
+    # Handle empty cluster_centers_gdf
+    if cluster_centers_gdf.empty or 'is_remote' not in cluster_centers_gdf.columns:
+        print("No cluster centers to process!")
+        return gpd.GeoDataFrame(columns=['geometry', 'cluster_id', 'distance_km', 
+                                        'from_lon', 'from_lat', 'to_lon', 'to_lat', 'connection_type'], 
+                                geometry='geometry', crs=COMMON_CRS)
     
     remote_clusters = cluster_centers_gdf[cluster_centers_gdf['is_remote']]
     
     if len(remote_clusters) == 0:
         print("No remote clusters found!")
         return gpd.GeoDataFrame(columns=['geometry', 'cluster_id', 'distance_km', 
-                                        'from_lon', 'from_lat', 'to_lon', 'to_lat'], crs=COMMON_CRS)
+                                        'from_lon', 'from_lat', 'to_lon', 'to_lat', 'connection_type'], 
+                                geometry='geometry', crs=COMMON_CRS)
     
-    print(f"\nCreating facility-to-grid connections for {len(remote_clusters)} remote clusters...")
-    print("(Intra-cluster connections will be created during supply allocation)")
+    # Check if we have grid infrastructure
+    has_grid = not grid_lines_gdf.empty
+    
+    if has_grid:
+        print(f"\nCreating facility-to-grid connections for {len(remote_clusters)} remote clusters...")
+    else:
+        print(f"\nNo grid infrastructure - creating Euclidean facility-to-settlement connections...")
     
     all_connections = []
+    
+    # Helper function to calculate distance in km
+    def calc_distance_km(lon1, lat1, lon2, lat2):
+        """Calculate approximate distance in km using haversine formula."""
+        from math import radians, sin, cos, sqrt, atan2
+        R = 6371  # Earth radius in km
+        lat1, lat2, lon1, lon2 = map(radians, [lat1, lat2, lon1, lon2])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        return R * c
+    
     for idx, cluster in remote_clusters.iterrows():
         cluster_center = Point(cluster['center_lon'], cluster['center_lat'])
-        nearest_grid = Point(cluster['nearest_grid_lon'], cluster['nearest_grid_lat'])
-        distance_km = cluster['distance_to_grid_km']
+        cluster_id = cluster['cluster_id']
         
-        connection = {
-            'geometry': LineString([cluster_center, nearest_grid]),
-            'cluster_id': cluster['cluster_id'],
-            'distance_km': distance_km,
-            'from_lon': cluster['center_lon'],
-            'from_lat': cluster['center_lat'],
-            'to_lon': cluster['nearest_grid_lon'],
-            'to_lat': cluster['nearest_grid_lat'],
-            'connection_type': 'facility_to_grid'
-        }
-        all_connections.append(connection)
+        # Check if grid coordinates are valid
+        nearest_grid_lon = cluster.get('nearest_grid_lon', np.nan)
+        nearest_grid_lat = cluster.get('nearest_grid_lat', np.nan)
+        distance_km = cluster.get('distance_to_grid_km', np.inf)
         
-        print(f"  Cluster {cluster['cluster_id']}: {distance_km:.2f} km to grid")
+        has_valid_grid = not (
+            pd.isna(nearest_grid_lon) or pd.isna(nearest_grid_lat) or 
+            np.isinf(nearest_grid_lon) or np.isinf(nearest_grid_lat) or
+            np.isinf(distance_km) or
+            (nearest_grid_lon == cluster['center_lon'] and nearest_grid_lat == cluster['center_lat'])
+        )
+        
+        if has_valid_grid:
+            # Create facility-to-grid connection
+            nearest_grid = Point(nearest_grid_lon, nearest_grid_lat)
+            connection = {
+                'geometry': LineString([cluster_center, nearest_grid]),
+                'cluster_id': cluster_id,
+                'distance_km': distance_km,
+                'from_lon': cluster['center_lon'],
+                'from_lat': cluster['center_lat'],
+                'to_lon': nearest_grid_lon,
+                'to_lat': nearest_grid_lat,
+                'connection_type': 'facility_to_grid'
+            }
+            all_connections.append(connection)
+            print(f"  Cluster {cluster_id}: {distance_km:.2f} km to grid")
+        else:
+            # No grid - create Euclidean lines from cluster center to each settlement
+            # Get settlements in this cluster
+            if 'cluster_id' in settlements_gdf.columns:
+                cluster_settlements = settlements_gdf[settlements_gdf['cluster_id'] == cluster_id]
+            elif 'original_cluster_id' in cluster.index:
+                # Try using original_cluster_id if available
+                orig_cluster_id = cluster.get('original_cluster_id', cluster_id)
+                cluster_settlements = settlements_gdf[settlements_gdf['cluster_id'] == orig_cluster_id]
+            else:
+                cluster_settlements = gpd.GeoDataFrame()
+            
+            if len(cluster_settlements) == 0:
+                print(f"  Cluster {cluster_id}: No settlements found for Euclidean connections")
+                continue
+            
+            cluster_total_dist = 0
+            for _, settlement in cluster_settlements.iterrows():
+                settlement_lon = settlement.geometry.x
+                settlement_lat = settlement.geometry.y
+                
+                # Skip if settlement is at cluster center (same point)
+                if settlement_lon == cluster['center_lon'] and settlement_lat == cluster['center_lat']:
+                    continue
+                
+                settlement_point = Point(settlement_lon, settlement_lat)
+                dist_km = calc_distance_km(
+                    cluster['center_lon'], cluster['center_lat'],
+                    settlement_lon, settlement_lat
+                )
+                
+                connection = {
+                    'geometry': LineString([cluster_center, settlement_point]),
+                    'cluster_id': cluster_id,
+                    'distance_km': dist_km,
+                    'from_lon': cluster['center_lon'],
+                    'from_lat': cluster['center_lat'],
+                    'to_lon': settlement_lon,
+                    'to_lat': settlement_lat,
+                    'connection_type': 'facility_to_settlement'
+                }
+                all_connections.append(connection)
+                cluster_total_dist += dist_km
+            
+            n_connections = len(cluster_settlements)
+            print(f"  Cluster {cluster_id}: {n_connections} Euclidean lines to settlements ({cluster_total_dist:.2f} km total)")
     
     if not all_connections:
         print("No network connections generated!")
         return gpd.GeoDataFrame(columns=['geometry', 'cluster_id', 'distance_km', 
-                                        'from_lon', 'from_lat', 'to_lon', 'to_lat'], crs=COMMON_CRS)
+                                        'from_lon', 'from_lat', 'to_lon', 'to_lat', 'connection_type'], 
+                                geometry='geometry', crs=COMMON_CRS)
     
     networks_gdf = gpd.GeoDataFrame(all_connections, crs=COMMON_CRS)
     
-    print(f"\nTotal facility-to-grid connections: {len(networks_gdf)}")
-    print(f"Total connection length: {networks_gdf['distance_km'].sum():.2f} km")
-    print(f"Average connection distance: {networks_gdf['distance_km'].mean():.2f} km")
+    # Summary by connection type
+    facility_to_grid = networks_gdf[networks_gdf['connection_type'] == 'facility_to_grid']
+    facility_to_settlement = networks_gdf[networks_gdf['connection_type'] == 'facility_to_settlement']
+    
+    print(f"\nNetwork connections summary:")
+    if len(facility_to_grid) > 0:
+        print(f"  Facility-to-grid: {len(facility_to_grid)} connections, {facility_to_grid['distance_km'].sum():.2f} km")
+    if len(facility_to_settlement) > 0:
+        print(f"  Facility-to-settlement (Euclidean): {len(facility_to_settlement)} connections, {facility_to_settlement['distance_km'].sum():.2f} km")
+    print(f"  Total: {len(networks_gdf)} connections, {networks_gdf['distance_km'].sum():.2f} km")
     
     return networks_gdf
 
@@ -1025,6 +1138,33 @@ def clip_networks_to_boundaries(networks_gdf, admin_boundaries):
         return networks_gdf
     
     print("\nClipping networks to country boundaries...")
+    
+    # Filter out invalid geometries (degenerate LineStrings, empty, None, etc.)
+    def is_valid_linestring(geom):
+        if geom is None or geom.is_empty:
+            return False
+        if geom.geom_type != 'LineString':
+            return False
+        # Check for degenerate LineString (same start/end point)
+        coords = list(geom.coords)
+        if len(coords) < 2:
+            return False
+        if coords[0] == coords[-1] and len(coords) == 2:
+            return False
+        # Check for inf coordinates
+        for coord in coords:
+            if any(np.isinf(c) or np.isnan(c) for c in coord):
+                return False
+        return True
+    
+    valid_mask = networks_gdf.geometry.apply(is_valid_linestring)
+    if not valid_mask.any():
+        print("  No valid network geometries to clip")
+        return gpd.GeoDataFrame(columns=networks_gdf.columns, geometry='geometry', crs=COMMON_CRS)
+    
+    networks_gdf = networks_gdf[valid_mask].copy()
+    if networks_gdf.empty:
+        return networks_gdf
     
     # Ensure both are in same CRS
     admin_union = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
@@ -1098,7 +1238,7 @@ def clip_clusters_to_boundaries(cluster_centers_gdf, admin_boundaries):
 
 
 def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, 
-                output_dir="outputs_per_country"):
+                output_dir="outputs_per_country", has_grid=True, has_facilities=True):
     """Save all outputs to parquet files with detailed summary."""
     scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
     output_path = Path(output_dir) / "parquet" / scenario_suffix
@@ -1130,6 +1270,10 @@ def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso
         ('Country', country_iso3),
         ('Analysis_Year', ANALYSIS_YEAR),
         ('Supply_Factor_Pct', SUPPLY_FACTOR * 100),
+        ('', ''),
+        ('--- INFRASTRUCTURE STATUS ---', ''),
+        ('Has_Grid_Infrastructure', 'Yes' if has_grid else 'No'),
+        ('Has_Existing_Facilities', 'Yes' if has_facilities else 'No'),
         ('', ''),
         ('--- CONFIGURATION ---', ''),
         ('Cluster_Radius_km', CLUSTER_RADIUS_KM),
@@ -1212,8 +1356,12 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
             facilities_gdf, settlements_gdf, all_centroids_gdf=centroids_gdf
         )
         
-        # Calculate remaining capacity by energy type for allocation (already done in calculate_num_clusters)
-        remaining_by_type = facilities_with_capacity.groupby('Grouped_Type')['remaining_mwh'].sum().to_dict()
+        # Calculate remaining capacity by energy type for allocation
+        # Handle empty facilities_with_capacity gracefully
+        if not facilities_with_capacity.empty and 'Grouped_Type' in facilities_with_capacity.columns and 'remaining_mwh' in facilities_with_capacity.columns:
+            remaining_by_type = facilities_with_capacity.groupby('Grouped_Type')['remaining_mwh'].sum().to_dict()
+        else:
+            remaining_by_type = {}
         
         # Cluster settlements using weighted K-means (weighted by demand_gap_mwh)
         settlements_gdf = cluster_settlements(settlements_gdf, n_clusters)
@@ -1231,7 +1379,12 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
         # Clip networks to country boundaries
         networks_gdf = clip_networks_to_boundaries(networks_gdf, admin_boundaries)
         
-        save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, output_dir)
+        # Determine infrastructure status
+        has_grid = not grid_lines_gdf.empty
+        has_facilities = not facilities_gdf.empty
+        
+        save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso3, output_dir,
+                    has_grid=has_grid, has_facilities=has_facilities)
         
         # Print summary of capacity added for process_country_supply.py
         print("\n" + "="*60)

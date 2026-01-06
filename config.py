@@ -57,6 +57,11 @@ NODE_SNAP_TOLERANCE_M = 100  # Snap distance (meters, UTM) for clustering nearby
 MAX_CONNECTION_DISTANCE_M = 50000  # Max distance (meters) for connecting facilities/centroids to grid
 FACILITY_SEARCH_RADIUS_KM = 300  # Max radius (km) to search for facilities from each centroid
 
+# Fallback for countries with no grid data (e.g., MUS, MDV)
+# When grid data is missing, create Euclidean connections from facilities to settlements
+# within this radius. This assumes implicit local distribution networks exist.
+NO_GRID_CONNECTION_RADIUS_KM = 300  # Max radius (km) for direct facility-to-settlement connections
+
 # =============================================================================
 # SITING ANALYSIS SETTINGS (process_country_siting.py)
 # =============================================================================
@@ -64,6 +69,8 @@ CLUSTER_RADIUS_KM = 50  # K-means clustering radius parameter
 CLUSTER_MIN_SAMPLES = 1  # Minimum samples for DBSCAN geographic component detection
 GRID_DISTANCE_THRESHOLD_KM = 50  # Threshold (km) to classify clusters as "remote" vs "near grid"
 DROP_PERCENTAGE = 0.01  # Drop bottom X% of settlements by demand (0.01 = 1%)
+MIN_SETTLEMENTS_PER_COMPONENT = 1  # Min settlements in a geographic component to create synthetic facilities
+                                   # Set to 1 to support small island nations (e.g., MDV with 4 settlements)
 
 # =============================================================================
 # LAND COVER FILTERING SETTINGS (p1_c, p1_d, p1_e, p1_f)

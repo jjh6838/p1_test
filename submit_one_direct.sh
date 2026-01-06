@@ -84,9 +84,9 @@ ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
 
 # --- Auto-detect tier based on country if not specified ---
 TIER_1="CHN"
-TIER_2="DEU BRA IND USA FRA"
-TIER_3="AUS KAZ IDN IRN CAN RUS ZAF MEX SAU ARG EGY"
-TIER_4="TCD TUR MLI PAK PHL JPN GEO MMR ETH UKR PER NOR IRQ COL DZA GHA SDN VEN SWE NGA"
+TIER_2="USA BRA IND DEU FRA"
+TIER_3="AUS CAN SAU KAZ IDN ZAF MEX RUS IRN EGY ARG"
+TIER_4="GHA COL UKR JPN PAK MLI DZA NOR SWE MMR PER PHL TCD VEN ETH GEO NGA IRQ SDN TUR"
 
 if [ -z "$TIER" ]; then
     if [[ " $TIER_1 " =~ " $ISO3 " ]]; then

@@ -79,8 +79,8 @@ fi
 ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
 
 # --- Auto-detect tier based on country if not specified ---
-SITING_TIER_1="USA CHN IND"
-SITING_TIER_2="RUS ARG KAZ CAN MEX SAU AUS IDN BRA"
+SITING_TIER_1="IND CHN USA"
+SITING_TIER_2="ARG MEX IDN RUS BRA KAZ AUS SAU CAN"
 
 if [ -z "$TIER" ]; then
     if [[ " $SITING_TIER_1 " =~ " $ISO3 " ]]; then
@@ -204,8 +204,8 @@ sbatch --job-name="ds_${ISO3}" \
        $SBATCH_EXPORT \
        "$TEMP_SCRIPT"
 
-# Clean up temp script after a delay (give sbatch time to read it)
-(sleep 5 && rm -f "$TEMP_SCRIPT") &
+# Note: Temp script is NOT auto-deleted. SLURM copies it internally.
+# The /tmp cleanup on compute nodes will handle it eventually.
 
 echo ""
 echo "Monitor with:"

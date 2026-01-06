@@ -1366,8 +1366,8 @@ sbatch --job-name="ds_${{ISO3}}" \\
        $SBATCH_EXPORT \\
        "$TEMP_SCRIPT"
 
-# Clean up temp script after a delay (give sbatch time to read it)
-(sleep 5 && rm -f "$TEMP_SCRIPT") &
+# Note: Temp script is NOT auto-deleted. SLURM copies it internally.
+# The /tmp cleanup on compute nodes will handle it eventually.
 
 echo ""
 echo "Monitor with:"

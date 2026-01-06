@@ -84,7 +84,8 @@ from config import (
     POP_AGGREGATION_FACTOR, TARGET_RESOLUTION_ARCSEC,
     COMMON_CRS, ANALYSIS_YEAR, DEMAND_TYPES, SUPPLY_FACTOR,
     GRID_STITCH_DISTANCE_KM, NODE_SNAP_TOLERANCE_M,
-    MAX_CONNECTION_DISTANCE_M, FACILITY_SEARCH_RADIUS_KM
+    MAX_CONNECTION_DISTANCE_M, FACILITY_SEARCH_RADIUS_KM,
+    NO_GRID_CONNECTION_RADIUS_KM
 )
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
@@ -127,7 +128,7 @@ def print_configuration_banner(test_mode=False, scenario_suffix=""):
         print(f"Scenario: {scenario_suffix}")
     print(f"Demand Types: {', '.join(DEMAND_TYPES)}")
     print(
-        f"Population Aggregation Factor: {POP_AGGREGATION_FACTOR}x (native 30\" → {POP_AGGREGATION_FACTOR*30}\")"
+        f"Population Aggregation Factor: {POP_AGGREGATION_FACTOR}x (native 30\" -> {POP_AGGREGATION_FACTOR*30}\")"
     )
     print(f"Grid Stitch Distance: {GRID_STITCH_DISTANCE_KM} km")
     print(f"Node Snap Tolerance: {NODE_SNAP_TOLERANCE_M} m")
@@ -184,6 +185,27 @@ def get_utm_crs(lon, lat):
     """Get appropriate UTM CRS for given coordinates. UTM is essential for accurate distance calculations in meters."""
     utm_zone = int((lon + 180) / 6) + 1
     return f"EPSG:{32600 + utm_zone}" if lat >= 0 else f"EPSG:{32700 + utm_zone}"
+
+def haversine_distance_km(lat1, lon1, lat2, lon2):
+    """Calculate haversine distance between two points in kilometers.
+    
+    This function computes the great-circle distance between two points
+    on a sphere given their latitudes and longitudes.
+    
+    Args:
+        lat1, lon1: Latitude and longitude of the first point (degrees)
+        lat2, lon2: Latitude and longitude of the second point (degrees)
+    
+    Returns:
+        float: Distance in kilometers
+    """
+    R = 6371  # Earth's radius in kilometers
+    phi1, phi2 = np.radians(lat1), np.radians(lat2)
+    dphi = np.radians(lat2 - lat1)
+    dlambda = np.radians(lon2 - lon1)
+    
+    a = np.sin(dphi/2)**2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda/2)**2
+    return 2 * R * np.arcsin(np.sqrt(a))
 
 def get_country_bbox(admin_boundaries, buffer=0.1):
     """Get bounding box for a country with buffer"""
@@ -461,6 +483,8 @@ def load_energy_facilities(country_iso3, year=2024, scenario=None):
         siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
         if siting_summary_path.exists():
             existing_facilities_path = Path(f"outputs_per_country/parquet/{scenario}/facilities_{country_iso3}.parquet")
+            
+            # Load existing facilities if parquet exists, otherwise start with empty GeoDataFrame
             if existing_facilities_path.exists():
                 print(f"Loading existing facilities from {existing_facilities_path}")
                 facilities_gdf = gpd.read_parquet(existing_facilities_path)
@@ -470,43 +494,48 @@ def load_energy_facilities(country_iso3, year=2024, scenario=None):
                 facilities_gdf['supplied_mwh'] = 0.0
                 # remaining_mwh stays as-is from first run
                 print(f"Loaded {len(facilities_gdf)} existing facilities (preserving remaining_mwh from first run)")
+            else:
+                # No base facilities parquet (country had 0 existing facilities)
+                # Create empty GeoDataFrame to append siting clusters to
+                print(f"No existing facilities parquet for {country_iso3} (country has no base facilities)")
+                facilities_gdf = gpd.GeoDataFrame(geometry=[], crs=COMMON_CRS)
+            
+            # Load and append siting clusters
+            clusters_df = load_siting_clusters(scenario, country_iso3)
+            
+            if clusters_df is not None and not clusters_df.empty:
+                # Verify required columns exist
+                required_cols = ['cluster_id', 'Grouped_Type', 'center_lat', 'center_lon', 'remaining_mwh']
+                missing_cols = [col for col in required_cols if col not in clusters_df.columns]
+                if missing_cols:
+                    print(f"Warning: Siting clusters missing required columns: {missing_cols}")
+                    print(f"Available columns: {list(clusters_df.columns)}")
+                    return facilities_gdf
                 
-                # Load and append siting clusters
-                clusters_df = load_siting_clusters(scenario, country_iso3)
+                # Map siting clusters to facility format
+                cluster_facilities = pd.DataFrame({
+                    'GID_0': country_iso3,
+                    'Country Code': country_iso3,
+                    'GEM unit/phase ID': clusters_df['cluster_id'].astype(str),
+                    'Grouped_Type': clusters_df['Grouped_Type'],
+                    'Latitude': clusters_df['center_lat'],
+                    'Longitude': clusters_df['center_lon'],
+                    'Adjusted_Capacity_MW': np.nan,
+                    'total_mwh': clusters_df['remaining_mwh'],
+                    'available_total_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR,
+                    'supplied_mwh': 0.0,
+                    'remaining_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR  # Initialize with capacity, not 0!
+                })
                 
-                if clusters_df is not None and not clusters_df.empty:
-                    # Verify required columns exist
-                    required_cols = ['cluster_id', 'Grouped_Type', 'center_lat', 'center_lon', 'remaining_mwh']
-                    missing_cols = [col for col in required_cols if col not in clusters_df.columns]
-                    if missing_cols:
-                        print(f"Warning: Siting clusters missing required columns: {missing_cols}")
-                        print(f"Available columns: {list(clusters_df.columns)}")
-                        return facilities_gdf
-                    
-                    # Map siting clusters to facility format
-                    cluster_facilities = pd.DataFrame({
-                        'GID_0': country_iso3,
-                        'Country Code': country_iso3,
-                        'GEM unit/phase ID': clusters_df['cluster_id'].astype(str),
-                        'Grouped_Type': clusters_df['Grouped_Type'],
-                        'Latitude': clusters_df['center_lat'],
-                        'Longitude': clusters_df['center_lon'],
-                        'Adjusted_Capacity_MW': np.nan,
-                        'total_mwh': clusters_df['remaining_mwh'],
-                        'available_total_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR,
-                        'supplied_mwh': 0.0,
-                        'remaining_mwh': clusters_df['remaining_mwh'] * SUPPLY_FACTOR  # Initialize with capacity, not 0!
-                    })
-                    
-                    # Create geometry for cluster facilities
-                    cluster_geometry = gpd.points_from_xy(cluster_facilities['Longitude'], cluster_facilities['Latitude'])
-                    cluster_facilities_gdf = gpd.GeoDataFrame(cluster_facilities, geometry=cluster_geometry, crs=COMMON_CRS)
-                    
-                    # Append cluster facilities to existing facilities
-                    facilities_gdf = pd.concat([facilities_gdf, cluster_facilities_gdf], ignore_index=True)
-                    print(f"Added {len(cluster_facilities_gdf)} siting clusters to facilities (total: {len(facilities_gdf)})")
+                # Create geometry for cluster facilities
+                cluster_geometry = gpd.points_from_xy(cluster_facilities['Longitude'], cluster_facilities['Latitude'])
+                cluster_facilities_gdf = gpd.GeoDataFrame(cluster_facilities, geometry=cluster_geometry, crs=COMMON_CRS)
                 
-                return facilities_gdf
+                # Append cluster facilities to existing facilities
+                facilities_gdf = pd.concat([facilities_gdf, cluster_facilities_gdf], ignore_index=True)
+                print(f"Added {len(cluster_facilities_gdf)} siting clusters to facilities (total: {len(facilities_gdf)})")
+            
+            return facilities_gdf
     
     # If no siting data or facilities parquet doesn't exist, load from Excel
     try:
@@ -1196,6 +1225,205 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
 
     return G
 
+
+def allocate_supply_no_grid(facilities_gdf, centroids_gdf, demand_col, radius_km=NO_GRID_CONNECTION_RADIUS_KM):
+    """
+    Allocate supply from facilities to centroids without grid infrastructure.
+    
+    This function handles countries like MUS where facilities exist but no grid data
+    is available. Each facility independently supplies nearby settlements within
+    a specified radius using Euclidean (great-circle) distance.
+    
+    The allocation strategy is:
+    1. Each facility operates independently (no inter-facility connections)
+    2. Facilities are processed largest-first
+    3. For each facility, centroids within radius_km are sorted by distance (closest first)
+    4. Allocation continues until facility capacity is exhausted (Option C)
+    
+    Args:
+        facilities_gdf: GeoDataFrame with facility locations and 'total_mwh' column
+        centroids_gdf: GeoDataFrame with centroid locations and demand columns
+        demand_col: Column name for demand (e.g., 'Total_Demand_2030_centroid')
+        radius_km: Maximum Euclidean connection distance in km (default from config)
+    
+    Returns:
+        tuple: (updated_centroids_gdf, updated_facilities_gdf, 
+                facility_remaining, facility_supplied, active_connections)
+    """
+    print(f"\n  === No-Grid Euclidean Allocation ===")
+    print(f"  Connection radius: {radius_km} km")
+    print(f"  Facilities: {len(facilities_gdf)}, Centroids: {len(centroids_gdf)}")
+    
+    # Initialize tracking dictionaries
+    facility_remaining = {}
+    facility_supplied = {}
+    
+    # Initialize facility columns
+    for idx in facilities_gdf.index:
+        total_mwh = facilities_gdf.loc[idx, 'total_mwh'] if 'total_mwh' in facilities_gdf.columns else 0
+        facility_remaining[idx] = float(total_mwh) if pd.notna(total_mwh) else 0.0
+        facility_supplied[idx] = 0.0
+    
+    # Initialize centroid columns
+    centroids_gdf = centroids_gdf.copy()
+    centroids_gdf['supply_received_mwh'] = 0.0
+    centroids_gdf['supplying_facility_distance'] = ''
+    centroids_gdf['supplying_facility_type'] = ''
+    centroids_gdf['supplying_facility_gem_id'] = ''
+    centroids_gdf['supply_status'] = 'Not Filled'
+    
+    # Initialize facilities output columns
+    facilities_gdf = facilities_gdf.copy()
+    facilities_gdf['original_total_mwh'] = facilities_gdf['total_mwh'] if 'total_mwh' in facilities_gdf.columns else 0
+    facilities_gdf['available_total_mwh'] = 0.0  # Will be updated after allocation
+    
+    # Get centroid coordinates
+    centroid_coords = []
+    for idx in centroids_gdf.index:
+        geom = centroids_gdf.loc[idx, 'geometry']
+        centroid_coords.append({
+            'idx': idx,
+            'lat': geom.y,
+            'lon': geom.x,
+            'demand': float(centroids_gdf.loc[idx, demand_col]) if pd.notna(centroids_gdf.loc[idx, demand_col]) else 0.0
+        })
+    
+    # Get facility coordinates and capacities
+    facility_list = []
+    for idx in facilities_gdf.index:
+        geom = facilities_gdf.loc[idx, 'geometry']
+        capacity = facility_remaining[idx]
+        facility_list.append({
+            'idx': idx,
+            'lat': geom.y,
+            'lon': geom.x,
+            'capacity': capacity,
+            'gem_id': str(facilities_gdf.loc[idx, 'GEM unit/phase ID']) if pd.notna(facilities_gdf.loc[idx].get('GEM unit/phase ID')) else '',
+            'facility_type': facilities_gdf.loc[idx].get('Grouped_Type', '')
+        })
+    
+    # Sort facilities by capacity (largest first)
+    facility_list.sort(key=lambda x: x['capacity'], reverse=True)
+    
+    active_connections = []
+    supply_tracking = {c['idx']: {'received': 0.0, 'distances': [], 'types': [], 'gem_ids': []} 
+                       for c in centroid_coords}
+    
+    # Pre-calculate distances from each facility to all centroids
+    print(f"  Calculating distances from {len(facility_list)} facilities to {len(centroid_coords)} centroids...")
+    
+    facility_to_centroids = {}
+    for fac in facility_list:
+        fac_centroids = []
+        for cent in centroid_coords:
+            dist_km = haversine_distance_km(fac['lat'], fac['lon'], cent['lat'], cent['lon'])
+            if dist_km <= radius_km:
+                fac_centroids.append({
+                    'centroid_idx': cent['idx'],
+                    'distance_km': dist_km,
+                    'centroid_lat': cent['lat'],
+                    'centroid_lon': cent['lon']
+                })
+        # Sort by distance (closest first)
+        fac_centroids.sort(key=lambda x: x['distance_km'])
+        facility_to_centroids[fac['idx']] = fac_centroids
+    
+    # Allocate supply
+    total_allocated = 0.0
+    facilities_with_connections = 0
+    
+    for fac in facility_list:
+        fac_idx = fac['idx']
+        remaining_capacity = facility_remaining[fac_idx]
+        
+        if remaining_capacity <= 0:
+            continue
+        
+        centroids_in_range = facility_to_centroids.get(fac_idx, [])
+        if not centroids_in_range:
+            continue
+        
+        facilities_with_connections += 1
+        
+        for cent_info in centroids_in_range:
+            if remaining_capacity <= 0:
+                break
+            
+            cent_idx = cent_info['centroid_idx']
+            demand = centroid_coords[list(c['idx'] for c in centroid_coords).index(cent_idx)]['demand']
+            received = supply_tracking[cent_idx]['received']
+            remaining_demand = demand - received
+            
+            if remaining_demand <= 0:
+                continue
+            
+            # Allocate supply
+            allocated = min(remaining_demand, remaining_capacity)
+            supply_tracking[cent_idx]['received'] += allocated
+            supply_tracking[cent_idx]['distances'].append(f"{cent_info['distance_km']:.2f}")
+            supply_tracking[cent_idx]['types'].append(fac['facility_type'])
+            supply_tracking[cent_idx]['gem_ids'].append(fac['gem_id'])
+            
+            facility_remaining[fac_idx] -= allocated
+            facility_supplied[fac_idx] += allocated
+            remaining_capacity -= allocated
+            total_allocated += allocated
+            
+            # Track active connection
+            active_connections.append({
+                'centroid_idx': cent_idx,
+                'facility_gem_id': fac['gem_id'],
+                'centroid_lat': cent_info['centroid_lat'],
+                'centroid_lon': cent_info['centroid_lon'],
+                'facility_lat': fac['lat'],
+                'facility_lon': fac['lon'],
+                'distance_km': cent_info['distance_km'],
+                'supply_mwh': allocated,
+                'facility_type': fac['facility_type'],
+                'path_nodes': [(fac['lon'], fac['lat']), (cent_info['centroid_lon'], cent_info['centroid_lat'])],
+                'path_segments': []
+            })
+    
+    # Update centroid columns
+    for cent_idx, tracking in supply_tracking.items():
+        centroids_gdf.loc[cent_idx, 'supply_received_mwh'] = tracking['received']
+        centroids_gdf.loc[cent_idx, 'supplying_facility_distance'] = ', '.join(tracking['distances'])
+        centroids_gdf.loc[cent_idx, 'supplying_facility_type'] = ', '.join(tracking['types'])
+        centroids_gdf.loc[cent_idx, 'supplying_facility_gem_id'] = ', '.join(tracking['gem_ids'])
+        
+        # Update supply status
+        demand = float(centroids_gdf.loc[cent_idx, demand_col]) if pd.notna(centroids_gdf.loc[cent_idx, demand_col]) else 0
+        if demand <= 0:
+            centroids_gdf.loc[cent_idx, 'supply_status'] = 'No Demand'
+        elif tracking['received'] >= demand:
+            centroids_gdf.loc[cent_idx, 'supply_status'] = 'Filled'
+        elif tracking['received'] > 0:
+            centroids_gdf.loc[cent_idx, 'supply_status'] = 'Partially Filled'
+        else:
+            centroids_gdf.loc[cent_idx, 'supply_status'] = 'Not Filled'
+    
+    # Update facility available_total_mwh (amount that was actually allocatable)
+    for fac_idx in facilities_gdf.index:
+        facilities_gdf.loc[fac_idx, 'available_total_mwh'] = facility_supplied[fac_idx]
+    
+    # Summary statistics
+    total_demand = sum(c['demand'] for c in centroid_coords)
+    total_supply = sum(fac['capacity'] for fac in facility_list)
+    filled_centroids = sum(1 for idx, t in supply_tracking.items() 
+                          if t['received'] >= centroid_coords[list(c['idx'] for c in centroid_coords).index(idx)]['demand'] 
+                          and centroid_coords[list(c['idx'] for c in centroid_coords).index(idx)]['demand'] > 0)
+    partial_centroids = sum(1 for t in supply_tracking.values() if 0 < t['received'] < sum(c['demand'] for c in centroid_coords if c['idx'] in supply_tracking))
+    
+    print(f"  === Allocation Summary ===")
+    print(f"  Total demand: {total_demand:,.0f} MWh")
+    print(f"  Total facility capacity: {total_supply:,.0f} MWh")
+    print(f"  Total allocated: {total_allocated:,.0f} MWh ({100*total_allocated/total_demand:.1f}% of demand)" if total_demand > 0 else "  Total allocated: 0 MWh")
+    print(f"  Facilities with connections: {facilities_with_connections}/{len(facility_list)}")
+    print(f"  Active connections: {len(active_connections)}")
+    
+    return centroids_gdf, facilities_gdf, facility_remaining, facility_supplied, active_connections
+
+
 def find_available_facilities_within_radius_kdtree(centroid_utm_coords, facility_tree, facilities_gdf, radius_km=FACILITY_SEARCH_RADIUS_KM):
     """
     Find facilities within a radius of a centroid using precomputed KDTree.
@@ -1221,6 +1449,8 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
     """
     Creates a polyline layer showing the actual network paths for active supply connections.
     This visualizes exactly how electricity is flowing from a specific plant to a specific population center.
+    
+    For no-grid (Euclidean) connections, path_nodes are already in WGS84 coordinates.
     """
     all_geometries = []
     all_attributes = []
@@ -1228,7 +1458,14 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
     if not active_connections:
         return gpd.GeoDataFrame()
     
-    utm_crs = network_graph.graph.get('utm_crs', 'EPSG:3857')
+    # Get UTM CRS from network graph if available, otherwise default to WGS84 
+    # (Euclidean connections use WGS84 coordinates directly)
+    if network_graph is not None:
+        utm_crs = network_graph.graph.get('utm_crs', 'EPSG:3857')
+        is_euclidean_mode = False
+    else:
+        utm_crs = COMMON_CRS  # WGS84 - Euclidean connections are already in this CRS
+        is_euclidean_mode = True
 
     for connection in active_connections:
         centroid_idx = connection.get('centroid_idx')
@@ -1261,7 +1498,11 @@ def create_polyline_layer(active_connections, network_graph, country_iso3):
             if path_geom is None or path_geom.is_empty:
                 continue
 
-            path_wgs84 = gpd.GeoSeries([path_geom], crs=utm_crs).to_crs(COMMON_CRS).iloc[0]
+            # For Euclidean mode, coordinates are already in WGS84, no transformation needed
+            if is_euclidean_mode:
+                path_wgs84 = path_geom
+            else:
+                path_wgs84 = gpd.GeoSeries([path_geom], crs=utm_crs).to_crs(COMMON_CRS).iloc[0]
             all_geometries.append(path_wgs84)
             all_attributes.append({
                 'centroid_idx': centroid_idx,
@@ -2033,12 +2274,55 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                 else:
                     centroids_gdf.loc[centroid_idx, 'supply_status'] = 'Not Filled'
         else:
-            # Initialize supply columns if network processing is skipped
-            centroids_gdf['supplying_facility_distance'] = np.nan
-            centroids_gdf['supplying_facility_type'] = ''
-            centroids_gdf['supplying_facility_gem_id'] = ''
-            centroids_gdf['supply_received_mwh'] = 0.0
-            centroids_gdf['supply_status'] = 'Not Filled'
+            # No grid infrastructure - use Euclidean allocation if we have facilities
+            # Initialize variables needed for summary statistics
+            demand_col = f'Total_Demand_{ANALYSIS_YEAR}_centroid'
+            total_demand = centroids_gdf[demand_col].sum() if demand_col in centroids_gdf.columns else 0
+            total_available_supply = total_demand * SUPPLY_FACTOR
+            original_total_capacity = facilities_gdf['total_mwh'].sum() if not facilities_gdf.empty and 'total_mwh' in facilities_gdf.columns else 0
+            demand_by_type_no_facilities = {}
+            
+            if not facilities_gdf.empty:
+                # We have facilities but no grid - use Euclidean allocation
+                print(f"\n{'='*60}")
+                print(f"  NO GRID DATA - Using Euclidean allocation")
+                print(f"  {len(facilities_gdf)} facilities will supply centroids within {NO_GRID_CONNECTION_RADIUS_KM} km radius")
+                print(f"{'='*60}")
+                
+                # Apply supply factor to facility capacities if needed
+                if SUPPLY_FACTOR < 1.0:
+                    facilities_gdf['total_mwh'] = facilities_gdf['total_mwh'] * SUPPLY_FACTOR
+                    print(f"  Sensitivity analysis: Facility capacities scaled to {SUPPLY_FACTOR*100:.0f}%")
+                
+                # Run Euclidean allocation
+                centroids_gdf, facilities_gdf, facility_remaining, facility_supplied, active_connections = \
+                    allocate_supply_no_grid(
+                        facilities_gdf, 
+                        centroids_gdf, 
+                        demand_col, 
+                        radius_km=NO_GRID_CONNECTION_RADIUS_KM
+                    )
+                
+                # Track demand by type for summary
+                for energy_type in DEMAND_TYPES:
+                    type_demand_col = f"{energy_type}_{ANALYSIS_YEAR}_centroid"
+                    if type_demand_col in centroids_gdf.columns:
+                        type_demand = centroids_gdf[type_demand_col].sum()
+                        if type_demand > 0:
+                            demand_by_type_no_facilities[energy_type] = type_demand
+            else:
+                # No facilities and no grid - just initialize empty columns
+                centroids_gdf['supplying_facility_distance'] = np.nan
+                centroids_gdf['supplying_facility_type'] = ''
+                centroids_gdf['supplying_facility_gem_id'] = ''
+                centroids_gdf['supply_received_mwh'] = 0.0
+                centroids_gdf['supply_status'] = 'Not Filled'
+                active_connections = []
+                facility_remaining = {}
+                facility_supplied = {}
+                
+                print(f"\n  WARNING: No facilities and no grid data available")
+                print(f"  Total demand: {total_demand:,.0f} MWh cannot be distributed")
         
         # Create all layers
         with timer("Create output layers"):
