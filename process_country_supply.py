@@ -480,7 +480,7 @@ def load_energy_facilities(country_iso3, year=2024, scenario=None):
     
     # Check if siting data exists - if so, load existing facilities parquet instead of Excel
     if scenario and country_iso3:
-        siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
+        siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/{ANALYSIS_YEAR}_siting_{int(SUPPLY_FACTOR*100)}%_{country_iso3}.xlsx")
         if siting_summary_path.exists():
             existing_facilities_path = Path(f"outputs_per_country/parquet/{scenario}/facilities_{country_iso3}.parquet")
             
@@ -716,7 +716,7 @@ def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=
 
     # Check if siting data exists - if so, load existing grid_lines parquet instead of raw GridFinder
     if scenario and country_iso3:
-        siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
+        siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/{ANALYSIS_YEAR}_siting_{int(SUPPLY_FACTOR*100)}%_{country_iso3}.xlsx")
         if siting_summary_path.exists():
             # Load existing grid_lines parquet file
             existing_grid_path = Path(f"outputs_per_country/parquet/{scenario}/grid_lines_{country_iso3}.parquet")
@@ -2093,7 +2093,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
     
     # Check if siting data exists (determines workflow approach)
     scenario = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
-    siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/siting_summary_{country_iso3}.xlsx")
+    siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/{ANALYSIS_YEAR}_siting_{int(SUPPLY_FACTOR*100)}%_{country_iso3}.xlsx")
     has_siting_data = siting_summary_path.exists()
     
     if has_siting_data:

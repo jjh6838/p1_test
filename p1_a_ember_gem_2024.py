@@ -720,11 +720,6 @@ def filter_facilities_to_boundaries(df):
             invalid_count += invalid_in_country
         
         valid_facilities.append(country_facilities[within_boundary])
-        if invalid_in_country > 0:
-            print(f"  {country_code}: Removed {invalid_in_country} facilities outside boundaries")
-            invalid_count += invalid_in_country
-        
-        valid_facilities.append(country_facilities[within_boundary])
     
     # Combine all valid facilities
     if valid_facilities:

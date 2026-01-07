@@ -14,7 +14,7 @@ Methodology:
 Output:
 - PVOUT_2030_300arcsec.tif
 - PVOUT_2050_300arcsec.tif
-- PVOUT_UNCERTAINTY_2030_300arcsec.tif (IQR across models)
+- PVOUT_UNCERTAINTY_2030_300arcsec.tif (range across models: max - min)
 - PVOUT_UNCERTAINTY_2050_300arcsec.tif
 - PVOUT_baseline_300arcsec.tif
 """

@@ -419,7 +419,9 @@ Harmonizes Ember country-level statistics with Global Energy Monitor facility da
 - Validates coordinates against GADM + EEZ boundaries
 - Filters out offshore facilities beyond territorial waters
 
-**Output:** `data_facilities_gem/p1_a_ember_2024_30.xlsx`
+**Outputs:**
+- `outputs_processed_data/p1_a_ember_gem_2024.xlsx` — Country-level aggregates (Granular_cur, Grouped_cur sheets)
+- `outputs_processed_data/p1_a_ember_gem_2024_fac_lvl.xlsx` — Facility-level data (2024, 2030, 2050 sheets)
 
 #### `p1_b_ember_2024_30_50.py`
 Projects 2030 and 2050 electricity generation scenarios.
@@ -646,7 +648,7 @@ python process_country_siting.py KEN --supply-factor 0.9
 **Outputs:**
 - `siting_clusters_{ISO3}.parquet` — Cluster centers with assignments
 - `siting_networks_{ISO3}.parquet` — Network geometries
-- `siting_summary_{ISO3}.xlsx` — Summary statistics
+- `{YEAR}_siting_{FACTOR}%_{ISO3}.xlsx` — Summary statistics (e.g., `2030_siting_100%_KEN.xlsx`)
 
 #### `generate_hpc_scripts.py`
 Generate country list and SLURM batch scripts for HPC cluster execution.
@@ -803,7 +805,7 @@ Generate exposure analysis dataset across scenarios.
 │  └── 2030_supply_100%/                                          │
 │      ├── siting_clusters_{ISO3}.parquet    ← NEW                │
 │      ├── siting_networks_{ISO3}.parquet    ← NEW                │
-│      └── siting_summary_{ISO3}.xlsx        ← NEW                │
+│      └── {YEAR}_siting_{FACTOR}%_{ISO3}.xlsx  ← NEW             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -834,12 +836,20 @@ python process_country_siting.py KEN
 
 # Step 3: Integrated analysis (optional)
 python process_country_supply.py KEN
-# → Detects siting outputs, creates _add_v2 files
+# → Detects siting outputs, creates _add_v2 files in separate folder:
+#   outputs_per_country/parquet/2030_supply_100%_add_v2/
 
-# Combine to GeoPackage
+# Combine to GeoPackage (basic - from 2030_supply_100%/)
 python combine_one_results.py KEN
+# → Creates: outputs_per_country/2030_supply_100%_KEN_add.gpkg
+
+# Combine to GeoPackage (with _add_v2 - from 2030_supply_100%_add_v2/)
+python combine_one_results.py KEN --scenario "2030_supply_100%_add_v2"
 # → Creates: outputs_per_country/2030_supply_100%_KEN_add_v2.gpkg
 ```
+
+> **Note:** The `_add_v2` parquet files are saved to a separate folder (`2030_supply_100%_add_v2/`).
+> You must specify `--scenario "2030_supply_100%_add_v2"` to combine them into a GeoPackage.
 
 ---
 
@@ -1000,10 +1010,10 @@ ls -lh outputs_global/*_global.gpkg
 
 ```bash
 # Verify siting outputs exist
-ls outputs_per_country/parquet/2030_supply_100%/siting_summary_*.xlsx
+ls outputs_per_country/parquet/2030_supply_100%/2030_siting_100%_*.xlsx
 
 # Check exact filename (case-sensitive)
-# Must be: siting_summary_{ISO3}.xlsx
+# Must be: {YEAR}_siting_{FACTOR}%_{ISO3}.xlsx (e.g., 2030_siting_100%_KEN.xlsx)
 ```
 
 ### Line Types Not Preserved

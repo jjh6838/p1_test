@@ -1319,7 +1319,7 @@ def save_outputs(settlements_gdf, cluster_centers_gdf, networks_gdf, country_iso
     all_params = config_params + energy_type_params
     summary_df = pd.DataFrame(all_params, columns=['Parameter', 'Value'])
     
-    summary_file = output_path / f"siting_summary_{country_iso3}.xlsx"
+    summary_file = output_path / f"{ANALYSIS_YEAR}_siting_{int(SUPPLY_FACTOR*100)}%_{country_iso3}.xlsx"
     with pd.ExcelWriter(summary_file, engine='openpyxl') as writer:
         summary_df.to_excel(writer, index=False, sheet_name='Summary')
         worksheet = writer.sheets['Summary']
