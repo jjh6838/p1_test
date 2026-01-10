@@ -188,11 +188,8 @@ python combine_global_results.py --input-dir outputs_per_country
 ### All Countries (HPC Cluster)
 
 ```bash
-# Generate parallel SLURM scripts
+# Generate parallel SLURM scripts (automatically uses Unix line endings)
 python generate_hpc_scripts.py --create-parallel
-
-# Fix line endings (if prepared on Windows)
-sed -i 's/\r$//' submit_all_parallel.sh parallel_scripts/*.sh
 chmod +x submit_all_parallel.sh parallel_scripts/*.sh
 
 # Submit all 40 parallel jobs (single scenario: 100%)
@@ -943,13 +940,9 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 # PREPARATION
 # ═══════════════════════════════════════════════════════════════
 
-# Generate parallel scripts
+# Generate parallel scripts (automatically uses Unix line endings)
 python generate_hpc_scripts.py --create-parallel         # 40 supply scripts
 python generate_hpc_scripts.py --create-parallel-siting  # 25 siting scripts
-
-# Fix line endings (if prepared on Windows)
-sed -i 's/\r$//' submit_all_parallel.sh submit_one_direct.sh parallel_scripts/*.sh
-sed -i 's/\r$//' submit_all_parallel_siting.sh submit_one_direct_siting.sh parallel_scripts_siting/*.sh
 chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # ═══════════════════════════════════════════════════════════════

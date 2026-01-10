@@ -400,7 +400,7 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
         
         # Write script file
         script_file = scripts_dir / f"submit_parallel_{i:02d}.sh"
-        script_file.write_text(script_content, encoding='utf-8')
+        script_file.write_text(script_content, encoding='utf-8', newline='\n')
         script_file.chmod(0o755)
         
         print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
@@ -505,7 +505,7 @@ echo "  Tier 5 (all others):           11 countries/script | Short partition (12
 """
     
     master_file = Path("submit_all_parallel.sh")
-    master_file.write_text(master_script, encoding='utf-8')
+    master_file.write_text(master_script, encoding='utf-8', newline='\n')
     master_file.chmod(0o755)
     
     print(f"\nCreated {master_file} to submit all parallel jobs")
@@ -561,7 +561,7 @@ fi
 """
     
     workflow_file = Path("submit_workflow.sh")
-    workflow_file.write_text(workflow_script, encoding='utf-8')
+    workflow_file.write_text(workflow_script, encoding='utf-8', newline='\n')
     workflow_file.chmod(0o755)
     
     print(f"Created {workflow_file} for combining results")
@@ -805,7 +805,7 @@ echo "  tail -f ${{LOG_DIR}}/${{ISO3}}_*.out"
 """
     
     direct_file = Path("submit_one_direct.sh")
-    direct_file.write_text(direct_script, encoding='utf-8')
+    direct_file.write_text(direct_script, encoding='utf-8', newline='\n')
     direct_file.chmod(0o755)
     
     print(f"Created {direct_file} for submitting any single country directly")
@@ -1053,7 +1053,7 @@ echo "[INFO] Siting batch {i}/{len(all_batches)} ({tier.upper()}) completed at $
 """
         
         script_file = scripts_dir / f"submit_parallel_siting_{i:02d}.sh"
-        script_file.write_text(script_content, encoding='utf-8')
+        script_file.write_text(script_content, encoding='utf-8', newline='\n')
         script_file.chmod(0o755)
         
         print(f"  Script {i:02d}: {len(batch)} countries ({tier.upper()}) - {', '.join(batch)}")
@@ -1154,7 +1154,7 @@ echo "  Tier 3 (all others):           11 countries/script | Short partition (12
 """
     
     master_file = Path("submit_all_parallel_siting.sh")
-    master_file.write_text(master_script, encoding='utf-8')
+    master_file.write_text(master_script, encoding='utf-8', newline='\n')
     master_file.chmod(0o755)
     
     print(f"\nCreated {master_file} to submit all parallel siting jobs")
@@ -1376,7 +1376,7 @@ echo "  tail -f ${{LOG_DIR}}/siting_${{ISO3}}_*.out"
 """
     
     direct_siting_file = Path("submit_one_direct_siting.sh")
-    direct_siting_file.write_text(direct_siting_script, encoding='utf-8')
+    direct_siting_file.write_text(direct_siting_script, encoding='utf-8', newline='\n')
     direct_siting_file.chmod(0o755)
     
     print(f"Created {direct_siting_file} for submitting any single country's siting analysis directly")
