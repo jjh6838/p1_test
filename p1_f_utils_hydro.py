@@ -423,8 +423,20 @@ def save_geotiff(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
 
 
 def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
-                    out_path: Path, value_column: str = "value", nodata: float = 0) -> None:
-    """Save data array as Parquet centroids (points with values > 0)."""
+                    out_path: Path, value_column: str = "value", nodata: float = 0,
+                    filter_positive: bool = True) -> None:
+    """
+    Save data array as Parquet centroids.
+    
+    Args:
+        data: 2D numpy array of values
+        lons: 1D array of longitude coordinates
+        lats: 1D array of latitude coordinates
+        out_path: Output path for parquet file
+        value_column: Name of the value column
+        nodata: Value to treat as nodata (excluded from output)
+        filter_positive: If True, only keep values > 0. If False, keep all non-NaN/non-nodata values.
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Ensure lats are in correct order for grid creation
@@ -441,7 +453,10 @@ def save_as_parquet(data: np.ndarray, lons: np.ndarray, lats: np.ndarray,
     data_flat = data.ravel()
     
     # Filter out nodata/NaN values
-    valid_mask = ~np.isnan(data_flat) & (data_flat != nodata) & (data_flat > 0)
+    if filter_positive:
+        valid_mask = ~np.isnan(data_flat) & (data_flat != nodata) & (data_flat > 0)
+    else:
+        valid_mask = ~np.isnan(data_flat) & (data_flat != nodata)
     
     # Create GeoDataFrame
     gdf = gpd.GeoDataFrame({

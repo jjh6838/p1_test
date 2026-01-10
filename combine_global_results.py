@@ -71,12 +71,12 @@ def get_cmip6_layer_paths(year: int) -> dict:
         f"PVOUT_DELTA_{year}_{suffix}": solar_dir / f"PVOUT_DELTA_{year}_{suffix}.parquet",
         f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
         # Hydro runoff layers (gridded)
-        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
-        f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
         f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
+        f"HYDRO_RUNOFF_DELTA_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_DELTA_{year}_{suffix}.parquet",
+        f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
         # HydroATLAS river reach layers - stored in hydro_dir
-        f"RiverATLAS_projected_{year}": hydro_dir / f"RiverATLAS_projected_{year}.parquet",
-        "RiverATLAS_baseline": hydro_dir / "RiverATLAS_baseline.parquet",
+        f"RiverATLAS_{year}_polyline": hydro_dir / f"RiverATLAS_{year}_polyline.parquet",
+        "RiverATLAS_baseline_polyline": hydro_dir / "RiverATLAS_baseline_polyline.parquet",
         # Unified viable centroids
         f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.parquet",
         f"WIND_VIABLE_CENTROIDS_{year}": wind_dir / f"WIND_VIABLE_CENTROIDS_{year}.parquet",
@@ -108,10 +108,9 @@ def get_cmip6_tif_paths(year: int) -> dict:
         f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.tif",
         f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.tif",
         # Hydro runoff TIFs
-        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.tif",
-        f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.tif",
         f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.tif",
-        f"HYDRO_VIABLE_CENTROIDS_{year}": hydro_dir / f"HYDRO_VIABLE_CENTROIDS_{year}.tif",
+        f"HYDRO_RUNOFF_DELTA_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_DELTA_{year}_{suffix}.tif",
+        f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.tif",
     }
 
 

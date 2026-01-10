@@ -177,12 +177,7 @@ WIND_WPD_THRESHOLD = 25
 #   210: Water bodies
 LANDCOVER_VALID_HYDRO = [160, 170, 180, 210]
 
-# =============================================================================
-# HYDROATLAS RIVER BUFFER SETTINGS (p1_f_viable_hydro.py)
-# =============================================================================
-# Buffer distance (meters) around suitable river reaches for hydro siting
-HYDRO_RIVER_BUFFER_M = 5000  # 5 km buffer
-
-# Minimum runoff threshold (mm/year) for viable hydro centroids
-# Areas with runoff below this threshold are excluded from viable centroids output
-HYDRO_RUNOFF_THRESHOLD_MM = 100
+# Minimum projected discharge (m³/s) for viable hydro centroids
+# River reaches with discharge below this threshold are excluded
+# Typical small-hydro plants require at least 1-5 m³/s
+HYDRO_MIN_DISCHARGE_VIABLE_M3S = 1.0
