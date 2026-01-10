@@ -72,6 +72,7 @@ def get_cmip6_layer_paths(year: int) -> dict:
         f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
         # Hydro runoff layers (gridded)
         f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
+        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
         f"HYDRO_RUNOFF_DELTA_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_DELTA_{year}_{suffix}.parquet",
         f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
         # HydroATLAS river reach layers - stored in hydro_dir
@@ -109,6 +110,7 @@ def get_cmip6_tif_paths(year: int) -> dict:
         f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.tif",
         # Hydro runoff TIFs
         f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.tif",
+        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.tif",
         f"HYDRO_RUNOFF_DELTA_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_DELTA_{year}_{suffix}.tif",
         f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.tif",
     }

@@ -2092,6 +2092,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
     scenario_suffix = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
     
     # Check if siting data exists (determines workflow approach)
+    # Auto-detected from existing siting data file
     scenario = f"{ANALYSIS_YEAR}_supply_{int(SUPPLY_FACTOR*100)}%"
     siting_summary_path = Path(f"outputs_per_country/parquet/{scenario}/{ANALYSIS_YEAR}_siting_{int(SUPPLY_FACTOR*100)}%_{country_iso3}.xlsx")
     has_siting_data = siting_summary_path.exists()
@@ -2646,7 +2647,11 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
 
 def main():
     """Parses command-line arguments and runs the main processing function."""
-    parser = argparse.ArgumentParser(description='Process supply analysis for a country')
+    parser = argparse.ArgumentParser(
+        description='Process supply analysis for a country. '
+                    'ADD_V2 workflow is auto-enabled when siting data exists '
+                    '(i.e., {YEAR}_siting_{SUPPLY}%_{ISO3}.xlsx in outputs_per_country/parquet/).'
+    )
     parser.add_argument('country_iso3', help='ISO3 country code')
     parser.add_argument('--output-dir', default='outputs_per_country', help='Output directory')
     parser.add_argument('--test', action='store_true', 

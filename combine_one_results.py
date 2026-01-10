@@ -59,6 +59,7 @@ def get_cmip6_layer_paths(year: int) -> dict:
         f"PVOUT_baseline_{suffix}": solar_dir / f"PVOUT_baseline_{suffix}.parquet",
         # Hydro runoff layers (clip to GADM only - land-based)
         f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet",
+        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.parquet",
         f"HYDRO_RUNOFF_DELTA_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_DELTA_{year}_{suffix}.parquet",
         f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.parquet",
         # HydroATLAS river reach layers (clip to GADM only) - stored in hydro_dir
@@ -96,6 +97,7 @@ def get_cmip6_tif_paths(year: int) -> dict:
         f"SOLAR_VIABLE_CENTROIDS_{year}": solar_dir / f"SOLAR_VIABLE_CENTROIDS_{year}.tif",
         # Hydro runoff TIFs
         f"HYDRO_RUNOFF_baseline_{suffix}": hydro_dir / f"HYDRO_RUNOFF_baseline_{suffix}.tif",
+        f"HYDRO_RUNOFF_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_{year}_{suffix}.tif",
         f"HYDRO_RUNOFF_DELTA_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_DELTA_{year}_{suffix}.tif",
         f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}": hydro_dir / f"HYDRO_RUNOFF_UNCERTAINTY_{year}_{suffix}.tif",
     }
@@ -277,15 +279,32 @@ def parquet_to_gpkg(base_dir, scenario, iso3):
     """
 
     base_dir = Path(base_dir)
-    in_dir = base_dir / "parquet" / scenario
     
-    # Check for _add_v2 files first (supply analysis with siting)
-    add_v2_files = {
-        "centroids":    in_dir / f"centroids_{iso3}_add_v2.parquet",
-        "polylines":    in_dir / f"polylines_{iso3}_add_v2.parquet",
-        "grid_lines":   in_dir / f"grid_lines_{iso3}_add_v2.parquet",
-        "facilities":   in_dir / f"facilities_{iso3}_add_v2.parquet",
-    }
+    # Handle scenario names that already end with _add_v2
+    if scenario.endswith("_add_v2"):
+        base_scenario = scenario[:-7]  # Remove _add_v2 suffix
+        in_dir_v2 = base_dir / "parquet" / scenario  # e.g., parquet/2030_supply_100%_add_v2/
+        in_dir = base_dir / "parquet" / base_scenario  # e.g., parquet/2030_supply_100%/
+    else:
+        base_scenario = scenario
+        in_dir = base_dir / "parquet" / scenario  # e.g., parquet/2030_supply_100%/
+        in_dir_v2 = base_dir / "parquet" / f"{scenario}_add_v2"  # e.g., parquet/2030_supply_100%_add_v2/
+    
+    # Check for _add_v2 files - check _add_v2 folder first, then base scenario folder
+    if in_dir_v2.exists():
+        add_v2_files = {
+            "centroids":    in_dir_v2 / f"centroids_{iso3}_add_v2.parquet",
+            "polylines":    in_dir_v2 / f"polylines_{iso3}_add_v2.parquet",
+            "grid_lines":   in_dir_v2 / f"grid_lines_{iso3}_add_v2.parquet",
+            "facilities":   in_dir_v2 / f"facilities_{iso3}_add_v2.parquet",
+        }
+    else:
+        add_v2_files = {
+            "centroids":    in_dir / f"centroids_{iso3}_add_v2.parquet",
+            "polylines":    in_dir / f"polylines_{iso3}_add_v2.parquet",
+            "grid_lines":   in_dir / f"grid_lines_{iso3}_add_v2.parquet",
+            "facilities":   in_dir / f"facilities_{iso3}_add_v2.parquet",
+        }
     
     has_add_v2 = any(fp.exists() for fp in add_v2_files.values())
     
@@ -319,12 +338,8 @@ def parquet_to_gpkg(base_dir, scenario, iso3):
     
     # Determine output filename and files to process
     if has_add_v2:
-        # If scenario already ends with _add_v2, strip it and re-add after iso3
-        if scenario.endswith("_add_v2"):
-            base_scenario = scenario[:-7]  # Remove _add_v2
-            out_gpkg = base_dir / f"{base_scenario}_{iso3}_add_v2.gpkg"
-        else:
-            out_gpkg = base_dir / f"{scenario}_{iso3}_add_v2.gpkg"
+        # Use base_scenario (without _add_v2 suffix) for output naming
+        out_gpkg = base_dir / f"{base_scenario}_{iso3}_add_v2.gpkg"
         files = add_v2_files
     elif has_additional:
         out_gpkg = base_dir / f"{scenario}_{iso3}_add.gpkg"
@@ -376,9 +391,15 @@ def parquet_to_gpkg(base_dir, scenario, iso3):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Combine Parquet files into GPKG for a single country")
+    parser = argparse.ArgumentParser(
+        description="Combine Parquet files into GPKG for a single country. "
+                    "Auto-detects _add_v2 files: checks parquet/{scenario}_add_v2/ folder first, "
+                    "then falls back to parquet/{scenario}/. Output: {scenario}_{ISO3}.gpkg, "
+                    "{scenario}_{ISO3}_add.gpkg (with siting), or {scenario}_{ISO3}_add_v2.gpkg (after 2nd supply run)."
+    )
     parser.add_argument("iso3", help="ISO3 country code (e.g., KEN)")
-    parser.add_argument("--scenario", default="2030_supply_100%", help="Scenario name (default: 2030_supply_100%%)")
+    parser.add_argument("--scenario", default="2030_supply_100%", 
+                       help="Scenario name (default: 2030_supply_100%%). Can also use 2030_supply_100%%_add_v2.")
     parser.add_argument("--base-dir", default="outputs_per_country", help="Base directory (default: outputs_per_country)")
     
     args = parser.parse_args()

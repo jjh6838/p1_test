@@ -27,6 +27,30 @@ PART 3: Viable Hydro Centroids
   - Filter by valid hydro land cover classes (water/wetland: 160, 170, 180, 210)
   - Output: Viable centroids (Parquet) - point geometry
 
+  Land Cover Classes (ESA CCI LCCS):
+- 10: Cropland, rainfed
+- 20: Cropland, irrigated or post-flooding
+- 30: Mosaic cropland (>50%) / natural vegetation (<50%)
+- 40: Mosaic natural vegetation (>50%) / cropland (<50%)
+- 50: Tree cover, broadleaved, evergreen
+- 60: Tree cover, broadleaved, deciduous
+- 70: Tree cover, needleleaved, evergreen
+- 80: Tree cover, needleleaved, deciduous
+- 90: Tree cover, mixed leaf type
+- 100: Mosaic tree and shrub (>50%) / herbaceous (<50%)
+- 110: Mosaic herbaceous (>50%) / tree and shrub (<50%)
+- 120: Shrubland
+- 130: Grassland
+- 140: Lichens and mosses
+- 150: Sparse vegetation
+- 160: Tree cover, flooded, fresh or brackish water
+- 170: Tree cover, flooded, saline water
+- 180: Shrub or herbaceous cover, flooded
+- 190: Urban areas
+- 200: Bare areas
+- 210: Water bodies
+- 220: Permanent snow and ice
+
 Output Files:
 -------------
 Part 1 (Delta Rasters):
@@ -66,8 +90,12 @@ from shapely.geometry import Point
 
 from config import (
     TARGET_RESOLUTION_ARCSEC,
-    LANDCOVER_VALID_HYDRO,
+    LANDCOVER_EXCLUDE_HYDRO,
     HYDRO_MIN_DISCHARGE_VIABLE_M3S,
+    HYDRO_MIN_GRADIENT_M_KM,
+    HYDRO_MIN_ELEVATION_M,
+    HYDRO_MIN_FLOW_RELIABILITY,
+    HYDRO_MIN_STREAM_ORDER_VIABLE,
 )
 from p1_f_utils_hydro import (
     get_bigdata_path,
@@ -207,13 +235,21 @@ def run_part1_delta(cmip6_dir: Path, era5_dir: Path, out_dir: Path):
     unc_2030_data, _, _ = regrid_to_target(delta_unc_2030, TARGET_RESOLUTION_ARCSEC)
     unc_2050_data, _, _ = regrid_to_target(delta_unc_2050, TARGET_RESOLUTION_ARCSEC)
     
+    # Compute projected runoff (baseline × delta)
+    runoff_2030_data = baseline_data * delta_2030_data
+    runoff_2050_data = baseline_data * delta_2050_data
+    
     print(f"  Output shape: {delta_2030_data.shape}")
+    print(f"  Projected runoff 2030 mean: {float(np.nanmean(runoff_2030_data)):.1f} mm/year")
+    print(f"  Projected runoff 2050 mean: {float(np.nanmean(runoff_2050_data)):.1f} mm/year")
     
     # Save outputs (GeoTIFF)
     print("\n--- Saving Part 1 outputs (GeoTIFF) ---")
     suffix = f"{TARGET_RESOLUTION_ARCSEC}arcsec"
     
     save_geotiff(baseline_data, lons, lats, out_dir / f"HYDRO_RUNOFF_baseline_{suffix}.tif")
+    save_geotiff(runoff_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2030_{suffix}.tif")
+    save_geotiff(runoff_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2050_{suffix}.tif")
     save_geotiff(delta_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_DELTA_2030_{suffix}.tif", nodata=1.0)
     save_geotiff(delta_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_DELTA_2050_{suffix}.tif", nodata=1.0)
     save_geotiff(unc_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_UNCERTAINTY_2030_{suffix}.tif", nodata=0)
@@ -222,6 +258,8 @@ def run_part1_delta(cmip6_dir: Path, era5_dir: Path, out_dir: Path):
     # Save outputs (Parquet)
     print("\n--- Saving Part 1 outputs (Parquet) ---")
     save_as_parquet(baseline_data, lons, lats, out_dir / f"HYDRO_RUNOFF_baseline_{suffix}.parquet", "runoff_mm")
+    save_as_parquet(runoff_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2030_{suffix}.parquet", "runoff_mm")
+    save_as_parquet(runoff_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_2050_{suffix}.parquet", "runoff_mm")
     # Delta values can be < 1.0 (decreasing runoff), so don't filter positive only
     save_as_parquet(delta_2030_data, lons, lats, out_dir / f"HYDRO_RUNOFF_DELTA_2030_{suffix}.parquet", "delta", nodata=1.0, filter_positive=False)
     save_as_parquet(delta_2050_data, lons, lats, out_dir / f"HYDRO_RUNOFF_DELTA_2050_{suffix}.parquet", "delta", nodata=1.0, filter_positive=False)
@@ -287,10 +325,18 @@ def run_part2_riveratlas_projections(riveratlas_path: Path, out_dir: Path,
     gdf = extract_delta_at_points(gdf, delta_2030_data, delta_2030_transform, 'delta_2030')
     gdf = extract_delta_at_points(gdf, delta_2050_data, delta_2050_transform, 'delta_2050')
     
-    # Compute projected discharge
+    # Compute projected discharge (mean, min, max)
     print("\n--- Computing projected discharge ---")
+    # Mean annual discharge
     gdf['dis_m3_pyr_2030'] = gdf['dis_m3_pyr'] * gdf['delta_2030']
     gdf['dis_m3_pyr_2050'] = gdf['dis_m3_pyr'] * gdf['delta_2050']
+    # Min monthly discharge
+    gdf['dis_m3_pmn_2030'] = gdf['dis_m3_pmn'] * gdf['delta_2030']
+    gdf['dis_m3_pmn_2050'] = gdf['dis_m3_pmn'] * gdf['delta_2050']
+    # Max monthly discharge
+    gdf['dis_m3_pmx_2030'] = gdf['dis_m3_pmx'] * gdf['delta_2030']
+    gdf['dis_m3_pmx_2050'] = gdf['dis_m3_pmx'] * gdf['delta_2050']
+    # Change percentage
     gdf['dis_change_pct_2030'] = (gdf['delta_2030'] - 1.0) * 100
     gdf['dis_change_pct_2050'] = (gdf['delta_2050'] - 1.0) * 100
     
@@ -308,14 +354,18 @@ def run_part2_riveratlas_projections(riveratlas_path: Path, out_dir: Path,
     gdf[cols_baseline].to_parquet(out_dir / "RiverATLAS_baseline_polyline.parquet")
     print(f"  Saved: RiverATLAS_baseline_polyline.parquet ({len(gdf):,} reaches)")
     
-    cols_2030 = ['HYRIV_ID', 'geometry', 'dis_m3_pyr', 'delta_2030', 'dis_m3_pyr_2030', 
-                 'dis_change_pct_2030', 'ORD_STRA', 'UPLAND_SKM', 'sgr_dk_rav']
+    cols_2030 = ['HYRIV_ID', 'geometry', 'dis_m3_pyr', 'dis_m3_pmn', 'dis_m3_pmx',
+                 'delta_2030', 'dis_change_pct_2030',
+                 'dis_m3_pyr_2030', 'dis_m3_pmn_2030', 'dis_m3_pmx_2030',
+                 'ORD_STRA', 'UPLAND_SKM', 'sgr_dk_rav', 'ele_mt_cav', 'ele_mt_uav', 'LENGTH_KM']
     cols_2030 = [c for c in cols_2030 if c in gdf.columns]
     gdf[cols_2030].to_parquet(out_dir / "RiverATLAS_2030_polyline.parquet")
     print(f"  Saved: RiverATLAS_2030_polyline.parquet ({len(gdf):,} reaches)")
     
-    cols_2050 = ['HYRIV_ID', 'geometry', 'dis_m3_pyr', 'delta_2050', 'dis_m3_pyr_2050',
-                 'dis_change_pct_2050', 'ORD_STRA', 'UPLAND_SKM', 'sgr_dk_rav']
+    cols_2050 = ['HYRIV_ID', 'geometry', 'dis_m3_pyr', 'dis_m3_pmn', 'dis_m3_pmx',
+                 'delta_2050', 'dis_change_pct_2050',
+                 'dis_m3_pyr_2050', 'dis_m3_pmn_2050', 'dis_m3_pmx_2050',
+                 'ORD_STRA', 'UPLAND_SKM', 'sgr_dk_rav', 'ele_mt_cav', 'ele_mt_uav', 'LENGTH_KM']
     cols_2050 = [c for c in cols_2050 if c in gdf.columns]
     gdf[cols_2050].to_parquet(out_dir / "RiverATLAS_2050_polyline.parquet")
     print(f"  Saved: RiverATLAS_2050_polyline.parquet ({len(gdf):,} reaches)")
@@ -335,16 +385,25 @@ def run_part2_riveratlas_projections(riveratlas_path: Path, out_dir: Path,
 # =============================================================================
 
 def run_part3_viable_centroids(out_dir: Path, landcover_path: Path = None,
-                                min_discharge_viable: float = None):
+                                min_discharge_viable: float = None,
+                                min_gradient: float = None,
+                                min_elevation: float = None,
+                                min_flow_reliability: float = None,
+                                min_stream_order: int = None):
     """
     Create viable hydro centroids from projected RiverATLAS.
     
     Process:
       1. Load RiverATLAS_*_polyline.parquet
       2. Create point centroids from polylines
-      3. Filter by minimum projected discharge threshold
+      3. Apply hydro siting filters:
+         - Minimum projected discharge (m³/s)
+         - Minimum river gradient (m/km) - excludes flat coastal areas
+         - Minimum elevation (m) - excludes near sea-level sites
+         - Minimum flow reliability (min/mean discharge ratio)
+         - Minimum stream order (excludes small headwater streams)
       4. Sample land cover at centroid coordinates
-      5. Filter by valid hydro land cover classes (160, 170, 180, 210)
+      5. EXCLUDE unsuitable land cover (urban, snow/ice) - blacklist approach
     
     Outputs:
       - HYDRO_VIABLE_CENTROIDS_2030.parquet (point geometry)
@@ -358,6 +417,22 @@ def run_part3_viable_centroids(out_dir: Path, landcover_path: Path = None,
         landcover_path = LANDCOVER_PATH
     if min_discharge_viable is None:
         min_discharge_viable = HYDRO_MIN_DISCHARGE_VIABLE_M3S
+    if min_gradient is None:
+        min_gradient = HYDRO_MIN_GRADIENT_M_KM
+    if min_elevation is None:
+        min_elevation = HYDRO_MIN_ELEVATION_M
+    if min_flow_reliability is None:
+        min_flow_reliability = HYDRO_MIN_FLOW_RELIABILITY
+    if min_stream_order is None:
+        min_stream_order = HYDRO_MIN_STREAM_ORDER_VIABLE
+    
+    print(f"\nHydro siting thresholds:")
+    print(f"  Min discharge: {min_discharge_viable} m³/s")
+    print(f"  Min gradient: {min_gradient} m/km")
+    print(f"  Min elevation: {min_elevation} m")
+    print(f"  Min flow reliability: {min_flow_reliability}")
+    print(f"  Min stream order: {min_stream_order}")
+    print(f"  Excluded land cover: {LANDCOVER_EXCLUDE_HYDRO}")
     
     # Load projected RiverATLAS
     river_2030_path = out_dir / "RiverATLAS_2030_polyline.parquet"
@@ -380,79 +455,147 @@ def run_part3_viable_centroids(out_dir: Path, landcover_path: Path = None,
         centroids_2030 = river_2030.geometry.centroid
         centroids_2050 = river_2050.geometry.centroid
     
-    # Create centroid GeoDataFrames
+    # Helper function to safely get column values
+    def safe_get(df, col):
+        return df[col].values if col in df.columns else np.full(len(df), np.nan)
+    
+    # Create centroid GeoDataFrames with additional hydro-relevant fields
     viable_2030 = gpd.GeoDataFrame({
         'HYRIV_ID': river_2030['HYRIV_ID'].values,
         'geometry': centroids_2030,
-        'dis_m3_pyr': river_2030['dis_m3_pyr'].values,
+        'dis_m3_pyr': safe_get(river_2030, 'dis_m3_pyr'),
+        'dis_m3_pmn': safe_get(river_2030, 'dis_m3_pmn'),
+        'dis_m3_pmx': safe_get(river_2030, 'dis_m3_pmx'),
         'delta': river_2030['delta_2030'].values,
         'dis_m3_pyr_projected': river_2030['dis_m3_pyr_2030'].values,
-        'ORD_STRA': river_2030['ORD_STRA'].values if 'ORD_STRA' in river_2030.columns else np.nan,
+        'ORD_STRA': safe_get(river_2030, 'ORD_STRA'),
+        'sgr_dk_rav': safe_get(river_2030, 'sgr_dk_rav'),  # Gradient (m/km)
+        'ele_mt_cav': safe_get(river_2030, 'ele_mt_cav'),  # Elevation (m)
+        'UPLAND_SKM': safe_get(river_2030, 'UPLAND_SKM'),  # Catchment area (km²)
     }, crs="EPSG:4326")
     
     viable_2050 = gpd.GeoDataFrame({
         'HYRIV_ID': river_2050['HYRIV_ID'].values,
         'geometry': centroids_2050,
-        'dis_m3_pyr': river_2050['dis_m3_pyr'].values,
+        'dis_m3_pyr': safe_get(river_2050, 'dis_m3_pyr'),
+        'dis_m3_pmn': safe_get(river_2050, 'dis_m3_pmn'),
+        'dis_m3_pmx': safe_get(river_2050, 'dis_m3_pmx'),
         'delta': river_2050['delta_2050'].values,
         'dis_m3_pyr_projected': river_2050['dis_m3_pyr_2050'].values,
-        'ORD_STRA': river_2050['ORD_STRA'].values if 'ORD_STRA' in river_2050.columns else np.nan,
+        'ORD_STRA': safe_get(river_2050, 'ORD_STRA'),
+        'sgr_dk_rav': safe_get(river_2050, 'sgr_dk_rav'),  # Gradient (m/km)
+        'ele_mt_cav': safe_get(river_2050, 'ele_mt_cav'),  # Elevation (m)
+        'UPLAND_SKM': safe_get(river_2050, 'UPLAND_SKM'),  # Catchment area (km²)
     }, crs="EPSG:4326")
+    
+    # Compute flow reliability ratio (min/mean discharge)
+    viable_2030['flow_reliability'] = viable_2030['dis_m3_pmn'] / viable_2030['dis_m3_pyr']
+    viable_2050['flow_reliability'] = viable_2050['dis_m3_pmn'] / viable_2050['dis_m3_pyr']
     
     print(f"  Created {len(viable_2030):,} centroids for 2030")
     print(f"  Created {len(viable_2050):,} centroids for 2050")
     
-    # Filter by minimum discharge threshold
-    print(f"\n--- Filtering by discharge threshold ({min_discharge_viable} m³/s) ---")
+    # ==========================================================================
+    # APPLY HYDRO SITING FILTERS
+    # ==========================================================================
     
-    discharge_mask_2030 = viable_2030['dis_m3_pyr_projected'] >= min_discharge_viable
-    discharge_mask_2050 = viable_2050['dis_m3_pyr_projected'] >= min_discharge_viable
+    # Filter 1: Minimum projected discharge
+    print(f"\n--- Filter 1: Discharge threshold ({min_discharge_viable} m³/s) ---")
+    mask_2030 = viable_2030['dis_m3_pyr_projected'] >= min_discharge_viable
+    mask_2050 = viable_2050['dis_m3_pyr_projected'] >= min_discharge_viable
+    print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} pass")
+    print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} pass")
+    viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
+    viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
     
-    print(f"  2030: {discharge_mask_2030.sum():,} / {len(viable_2030):,} centroids meet discharge threshold")
-    print(f"  2050: {discharge_mask_2050.sum():,} / {len(viable_2050):,} centroids meet discharge threshold")
+    # Filter 2: Minimum gradient (excludes flat coastal areas)
+    print(f"\n--- Filter 2: Gradient threshold ({min_gradient} m/km) ---")
+    mask_2030 = viable_2030['sgr_dk_rav'] >= min_gradient
+    mask_2050 = viable_2050['sgr_dk_rav'] >= min_gradient
+    print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} pass")
+    print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} pass")
+    viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
+    viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
     
-    viable_2030 = viable_2030[discharge_mask_2030].reset_index(drop=True)
-    viable_2050 = viable_2050[discharge_mask_2050].reset_index(drop=True)
+    # Filter 3: Minimum elevation (excludes sea-level sites)
+    print(f"\n--- Filter 3: Elevation threshold ({min_elevation} m) ---")
+    mask_2030 = viable_2030['ele_mt_cav'] >= min_elevation
+    mask_2050 = viable_2050['ele_mt_cav'] >= min_elevation
+    print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} pass")
+    print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} pass")
+    viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
+    viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
     
-    # Sample land cover at centroids
-    if landcover_path.exists():
-        print(f"\n--- Sampling land cover at centroids ---")
-        print(f"  Valid hydro classes: {LANDCOVER_VALID_HYDRO}")
+    # Filter 4: Minimum flow reliability (excludes highly seasonal rivers)
+    print(f"\n--- Filter 4: Flow reliability threshold ({min_flow_reliability}) ---")
+    mask_2030 = viable_2030['flow_reliability'] >= min_flow_reliability
+    mask_2050 = viable_2050['flow_reliability'] >= min_flow_reliability
+    print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} pass")
+    print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} pass")
+    viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
+    viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
+    
+    # Filter 5: Minimum stream order (excludes small headwater streams)
+    print(f"\n--- Filter 5: Stream order threshold (>= {min_stream_order}) ---")
+    mask_2030 = viable_2030['ORD_STRA'] >= min_stream_order
+    mask_2050 = viable_2050['ORD_STRA'] >= min_stream_order
+    print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} pass")
+    print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} pass")
+    viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
+    viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
+    
+    print(f"\n  After physical filters: {len(viable_2030):,} (2030), {len(viable_2050):,} (2050)")
+    
+    # Early exit if no centroids remain after physical filters
+    if len(viable_2030) == 0 and len(viable_2050) == 0:
+        print("\n[WARNING] No centroids passed physical filters!")
+        print("  Consider relaxing thresholds in config.py")
+        print("\n--- Saving Part 3 outputs (empty Parquet files) ---")
+        viable_2030.to_parquet(out_dir / "HYDRO_VIABLE_CENTROIDS_2030.parquet")
+        viable_2050.to_parquet(out_dir / "HYDRO_VIABLE_CENTROIDS_2050.parquet")
+        print(f"  Saved: HYDRO_VIABLE_CENTROIDS_2030.parquet ({len(viable_2030):,} points)")
+        print(f"  Saved: HYDRO_VIABLE_CENTROIDS_2050.parquet ({len(viable_2050):,} points)")
+        return viable_2030, viable_2050
+    
+    # Filter 6: Land cover - EXCLUDE unsuitable areas (blacklist approach)
+    # Rivers can flow through any land cover; we only exclude urban & snow/ice
+    if landcover_path.exists() and (len(viable_2030) > 0 or len(viable_2050) > 0):
+        print(f"\n--- Filter 6: Land cover (exclude {LANDCOVER_EXCLUDE_HYDRO}) ---")
         
         with rasterio.open(landcover_path) as src:
             lc_data = src.read(1)
             lc_transform = src.transform
             
-            # Sample for 2030
-            coords_2030 = np.array([(p.x, p.y) for p in viable_2030.geometry])
-            rows_2030 = ((coords_2030[:, 1] - lc_transform.f) / lc_transform.e).astype(int)
-            cols_2030 = ((coords_2030[:, 0] - lc_transform.c) / lc_transform.a).astype(int)
-            rows_2030 = np.clip(rows_2030, 0, lc_data.shape[0] - 1)
-            cols_2030 = np.clip(cols_2030, 0, lc_data.shape[1] - 1)
-            lc_values_2030 = lc_data[rows_2030, cols_2030]
+            # Sample for 2030 (only if centroids exist)
+            if len(viable_2030) > 0:
+                coords_2030 = np.array([(p.x, p.y) for p in viable_2030.geometry])
+                rows_2030 = ((coords_2030[:, 1] - lc_transform.f) / lc_transform.e).astype(int)
+                cols_2030 = ((coords_2030[:, 0] - lc_transform.c) / lc_transform.a).astype(int)
+                rows_2030 = np.clip(rows_2030, 0, lc_data.shape[0] - 1)
+                cols_2030 = np.clip(cols_2030, 0, lc_data.shape[1] - 1)
+                lc_values_2030 = lc_data[rows_2030, cols_2030]
+                viable_2030['landcover_class'] = lc_values_2030
+                mask_2030 = ~np.isin(lc_values_2030, LANDCOVER_EXCLUDE_HYDRO)
+                print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} pass (not in excluded classes)")
+                viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
+            else:
+                print(f"  2030: 0 / 0 pass (no centroids to filter)")
             
-            # Sample for 2050
-            coords_2050 = np.array([(p.x, p.y) for p in viable_2050.geometry])
-            rows_2050 = ((coords_2050[:, 1] - lc_transform.f) / lc_transform.e).astype(int)
-            cols_2050 = ((coords_2050[:, 0] - lc_transform.c) / lc_transform.a).astype(int)
-            rows_2050 = np.clip(rows_2050, 0, lc_data.shape[0] - 1)
-            cols_2050 = np.clip(cols_2050, 0, lc_data.shape[1] - 1)
-            lc_values_2050 = lc_data[rows_2050, cols_2050]
-        
-        # Add land cover class to dataframes
-        viable_2030['landcover_class'] = lc_values_2030
-        viable_2050['landcover_class'] = lc_values_2050
-        
-        # Filter by valid land cover classes
-        mask_2030 = np.isin(lc_values_2030, LANDCOVER_VALID_HYDRO)
-        mask_2050 = np.isin(lc_values_2050, LANDCOVER_VALID_HYDRO)
-        
-        print(f"  2030: {mask_2030.sum():,} / {len(viable_2030):,} centroids have valid land cover")
-        print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} centroids have valid land cover")
-        
-        viable_2030 = viable_2030[mask_2030].reset_index(drop=True)
-        viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
-    else:
+            # Sample for 2050 (only if centroids exist)
+            if len(viable_2050) > 0:
+                coords_2050 = np.array([(p.x, p.y) for p in viable_2050.geometry])
+                rows_2050 = ((coords_2050[:, 1] - lc_transform.f) / lc_transform.e).astype(int)
+                cols_2050 = ((coords_2050[:, 0] - lc_transform.c) / lc_transform.a).astype(int)
+                rows_2050 = np.clip(rows_2050, 0, lc_data.shape[0] - 1)
+                cols_2050 = np.clip(cols_2050, 0, lc_data.shape[1] - 1)
+                lc_values_2050 = lc_data[rows_2050, cols_2050]
+                viable_2050['landcover_class'] = lc_values_2050
+                mask_2050 = ~np.isin(lc_values_2050, LANDCOVER_EXCLUDE_HYDRO)
+                print(f"  2050: {mask_2050.sum():,} / {len(viable_2050):,} pass (not in excluded classes)")
+                viable_2050 = viable_2050[mask_2050].reset_index(drop=True)
+            else:
+                print(f"  2050: 0 / 0 pass (no centroids to filter)")
+    elif not landcover_path.exists():
         print(f"\n[WARNING] Land cover file not found: {landcover_path}")
         print("  Skipping land cover filter - all centroids marked as viable")
     
@@ -520,8 +663,15 @@ def run(workdir: str = None, era5_dir: str = None, riveratlas_path: str = None,
         riveratlas_path, out_dir, min_discharge, min_order, bbox, save_gpkg
     )
     
-    # Part 3: Generate viable centroids with land cover filter
-    viable_2030, viable_2050 = run_part3_viable_centroids(out_dir, LANDCOVER_PATH)
+    # Part 3: Generate viable centroids with hydro siting filters
+    viable_2030, viable_2050 = run_part3_viable_centroids(
+        out_dir, LANDCOVER_PATH,
+        min_discharge_viable=HYDRO_MIN_DISCHARGE_VIABLE_M3S,
+        min_gradient=HYDRO_MIN_GRADIENT_M_KM,
+        min_elevation=HYDRO_MIN_ELEVATION_M,
+        min_flow_reliability=HYDRO_MIN_FLOW_RELIABILITY,
+        min_stream_order=HYDRO_MIN_STREAM_ORDER_VIABLE,
+    )
     
     print(f"\n{'='*70}")
     print("ALL PROCESSING COMPLETE!")

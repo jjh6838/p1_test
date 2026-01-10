@@ -732,17 +732,26 @@ python generate_hpc_scripts.py --create-parallel-siting
 Convert country Parquet files to GeoPackage for visualization.
 
 ```bash
-# Basic (4 layers)
+# Basic (4 layers) - from parquet/2030_supply_100%/
 python combine_one_results.py KEN
 
-# With siting layers (7 layers)
-python combine_one_results.py KEN  # Auto-detects siting outputs
+# With siting layers (7 layers) - auto-detects siting_*.parquet files
+python combine_one_results.py KEN  # Creates {scenario}_{ISO3}_add.gpkg
 
-# Custom scenario
-python combine_one_results.py KEN --scenario 2050_supply_100%
+# With _add_v2 (after 2nd supply run) - auto-detects _add_v2 folder
+python combine_one_results.py KEN  # Creates {scenario}_{ISO3}_add_v2.gpkg
+
+# Custom scenario (both work the same - auto-detects _add_v2 folder)
+python combine_one_results.py KEN --scenario 2030_supply_100%
+python combine_one_results.py KEN --scenario 2030_supply_100%_add_v2
 ```
 
-**Output:** `outputs_per_country/{scenario}_{ISO3}.gpkg`
+**Auto-detection logic:**
+1. Checks `parquet/{scenario}_add_v2/` folder first for `*_add_v2.parquet` files
+2. Falls back to `parquet/{scenario}/` folder
+3. Output filename: `{scenario}_{ISO3}.gpkg`, `_add.gpkg`, or `_add_v2.gpkg` based on available files
+
+**Output:** `outputs_per_country/{scenario}_{ISO3}[_add|_add_v2].gpkg`
 
 **Layers included:**
 - Core supply analysis: `centroids`, `facilities`, `grid_lines`, `polylines`
@@ -874,17 +883,19 @@ python process_country_supply.py KEN
 # → Detects siting outputs, creates _add_v2 files in separate folder:
 #   outputs_per_country/parquet/2030_supply_100%_add_v2/
 
-# Combine to GeoPackage (basic - from 2030_supply_100%/)
+# Combine to GeoPackage (auto-detects _add_v2 folder)
 python combine_one_results.py KEN
-# → Creates: outputs_per_country/2030_supply_100%_KEN_add.gpkg
+# → Auto-detects parquet/2030_supply_100%_add_v2/ folder
+# → Creates: outputs_per_country/2030_supply_100%_KEN_add_v2.gpkg
 
-# Combine to GeoPackage (with _add_v2 - from 2030_supply_100%_add_v2/)
-python combine_one_results.py KEN --scenario "2030_supply_100%_add_v2"
+# Or explicitly specify scenario (same result)
+python combine_one_results.py KEN --scenario 2030_supply_100%_add_v2
 # → Creates: outputs_per_country/2030_supply_100%_KEN_add_v2.gpkg
 ```
 
 > **Note:** The `_add_v2` parquet files are saved to a separate folder (`2030_supply_100%_add_v2/`).
-> You must specify `--scenario "2030_supply_100%_add_v2"` to combine them into a GeoPackage.
+> The combine script auto-detects this folder, so you can use either `--scenario 2030_supply_100%`
+> or `--scenario 2030_supply_100%_add_v2` - both will find the _add_v2 files.
 
 ---
 

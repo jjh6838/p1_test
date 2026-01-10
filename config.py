@@ -170,14 +170,50 @@ SOLAR_PVOUT_THRESHOLD = 3.0
 # A computed WPD of 25 W/m² likely corresponds to 75–150 W/m² true WPD.
 WIND_WPD_THRESHOLD = 25
 
-# Hydro viable classes (water-adjacent areas):
-#   160: Tree cover, flooded, fresh or brackish water
-#   170: Tree cover, flooded, saline water
-#   180: Shrub or herbaceous cover, flooded
-#   210: Water bodies
-LANDCOVER_VALID_HYDRO = [160, 170, 180, 210]
+# Hydro EXCLUDED land cover classes (blacklist approach):
+# Rivers can flow through any land cover, so we EXCLUDE unsuitable areas
+# rather than requiring specific water-adjacent classes.
+#   190: Urban areas (development conflicts, land use issues)
+#   200: Bare areas (harsh desert conditions, limited access)
+#   220: Permanent snow and ice (inaccessible, harsh conditions)
+LANDCOVER_EXCLUDE_HYDRO = [190, 200, 220]
 
-# Minimum projected discharge (m³/s) for viable hydro centroids
-# River reaches with discharge below this threshold are excluded
-# Typical small-hydro plants require at least 1-5 m³/s
+# Legacy: Kept for reference but no longer used in filtering
+# LANDCOVER_VALID_HYDRO = [160, 170, 180, 210]  # water/wetland only - too restrictive
+
+# =============================================================================
+# HYDRO SITING THRESHOLDS
+# =============================================================================
+# These thresholds filter river reaches to identify viable hydro sites.
+# Power potential: P = ρ × g × Q × H (where Q=discharge, H=head)
+#
+# HYDRO_MIN_DISCHARGE_VIABLE_M3S: Minimum projected discharge (m³/s)
+#   - Small hydro: 1-10 m³/s, Large hydro: >100 m³/s
+#   - Below this, not enough water for power generation
 HYDRO_MIN_DISCHARGE_VIABLE_M3S = 1.0
+
+# HYDRO_MIN_GRADIENT_M_KM: Minimum river gradient (m drop per km)
+#   - Coastal/lowland rivers: 0.1-1 m/km (poor for hydro)
+#   - Mountain rivers: 10-50+ m/km (excellent for hydro)
+#   - 1.5 m/km allows low-head run-of-river while requiring meaningful head
+HYDRO_MIN_GRADIENT_M_KM = 1.5
+
+# HYDRO_MIN_ELEVATION_M: Minimum site elevation (m above sea level)
+#   - Excludes coastal/delta areas where gradient is negligible
+#   - 20m is above tidal influence but allows viable lowland valleys
+HYDRO_MIN_ELEVATION_M = 20.0
+
+# HYDRO_MIN_FLOW_RELIABILITY: Minimum ratio of min/mean monthly discharge
+#   - dis_m3_pmn / dis_m3_pyr >= threshold
+#   - Higher = more reliable flow year-round
+#   - 0.2 = minimum flow is at least 20% of mean (seasonal rivers OK)
+#   - 0.5 = more reliable flow (less seasonal variation)
+HYDRO_MIN_FLOW_RELIABILITY = 0.2
+
+# HYDRO_MIN_STREAM_ORDER: Minimum Strahler stream order for viable sites
+#   - Order 1-2: Small headwater streams (micro-hydro only, <100 kW)
+#   - Order 3-4: Small rivers (small hydro, 100 kW - 10 MW)
+#   - Order 5-6: Medium rivers (medium hydro, 10-100 MW)
+#   - Order 7+: Large rivers (large hydro, >100 MW)
+#   - Setting to 2 includes smaller streams viable for small/micro hydro
+HYDRO_MIN_STREAM_ORDER_VIABLE = 2
