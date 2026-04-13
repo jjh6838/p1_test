@@ -257,7 +257,8 @@ When you modify configuration parameters, certain outputs need to be regenerated
 | `HYDRO_MIN_DISCHARGE_VIABLE_M3S` | `p1_f_viable_hydro.py --process-only` |
 | `LANDCOVER_VALID_*` | Respective viable script with `--process-only` |
 | Network settings | Country supply analysis only (`process_country_supply.py`) |
-| Siting settings | Country siting analysis only (`process_country_siting.py`) |
+| Siting settings (`CLUSTER_*`, `GRID_DISTANCE_*`) | Country siting analysis only (`process_country_siting.py`) |
+| `VIABILITY_SEARCH_RADIUS_KM`, `VIABILITY_FALLBACK_FOR_2024` | Country siting analysis only (`process_country_siting.py`) |
 
 **Typical regeneration workflow:**
 ```bash
@@ -326,6 +327,25 @@ python combine_one_results.py KEN
 | `CLUSTER_RADIUS_KM` | 50 | K-means clustering radius |
 | `GRID_DISTANCE_THRESHOLD_KM` | 50 | Remote vs near-grid classification |
 | `DROP_PERCENTAGE` | 0.01 | Filter bottom X% settlements by demand |
+| `VIABILITY_SEARCH_RADIUS_KM` | 100.0 | Radius (km) to search for viable CMIP6 centroids per cluster |
+| `VIABILITY_FALLBACK_FOR_2024` | True | Auto-use 2030 viable layers when `ANALYSIS_YEAR=2024` |
+
+Viability integration runs automatically as part of `process_country_siting.py` in two stages:
+
+**Stage 1 — Snapping.** Each cluster center is snapped to the highest-scoring nearby viable CMIP6 centroid within `VIABILITY_SEARCH_RADIUS_KM` (score = normalised resource value × proximity weight). Solar and Wind normalisation caps are 6.0 kWh/kWp/day and 25.0 W/m² respectively; Hydro uses 100 m³/s. If no viable centroid is within the radius, Solar and Wind clusters snap to the single nearest viable centroid in the country regardless of distance (`nearest_viable_fallback`); Hydro and types with no viable layer keep the geometric center (`geo_center_fallback`).
+
+**Stage 2 — LP rebalancing.** For clusters labelled `nearest_viable_fallback` or `geo_center_fallback` whose type is Solar or Wind, a Linear Programming optimisation reassigns MWh between Solar and Wind to maximise total viability-weighted capacity. Hard equality constraints ensure the country-level MWh total per type is preserved exactly. A cluster may be split into two rows (one Solar, one Wind) to represent a hybrid mini-grid; the `is_split` column identifies these.
+
+The siting clusters output (`siting_clusters_{ISO3}.parquet`) includes six additional audit columns:
+
+| Column | Description |
+|--------|--------------|
+| `viability_score` | Score [0–1]: normalised resource value × proximity weight (`weighted_snap`), or resource-only value (`nearest_viable_fallback`) |
+| `viability_source_year` | Year of the viable-centroid layer used (2030 or 2050) |
+| `viability_fallback_used` | `True` when `ANALYSIS_YEAR=2024` substituted 2030 layer, or when no within-radius snap was found |
+| `viability_distance_km` | Distance (km) to the snapped centroid (`NaN` for `geo_center_fallback`) |
+| `viability_method` | `weighted_snap` · `nearest_viable_fallback` · `lp_rebalanced` · `lp_split_solar` · `lp_split_wind` · `geo_center_fallback` |
+| `is_split` | `True` when a single cluster was split into Solar + Wind hybrid rows by the LP stage |
 
 ---
 

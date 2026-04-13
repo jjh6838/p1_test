@@ -217,3 +217,16 @@ HYDRO_MIN_FLOW_RELIABILITY = 0.2
 #   - Order 7+: Large rivers (large hydro, >100 MW)
 #   - Setting to 2 includes smaller streams viable for small/micro hydro
 HYDRO_MIN_STREAM_ORDER_VIABLE = 2
+
+# =============================================================================
+# VIABILITY INTEGRATION SETTINGS (process_country_siting.py)
+# =============================================================================
+# Search radius (km) around each cluster center to query viable CMIP6 centroids.
+# 100 km covers ~10× the 300 arcsec (~9.25 km) grid spacing, ensuring viable
+# candidates are found even in data-sparse regions and small island states.
+VIABILITY_SEARCH_RADIUS_KM = 100.0
+
+# When ANALYSIS_YEAR=2024 no dedicated viable-centroid layer exists.
+# If True, automatically use the 2030 layer and record the substitution in
+# the viability_source_year / viability_fallback_used output columns.
+VIABILITY_FALLBACK_FOR_2024 = True

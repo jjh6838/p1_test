@@ -24,7 +24,7 @@ from shapely.geometry import Point, LineString
 from shapely.ops import nearest_points
 from sklearn.cluster import KMeans
 from scipy.sparse.csgraph import minimum_spanning_tree
-from scipy.spatial import distance_matrix
+from scipy.spatial import distance_matrix, cKDTree
 from sklearn.cluster import DBSCAN
 
 # Suppress warnings
@@ -35,7 +35,8 @@ from config import (
     COMMON_CRS, ANALYSIS_YEAR, DEMAND_TYPES, SUPPLY_FACTOR,
     CLUSTER_RADIUS_KM, CLUSTER_MIN_SAMPLES,
     GRID_DISTANCE_THRESHOLD_KM, DROP_PERCENTAGE,
-    MIN_SETTLEMENTS_PER_COMPONENT
+    MIN_SETTLEMENTS_PER_COMPONENT,
+    VIABILITY_SEARCH_RADIUS_KM, VIABILITY_FALLBACK_FOR_2024
 )
 
 def get_bigdata_path(folder_name):
@@ -127,6 +128,449 @@ def haversine_distance_km(lat1, lon1, lat2, lon2):
     
     a = np.sin(dphi/2)**2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda/2)**2
     return 2 * R * np.arcsin(np.sqrt(a))
+
+
+# =============================================================================
+# VIABILITY INTEGRATION (CMIP6 viable centroid layers)
+# =============================================================================
+# Dispatch tables keyed on Grouped_Type values used in siting output
+_VIABILITY_DIR = {
+    "Solar": "bigdata_solar_cmip6",
+    "Wind":  "bigdata_wind_cmip6",
+    "Hydro": "bigdata_hydro_cmip6",
+}
+_VIABILITY_PREFIX    = {"Solar": "SOLAR",      "Wind": "WIND",    "Hydro": "HYDRO"}
+# Column containing the projected resource value in each parquet
+_VIABILITY_VALUE_COL = {"Solar": "value_2030", "Wind": "value_2030", "Hydro": "dis_m3_pyr"}
+# Normalisation denominators: Solar kWh/kWp/day, Hydro m³/s.
+# Wind is None → resolved at runtime to the 95th‑percentile of the country‑clipped
+# viable data, because ERA5-derived WPD is heavily underestimated (Jensen's
+# inequality + vector‑mean cancellation) so a global fixed cap spreads scores poorly.
+_VIABILITY_VALUE_MAX = {"Solar": 6.0,          "Wind": 25.0,        "Hydro": 100.0}
+
+
+def _get_viability_year(analysis_year):
+    """Map analysis year to available viable-centroid file year.
+    2024 has no dedicated layer; returns 2030 with fallback flag when enabled.
+    Returns: (file_year, fallback_used)
+    """
+    if analysis_year == 2024 and VIABILITY_FALLBACK_FOR_2024:
+        return 2030, True
+    return analysis_year, False
+
+
+def _load_viable_centroids(energy_type, file_year, country_geom):
+    """Load and country-clip the viable centroids parquet for one energy type.
+
+    Args:
+        energy_type: "Solar", "Wind", or "Hydro"
+        file_year:   2030 or 2050
+        country_geom: Shapely geometry used for bbox pre-filter then precise clip
+    Returns:
+        GeoDataFrame clipped to country, or empty GeoDataFrame on any failure.
+    """
+    base = get_bigdata_path(_VIABILITY_DIR[energy_type])
+    parquet_path = Path(base) / "outputs" / f"{_VIABILITY_PREFIX[energy_type]}_VIABLE_CENTROIDS_{file_year}.parquet"
+
+    if not parquet_path.exists():
+        print(f"  [viability] Warning: file not found: {parquet_path}")
+        return gpd.GeoDataFrame()
+
+    try:
+        gdf = gpd.read_parquet(parquet_path)
+        # Fast bbox pre-filter before the more expensive within() call
+        minx, miny, maxx, maxy = country_geom.bounds
+        gdf = gdf.cx[minx:maxx, miny:maxy]
+        # Solar and wind parquets have is_viable; hydro rows are all viable reaches
+        if "is_viable" in gdf.columns:
+            gdf = gdf[gdf["is_viable"]].reset_index(drop=True)
+        # Precise geometry clip
+        gdf = gdf[gdf.geometry.within(country_geom)].reset_index(drop=True)
+        return gdf
+    except Exception as exc:
+        print(f"  [viability] Warning: could not load {parquet_path.name}: {exc}")
+        return gpd.GeoDataFrame()
+
+
+def _nearest_viable_centroid(point, energy_type, viable_gdf):
+    """Snap to the single nearest viable centroid with no radius limit.
+
+    Returns (nearest_geometry, dist_km, norm_resource_score).
+    norm_resource_score has no proximity weight — purely the resource value.
+    """
+    val_col = _VIABILITY_VALUE_COL[energy_type]
+    val_max = _VIABILITY_VALUE_MAX[energy_type]
+    if val_max is None:
+        vals = viable_gdf[val_col].dropna() if val_col in viable_gdf.columns else pd.Series(dtype=float)
+        val_max = float(vals.quantile(0.95)) if len(vals) > 0 else 1.0
+
+    coords = np.column_stack([viable_gdf.geometry.x, viable_gdf.geometry.y])
+    tree = cKDTree(coords)
+    _, i = tree.query([point.x, point.y], k=1)
+    row = viable_gdf.iloc[i]
+    dist_km = haversine_distance_km(point.y, point.x, row.geometry.y, row.geometry.x)
+    raw_val = float(row[val_col]) if val_col in viable_gdf.columns and not pd.isna(row[val_col]) else 0.0
+    norm_val = min(raw_val / val_max, 1.0)
+    return row.geometry, dist_km, norm_val
+
+
+def _viability_score(point, energy_type, viable_gdf, search_radius_km):
+    """Compute a [0, 1] viability score for a single cluster center point.
+
+    Score = normalised_resource_value × proximity_weight
+    where proximity_weight decays linearly from 1 (at 0 km) to 0 (at search_radius_km).
+    Returns the highest-scoring candidate, not just the nearest.
+
+    Returns: (score, best_point_or_None, distance_km)
+    """
+    if viable_gdf is None or len(viable_gdf) == 0:
+        return 0.0, None, np.nan
+
+    val_col = _VIABILITY_VALUE_COL[energy_type]
+    val_max = _VIABILITY_VALUE_MAX[energy_type]
+    if val_max is None:
+        # Adaptive cap: 95th percentile of values in the country-clipped viable layer.
+        # Self-calibrates per country and year, avoiding poor spread from a global fixed cap.
+        vals = viable_gdf[val_col].dropna() if val_col in viable_gdf.columns else pd.Series(dtype=float)
+        val_max = float(vals.quantile(0.95)) if len(vals) > 0 else 1.0
+    has_val = val_col in viable_gdf.columns
+
+    coords = np.column_stack([viable_gdf.geometry.x, viable_gdf.geometry.y])
+    tree = cKDTree(coords)
+
+    # Degree radius: use longitude scale (fewest km/degree) so we never miss a
+    # true neighbour in any direction, then prune overshots via haversine below.
+    lat_factor = max(np.cos(np.radians(abs(point.y))), 0.1)
+    radius_deg = search_radius_km / (111.0 * lat_factor)
+    idxs = tree.query_ball_point([point.x, point.y], r=radius_deg)
+
+    if not idxs:
+        return 0.0, None, np.nan
+
+    best_score, best_point, best_dist = 0.0, None, np.nan
+    for i in idxs:
+        row = viable_gdf.iloc[i]
+        dist_km = haversine_distance_km(point.y, point.x, row.geometry.y, row.geometry.x)
+        if dist_km > search_radius_km:
+            continue  # prune cKDTree degree-space overshoot
+        raw_val = float(row[val_col]) if has_val and not pd.isna(row[val_col]) else 0.0
+        norm_val = min(raw_val / val_max, 1.0)
+        prox_w   = max(0.0, (search_radius_km - dist_km) / search_radius_km)
+        score    = norm_val * prox_w
+        if score > best_score:
+            best_score, best_point, best_dist = score, row.geometry, dist_km
+
+    return best_score, best_point, best_dist
+
+
+def apply_viability_to_clusters(cluster_centers_gdf, analysis_year, admin_boundaries):
+    """Snap cluster centers to the highest-scoring nearby viable CMIP6 centroid.
+
+    For each cluster center, finds the best viable centroid within
+    VIABILITY_SEARCH_RADIUS_KM and moves the center to that point.
+    Score = normalised_resource_value × proximity_weight (linear decay with distance).
+
+    When no viable point is found within the radius the original geometric center
+    is kept and viability_fallback_used is set to True.  Rows are never dropped.
+
+    Adds columns to the returned GeoDataFrame:
+        viability_score         float  [0, 1]
+        viability_source_year   int    year of the viable-centroid layer used
+        viability_fallback_used bool   True when 2024→2030 substitution or no snap
+        viability_distance_km   float  distance to snapped centroid (NaN if fallback)
+        viability_method        str    "weighted_snap" | "nearest_viable_fallback" | "geo_center_fallback"
+    Also updates geometry, center_lon, center_lat to reflect any snap.
+    """
+    if cluster_centers_gdf.empty:
+        for col in ("viability_score", "viability_source_year", "viability_fallback_used",
+                    "viability_distance_km", "viability_method"):
+            cluster_centers_gdf[col] = pd.NA
+        return cluster_centers_gdf, {}, None
+
+    print("\n" + "="*60)
+    print("VIABILITY INTEGRATION: snapping cluster centers to viable CMIP6 sites")
+    print("="*60)
+
+    file_year, global_fallback = _get_viability_year(analysis_year)
+    if global_fallback:
+        print(f"  [viability] ANALYSIS_YEAR={analysis_year}: auto-using {file_year} viable layers")
+
+    country_geom = admin_boundaries.to_crs(COMMON_CRS).geometry.union_all()
+
+    # Load and cache viable layers per energy type — avoid re-reading per row
+    viable_cache = {}
+    for etype in cluster_centers_gdf["Grouped_Type"].unique():
+        if etype not in _VIABILITY_DIR:
+            viable_cache[etype] = gpd.GeoDataFrame()
+        else:
+            viable_cache[etype] = _load_viable_centroids(etype, file_year, country_geom)
+            n = len(viable_cache[etype])
+            print(f"  [viability] {etype}: {n} viable centroids within country (year={file_year})")
+
+    new_geoms, scores, src_years, fallbacks, dists, methods = [], [], [], [], [], []
+
+    for _, row in cluster_centers_gdf.iterrows():
+        etype = row["Grouped_Type"]
+        score, best_pt, dist_km = _viability_score(
+            row.geometry, etype, viable_cache.get(etype), VIABILITY_SEARCH_RADIUS_KM
+        )
+
+        if best_pt is not None:
+            new_geoms.append(best_pt)
+            scores.append(round(score, 4))
+            src_years.append(file_year)
+            fallbacks.append(global_fallback)
+            dists.append(round(dist_km, 3))
+            methods.append("weighted_snap")
+        elif etype in {"Solar", "Wind"} and len(viable_cache.get(etype, [])) > 0:
+            # Solar/Wind: always snap to the nearest viable centroid even beyond radius.
+            # This eliminates geo_center_fallback for these types so the cluster center
+            # always lies on a resource-validated site.
+            n_pt, n_dist, n_score = _nearest_viable_centroid(
+                row.geometry, etype, viable_cache[etype]
+            )
+            new_geoms.append(n_pt)
+            scores.append(round(n_score, 4))
+            src_years.append(file_year)
+            fallbacks.append(True)
+            dists.append(round(n_dist, 3))
+            methods.append("nearest_viable_fallback")
+        else:
+            # No viable layer available for this type — keep original center
+            new_geoms.append(row.geometry)
+            scores.append(0.0)
+            src_years.append(file_year)
+            fallbacks.append(True)
+            dists.append(np.nan)
+            methods.append("geo_center_fallback")
+
+    out = cluster_centers_gdf.copy()
+    out = out.set_geometry(gpd.GeoSeries(new_geoms, crs=COMMON_CRS))
+    out["viability_score"]         = scores
+    out["viability_source_year"]   = src_years
+    out["viability_fallback_used"] = fallbacks
+    out["viability_distance_km"]   = dists
+    out["viability_method"]        = methods
+    out["center_lon"]              = out.geometry.x
+    out["center_lat"]              = out.geometry.y
+
+    n_snapped      = methods.count("weighted_snap")
+    n_nearest      = methods.count("nearest_viable_fallback")
+    n_geo_fallback = methods.count("geo_center_fallback")
+    print(f"\n  Snapped within radius:          {n_snapped} clusters")
+    print(f"  Snapped to nearest (>radius):   {n_nearest} clusters")
+    print(f"  Kept geometric center (no data):{n_geo_fallback} clusters")
+    if scores:
+        print(f"  Mean viability score: {np.mean(scores):.3f}")
+
+    return out, viable_cache, file_year
+
+
+def rebalance_viability_by_type(cluster_centers_gdf, viable_cache, file_year):
+    """LP-based rebalancing of Solar/Wind assignments for geo_center_fallback clusters.
+
+    For every cluster whose viability_method == "geo_center_fallback" and whose
+    Grouped_Type is Solar or Wind, compute viability scores for BOTH Solar and Wind
+    at that location.  Then solve a continuous LP that:
+
+      - Maximises total viability-weighted MWh across all fallback clusters.
+      - Preserves the global MWh budget per type exactly (Solar total and Wind total
+        are each held to their pre-rebalance country-level values).
+      - Allows fractional splits: a fallback cluster can emit rows for both Solar and
+        Wind, representing a hybrid mini-grid design.
+
+    Non-fallback clusters and non-Solar/Wind types are never modified.
+
+    New / changed columns after this function:
+        Grouped_Type            updated to "Solar", "Wind", or added row for split
+        remaining_mwh           redistributed within each type's global budget
+        viability_score         re-scored for the reallocated type
+        viability_method        "lp_rebalanced" | "lp_split_solar" | "lp_split_wind"
+        is_split                True when a single original cluster becomes two rows
+    """
+    from scipy.optimize import linprog
+
+    SW = {"Solar", "Wind"}   # only these two types participate in LP
+
+    # -------------------------------------------------------------------------
+    # Identify fallback rows that are Solar or Wind
+    # -------------------------------------------------------------------------
+    # Include both geo_center_fallback and nearest_viable_fallback —
+    # nearest_viable_fallback clusters are beyond the search radius so type
+    # switching can exploit a better resource at the same or nearby location.
+    fallback_mask = (
+        (cluster_centers_gdf["viability_method"].isin(
+            {"geo_center_fallback", "nearest_viable_fallback"}
+        )) &
+        (cluster_centers_gdf["Grouped_Type"].isin(SW))
+    )
+    fallback_idx = cluster_centers_gdf.index[fallback_mask].tolist()
+
+    if not fallback_idx:
+        print("  [LP rebalance] No Solar/Wind fallback clusters — skipping.")
+        cluster_centers_gdf["is_split"] = False
+        return cluster_centers_gdf
+
+    n = len(fallback_idx)
+    print(f"\n" + "="*60)
+    print("LP REBALANCING: optimising Solar/Wind splits for fallback clusters")
+    print("="*60)
+    print(f"  Fallback Solar/Wind clusters eligible for LP: {n}")
+
+    # -------------------------------------------------------------------------
+    # Pre-compute viability scores for Solar AND Wind at every fallback location
+    # -------------------------------------------------------------------------
+    score_s = np.zeros(n)   # Solar score at each fallback cluster
+    score_w = np.zeros(n)   # Wind  score at each fallback cluster
+    mwh     = np.zeros(n)   # MWh for each fallback cluster
+
+    solar_viable = viable_cache.get("Solar", gpd.GeoDataFrame())
+    wind_viable  = viable_cache.get("Wind",  gpd.GeoDataFrame())
+
+    for k, idx in enumerate(fallback_idx):
+        row   = cluster_centers_gdf.loc[idx]
+        pt    = row.geometry
+        mwh[k] = float(row["remaining_mwh"])
+
+        ss, _, _ = _viability_score(pt, "Solar", solar_viable, VIABILITY_SEARCH_RADIUS_KM)
+        sw, _, _ = _viability_score(pt, "Wind",  wind_viable,  VIABILITY_SEARCH_RADIUS_KM)
+        score_s[k] = ss
+        score_w[k] = sw
+
+    # -------------------------------------------------------------------------
+    # Global type budgets: sum of remaining_mwh by type across the whole country.
+    # The LP must preserve these totals exactly.
+    # -------------------------------------------------------------------------
+    # Fixed (non-fallback) contributions per type
+    fixed = cluster_centers_gdf[~fallback_mask]
+    fixed_solar = float(fixed.loc[fixed["Grouped_Type"] == "Solar", "remaining_mwh"].sum())
+    fixed_wind  = float(fixed.loc[fixed["Grouped_Type"] == "Wind",  "remaining_mwh"].sum())
+
+    # Original fallback contributions per type (will be replaced by LP solution)
+    fallback_rows = cluster_centers_gdf.loc[fallback_idx]
+    orig_solar = float(fallback_rows.loc[fallback_rows["Grouped_Type"] == "Solar", "remaining_mwh"].sum())
+    orig_wind  = float(fallback_rows.loc[fallback_rows["Grouped_Type"] == "Wind",  "remaining_mwh"].sum())
+
+    # Targets that the LP variables must sum to
+    target_solar = orig_solar   # LP must supply exactly this much Solar from fallback set
+    target_wind  = orig_wind    # LP must supply exactly this much Wind  from fallback set
+
+    print(f"  Budget targets for LP — Solar: {target_solar:,.1f} MWh, Wind: {target_wind:,.1f} MWh")
+
+    # -------------------------------------------------------------------------
+    # LP formulation
+    # Variables: x[0..n-1] = MWh assigned to Solar for each fallback cluster
+    #            x[n..2n-1] = MWh assigned to Wind  for each fallback cluster
+    #
+    # Objective: maximise sum( score_s[k]*x[k] + score_w[k]*x[n+k] )
+    #            ↔ minimise negative
+    #
+    # Equality constraints:
+    #   (1) sum(x[0..n-1])   == target_solar   (Solar budget)
+    #   (2) sum(x[n..2n-1])  == target_wind    (Wind  budget)
+    #   (3) x[k] + x[n+k]   == mwh[k]         ∀ k  (per-cluster MWh preserved)
+    #
+    # Bounds: 0 <= x[k] <= mwh[k]
+    # -------------------------------------------------------------------------
+    c_obj = np.concatenate([-score_s, -score_w])   # minimise negative score
+
+    # Equality: Solar budget
+    A_eq_solar = np.zeros((1, 2*n))
+    A_eq_solar[0, :n] = 1.0
+    b_eq_solar = np.array([target_solar])
+
+    # Equality: Wind budget
+    A_eq_wind = np.zeros((1, 2*n))
+    A_eq_wind[0, n:] = 1.0
+    b_eq_wind = np.array([target_wind])
+
+    # Equality: per-cluster MWh
+    A_eq_cluster = np.zeros((n, 2*n))
+    for k in range(n):
+        A_eq_cluster[k, k]   = 1.0
+        A_eq_cluster[k, n+k] = 1.0
+    b_eq_cluster = mwh
+
+    A_eq = np.vstack([A_eq_solar, A_eq_wind, A_eq_cluster])
+    b_eq = np.concatenate([b_eq_solar, b_eq_wind, b_eq_cluster])
+
+    bounds = [(0.0, float(mwh[k])) for k in range(n)] + \
+             [(0.0, float(mwh[k])) for k in range(n)]
+
+    result = linprog(c_obj, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+
+    if not result.success:
+        print(f"  [LP rebalance] WARNING: LP solver failed ({result.message}). No changes applied.")
+        cluster_centers_gdf["is_split"] = False
+        return cluster_centers_gdf
+
+    x_solar = result.x[:n]
+    x_wind  = result.x[n:]
+
+    print(f"  LP solved (status={result.status}). Applying rebalancing...")
+
+    # -------------------------------------------------------------------------
+    # Build output: replace fallback rows with LP solution rows
+    # A cluster with both Solar > 0 and Wind > 0 becomes TWO rows (hybrid).
+    # A cluster with only one type non-zero becomes ONE row (full reassignment).
+    # -------------------------------------------------------------------------
+    SPLIT_THRESHOLD = 1e-3   # MWh below which a component is treated as zero
+
+    rows_to_add   = []
+    idx_to_remove = []
+    n_split = 0
+    n_reassigned = 0
+
+    for k, idx in enumerate(fallback_idx):
+        row       = cluster_centers_gdf.loc[idx].copy()
+        mwh_s     = x_solar[k]
+        mwh_w     = x_wind[k]
+        has_solar = mwh_s > SPLIT_THRESHOLD
+        has_wind  = mwh_w > SPLIT_THRESHOLD
+        is_split  = has_solar and has_wind
+
+        idx_to_remove.append(idx)
+
+        if is_split:
+            n_split += 1
+            for etype, mwh_val, sc in [("Solar", mwh_s, score_s[k]),
+                                        ("Wind",  mwh_w, score_w[k])]:
+                new_row = row.copy()
+                new_row["Grouped_Type"]   = etype
+                new_row["remaining_mwh"]  = round(mwh_val, 4)
+                new_row["viability_score"] = round(sc, 4)
+                new_row["viability_method"] = f"lp_split_{etype.lower()}"
+                new_row["is_split"] = True
+                rows_to_add.append(new_row)
+        else:
+            n_reassigned += 1
+            etype    = "Solar" if has_solar else "Wind"
+            mwh_val  = mwh_s if has_solar else mwh_w
+            sc       = score_s[k] if has_solar else score_w[k]
+            new_row  = row.copy()
+            new_row["Grouped_Type"]   = etype
+            new_row["remaining_mwh"]  = round(mwh_val, 4)
+            new_row["viability_score"] = round(sc, 4)
+            new_row["viability_method"] = "lp_rebalanced"
+            new_row["is_split"] = False
+            rows_to_add.append(new_row)
+
+    # Assemble final GDF: keep non-fallback rows + LP replacement rows
+    non_fallback = cluster_centers_gdf.drop(index=idx_to_remove).copy()
+    non_fallback["is_split"] = False
+    new_rows_gdf = gpd.GeoDataFrame(rows_to_add, crs=COMMON_CRS)
+    out = pd.concat([non_fallback, new_rows_gdf], ignore_index=True)
+    out = gpd.GeoDataFrame(out, geometry="geometry", crs=COMMON_CRS)
+
+    # Verification print
+    post_solar = float(out.loc[out["Grouped_Type"] == "Solar", "remaining_mwh"].sum())
+    post_wind  = float(out.loc[out["Grouped_Type"] == "Wind",  "remaining_mwh"].sum())
+    print(f"  Fully reassigned clusters: {n_reassigned}")
+    print(f"  Hybrid split clusters:     {n_split}  (→ {n_split*2} rows)")
+    print(f"  Solar total — before: {fixed_solar + orig_solar:,.1f}  after: {post_solar:,.1f} MWh")
+    print(f"  Wind  total — before: {fixed_wind  + orig_wind:,.1f}  after: {post_wind:,.1f} MWh")
+
+    return out
 
 
 def identify_geographic_components(settlements_gdf, max_distance_km=50):
@@ -1372,7 +1816,16 @@ def process_country_siting(country_iso3, output_dir="outputs_per_country"):
         
         # Ensure clusters are within country boundaries
         cluster_centers_gdf = clip_clusters_to_boundaries(cluster_centers_gdf, admin_boundaries)
-        
+
+        # Snap cluster centers to highest-scoring nearby viable CMIP6 centroids,
+        # then LP-rebalance Solar/Wind assignments for geo_center_fallback clusters
+        cluster_centers_gdf, viable_cache, viability_file_year = apply_viability_to_clusters(
+            cluster_centers_gdf, ANALYSIS_YEAR, admin_boundaries
+        )
+        cluster_centers_gdf = rebalance_viability_by_type(
+            cluster_centers_gdf, viable_cache, viability_file_year
+        )
+
         cluster_centers_gdf = compute_grid_distances(cluster_centers_gdf, grid_lines_gdf)
         networks_gdf = build_remote_networks(settlements_gdf, cluster_centers_gdf, grid_lines_gdf)
         
