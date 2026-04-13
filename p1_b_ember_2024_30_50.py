@@ -486,7 +486,7 @@ for index, row in final_merged_df.iterrows():
         renewables_sum = sum(renewables_2030.values())
         total_gen_2030 = renewables_sum + fossil + nuclear
         if total_gen_2030 > 0 and target_share > 0 and renewables_sum > 0:
-            if fossil + nuclear == 0:
+            if fossil + nuclear == 0 or target_share >= 0.99:
                 desired_renewable_total = renewables_sum
             else:
                 desired_renewable_total = target_share * (fossil + nuclear) / (1 - target_share)
@@ -553,32 +553,22 @@ iea_pledge_caagr_re_2050 = {
     # Marine 0.93 in 2024 to 86.15 in 2050
 }
 
-# 7.1: Use existing MWh per capita values from previous tasks
-# For countries with NDCs: Use the per capita values calculated in Task 5
-# For countries without NDCs: Use the regional benchmark per capita values from Task 6
-
-# 7.2: Calculate 2050 MWh per capita values using CAAGR from 2024 to 2050
+# 7.1 / 7.2: Calculate 2050 MWh per capita and MWh targets
+# Use the ACTUAL (post-adjustment) 2030 MWh values as the base for all countries.
+# Previously, non-NDC countries used the pre-adjustment regional benchmark per-capita,
+# which ignored the scaling applied in Task 6.3 and produced inflated 2050 values.
 for energy_type in energy_types2:
     caagr = iea_pledge_caagr_re_2050.get(energy_type, 0)  # Default to 0% if not found
-    per_capita_2030_col = energy_type + "_per_capita"
-    per_capita_2030_benchmark_col = energy_type + "_per_capita_R_Benchmark"
     per_capita_2050_col = energy_type.replace("_2030_MWh", "_2050_MWh") + "_per_capita"
-    
-    # For countries with NDCs: Use their actual 2030 per capita values
-    # For countries without NDCs: Use their regional benchmark per capita values
-    final_merged_df[per_capita_2050_col] = final_merged_df.apply(
-        lambda row: (
-            row[per_capita_2030_col] if pd.notnull(row.get("res_share_target_org")) 
-            else row[per_capita_2030_benchmark_col]
-        ) * (1 + caagr) ** 20,  # 20 years from 2030 to 2050
-        axis=1
-    )
-
-# Calculate 2050 MWh targets by multiplying 2050 population by 2050 MWh per capita values
-for energy_type in energy_types2:
     energy_type_2050 = energy_type.replace("_2030_MWh", "_2050_MWh")
-    per_capita_2050_col = energy_type_2050 + "_per_capita"
     
+    # Derive per-capita from the actual (adjusted) 2030 MWh values, then grow by CAAGR
+    final_merged_df[per_capita_2050_col] = (
+        (final_merged_df[energy_type] / final_merged_df["PopTotal_2030"])
+        * (1 + caagr) ** 20  # 20 years from 2030 to 2050
+    )
+    
+    # Calculate 2050 MWh = 2050 per capita * 2050 population
     final_merged_df[energy_type_2050] = (
         final_merged_df[per_capita_2050_col] * final_merged_df["PopTotal_2050"]
     )
@@ -619,10 +609,8 @@ for index, row in final_merged_df.iterrows():
     
     # First, apply renewable share target scaling (if needed)
     if total_gen_2050 > 0 and target_share_2050 > 0 and renewables_sum > 0:
-        if fossil + nuclear == 0:
+        if fossil + nuclear == 0 or target_share_2050 >= 0.99:
             desired_renewable_total = renewables_sum
-        elif target_share_2050 == 1:
-            desired_renewable_total = renewables_sum 
         else:
             desired_renewable_total = target_share_2050 * (fossil + nuclear) / (1 - target_share_2050)
         

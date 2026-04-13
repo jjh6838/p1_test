@@ -2,7 +2,7 @@
 
 A comprehensive geospatial analysis pipeline for modeling electricity supply networks, projecting future energy demand, and identifying optimal locations for renewable energy infrastructure across 190 countries.
 
-[![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -87,14 +87,13 @@ This project performs country-level analysis of electricity supply and demand ne
 ├── submit_one_direct_siting.sh        # Submit any single country siting directly
 ├── submit_workflow.sh                 # Submit results combination job
 ├── parallel_scripts/                  # 40 supply analysis SLURM scripts
-├── parallel_scripts_siting/           # 24 siting analysis SLURM scripts
+├── parallel_scripts_siting/           # Generated siting analysis SLURM scripts (count depends on country list)
 │
 ├── # ═══ Data Directories ═══
 ├── bigdata_gadm/                      # GADM administrative boundaries
 ├── bigdata_eez/                       # Marine Regions EEZ boundaries
 ├── bigdata_gridfinder/                # GridFinder electrical grid data
 ├── bigdata_settlements_jrc/           # JRC GHS-POP population raster
-├── bigdata_landcover/                 # ESA CCI Land Cover 2022
 ├── bigdata_solar_pvout/               # Global Solar Atlas baseline
 ├── bigdata_wind_atlas/                # Global Wind Atlas baseline
 ├── bigdata_solar_wind_ms/             # Microsoft renewable energy sites
@@ -124,7 +123,7 @@ This project performs country-level analysis of electricity supply and demand ne
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - Conda or Mamba package manager
 - ~50GB disk space for datasets
 - 16GB+ RAM (32GB+ recommended for large countries)
@@ -179,7 +178,9 @@ python combine_one_results.py KEN
 
 ```bash
 # Process multiple countries sequentially
-python process_country_supply.py USA CHN IND
+for ISO3 in USA CHN IND; do
+  python process_country_supply.py $ISO3
+done
 
 # Combine all completed countries to global dataset
 python combine_global_results.py --input-dir outputs_per_country
@@ -274,7 +275,7 @@ python combine_one_results.py KEN
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `ANALYSIS_YEAR` | 2030 | Target year: 2024, 2030, or 2050 |
+| `ANALYSIS_YEAR` | 2024 | Target year: 2024, 2030, or 2050 |
 | `SUPPLY_FACTOR` | 1.0 | Sensitivity multiplier (0.6–1.0) |
 | `COMMON_CRS` | EPSG:4326 | Coordinate reference system |
 | `DEMAND_TYPES` | Solar, Wind, Hydro, Other Renewables, Nuclear, Fossil | Energy categories |
@@ -350,7 +351,7 @@ python combine_one_results.py KEN
 | Dataset | Path | Source |
 |---------|------|--------|
 | **Ember Data** | `data_energy_ember/yearly_full_release_*.csv` | [Ember](https://ember-climate.org/) |
-| **IEA Projections** | `data_energy_projections_iea/WEO*.csv` | [IEA WEO 2024](https://www.iea.org/) |
+| **IEA Projections** | `data_energy_projections_iea/WEO*.xls*` | [IEA WEO 2024](https://www.iea.org/) |
 | **UN Population** | `data_pop_un/` | [UN WPP 2024](https://population.un.org/) |
 | **World Bank** | `data_country_class_wb/` | [World Bank](https://datahelpdesk.worldbank.org/) |
 
@@ -426,7 +427,7 @@ Projects 2030 and 2050 electricity generation scenarios.
 - Applies IEA growth rates for fossil/nuclear
 - Disaggregates broad renewable targets
 
-**Output:** `data_facilities_gem/p1_b_ember_2024_30_50.xlsx`
+**Output:** `outputs_processed_data/p1_b_ember_2024_30_50.xlsx`
 
 #### `p1_c_prep_landcover.py`
 Download ESA CCI Land Cover 2022 from Copernicus Climate Data Store.
@@ -630,11 +631,10 @@ python process_country_supply.py <ISO3> --run-all-scenarios
 # Single specific supply factor (e.g., 90% only)
 python process_country_supply.py <ISO3> --supply-factor 0.9
 
-# Multiple countries
-python process_country_supply.py USA CHN IND
-
-# Custom scenario
-python process_country_supply.py KEN --scenario 2050_supply_100%
+# Multiple countries (loop)
+for ISO3 in USA CHN IND; do
+  python process_country_supply.py $ISO3
+done
 
 # Test mode (outputs GeoPackage)
 python process_country_supply.py KEN --test
@@ -693,7 +693,7 @@ python generate_hpc_scripts.py
 # Generate 40 parallel supply analysis scripts
 python generate_hpc_scripts.py --create-parallel
 
-# Generate 25 parallel siting analysis scripts
+# Generate parallel siting analysis scripts
 python generate_hpc_scripts.py --create-parallel-siting
 ```
 
@@ -708,11 +708,11 @@ python generate_hpc_scripts.py --create-parallel-siting
 |--------|-------------|
 | `submit_all_parallel.sh` | Submit all 40 supply analysis jobs |
 | `submit_one_direct.sh` | Submit any single country supply analysis |
-| `submit_all_parallel_siting.sh` | Submit all 25 siting analysis jobs |
+| `submit_all_parallel_siting.sh` | Submit all generated siting analysis jobs |
 | `submit_one_direct_siting.sh` | Submit any single country siting analysis |
 | `submit_workflow.sh` | Combine results after all jobs complete |
 | `parallel_scripts/*.sh` | 40 individual supply SLURM scripts |
-| `parallel_scripts_siting/*.sh` | 25 individual siting SLURM scripts |
+| `parallel_scripts_siting/*.sh` | Generated individual siting SLURM scripts |
 
 **Scenario Flags (all wrapper scripts support these):**
 | Flag | Description |
@@ -757,19 +757,22 @@ python combine_one_results.py KEN --scenario 2030_supply_100%_add_v2
 
 **CMIP6 Climate TIF Layers (auto-clipped if global TIFs exist):**
 
-The combine script automatically clips 12 CMIP6 TIF layers to the country extent for each target year:
+The combine script automatically clips 14 CMIP6 TIF layers to the country extent for each target year:
 
 | Layer | Description | Source |
 |-------|-------------|--------|
 | `PVOUT_{year}` | Projected solar PVOUT (kWh/kWp/day) | p1_d_viable_solar.py |
 | `PVOUT_{year}_uncertainty` | IQR uncertainty from CMIP6 ensemble | p1_d_viable_solar.py |
+| `PVOUT_DELTA_{year}` | Climate delta ratio for solar | p1_d_viable_solar.py |
 | `PVOUT_baseline` | Baseline PVOUT from Global Solar Atlas | p1_d_viable_solar.py |
 | `SOLAR_VIABLE_CENTROIDS_{year}` | Viable solar cells raster | p1_d_viable_solar.py |
 | `WPD100_{year}` | Projected wind power density (W/m²) | p1_e_viable_wind.py |
 | `WPD100_{year}_uncertainty` | IQR uncertainty from CMIP6 ensemble | p1_e_viable_wind.py |
+| `WPD100_DELTA_{year}` | Climate delta ratio for wind | p1_e_viable_wind.py |
 | `WPD100_baseline` | Baseline WPD from Global Wind Atlas | p1_e_viable_wind.py |
 | `WIND_VIABLE_CENTROIDS_{year}` | Viable wind cells raster | p1_e_viable_wind.py |
 | `HYDRO_RUNOFF_baseline` | Baseline runoff from ERA5-Land | p1_f_viable_hydro.py |
+| `HYDRO_RUNOFF_{year}` | Projected runoff (mm/year) | p1_f_viable_hydro.py |
 | `HYDRO_RUNOFF_DELTA_{year}` | Climate delta ratio for rivers | p1_f_viable_hydro.py |
 | `HYDRO_RUNOFF_UNCERTAINTY_{year}` | Ensemble range uncertainty | p1_f_viable_hydro.py |
 
@@ -785,8 +788,11 @@ python combine_global_results.py --input-dir outputs_per_country
 # Specific scenario
 python combine_global_results.py --scenario 2030_supply_100%
 
-# Subset of countries
+# Subset of countries (inline)
 python combine_global_results.py --countries USA CHN IND
+
+# Subset of countries (from file, one ISO3 per line)
+python combine_global_results.py --countries-file countries_subset.txt
 ```
 
 **Output:** `outputs_global/{scenario}_global.gpkg`

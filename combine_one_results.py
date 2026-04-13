@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import os
 import re
+import config
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -397,9 +398,10 @@ if __name__ == "__main__":
                     "then falls back to parquet/{scenario}/. Output: {scenario}_{ISO3}.gpkg, "
                     "{scenario}_{ISO3}_add.gpkg (with siting), or {scenario}_{ISO3}_add_v2.gpkg (after 2nd supply run)."
     )
+    default_scenario = f"{config.ANALYSIS_YEAR}_supply_{int(config.SUPPLY_FACTOR * 100)}%"
     parser.add_argument("iso3", help="ISO3 country code (e.g., KEN)")
-    parser.add_argument("--scenario", default="2030_supply_100%", 
-                       help="Scenario name (default: 2030_supply_100%%). Can also use 2030_supply_100%%_add_v2.")
+    parser.add_argument("--scenario", default=default_scenario, 
+                       help=f"Scenario name (default: {default_scenario}). Can also use {{year}}_supply_{{pct}}%%_add_v2.")
     parser.add_argument("--base-dir", default="outputs_per_country", help="Base directory (default: outputs_per_country)")
     
     args = parser.parse_args()

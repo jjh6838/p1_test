@@ -561,6 +561,8 @@ def main():
                        help='Output file (.gpkg for visualization, .parquet for data). Auto-generated if not specified.')
     parser.add_argument('--scenario', default=None,
                        help='Scenario subfolder name under parquet directory (e.g., "2050_supply_100%%")')
+    parser.add_argument('--countries', nargs='+',
+                       help='Optional list of ISO3 country codes to process (e.g., --countries USA CHN IND)')
     parser.add_argument('--countries-file', 
                        help='File with list of countries to process (optional)')
     
@@ -592,9 +594,18 @@ def main():
     
     # Load countries list if specified
     countries_list = None
+    if args.countries:
+        countries_list = [c.strip().upper() for c in args.countries if c and c.strip()]
+        logger.info(f"Processing specific countries from --countries: {len(countries_list)} countries")
+
     if args.countries_file and Path(args.countries_file).exists():
-        countries_list = [c.strip() for c in Path(args.countries_file).read_text().splitlines() if c.strip()]
-        logger.info(f"Processing specific countries from {args.countries_file}: {len(countries_list)} countries")
+        file_countries = [c.strip().upper() for c in Path(args.countries_file).read_text().splitlines() if c.strip()]
+        if countries_list:
+            countries_list = sorted(set(countries_list).union(file_countries))
+            logger.info(f"Combined countries from --countries and {args.countries_file}: {len(countries_list)} countries")
+        else:
+            countries_list = file_countries
+            logger.info(f"Processing specific countries from {args.countries_file}: {len(countries_list)} countries")
     
     # Process each scenario
     all_success = True
