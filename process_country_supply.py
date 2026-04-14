@@ -707,6 +707,7 @@ def load_siting_networks(scenario, country_iso3):
         print(f"Warning: Could not load siting networks: {e}")
         return None
 
+
 def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=None):
     """Load and clip grid lines from GridFinder data. Uses parallel processing for very large countries to speed up clipping.
     If scenario is provided and siting data exists, load existing grid_lines parquet and append siting networks."""
@@ -762,7 +763,7 @@ def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=
                     
                     # Fill any remaining nulls in line_type
                     grid_country['line_type'] = grid_country['line_type'].fillna('grid_infrastructure')
-                
+
                 # Stitch the combined grid to connect siting networks with existing infrastructure
                 grid_country = stitch_grid_segments(grid_country, admin_boundaries, GRID_STITCH_DISTANCE_KM)
                 return grid_country
@@ -1060,11 +1061,13 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     
     # Process grid lines
     single_lines = []
-    for _, row in grid_lines_utm.iterrows():
-        if isinstance(row.geometry, MultiLineString):
-            single_lines.extend(list(row.geometry.geoms))
+    for geom in grid_lines_utm.geometry:
+        if geom is None or geom.is_empty:
+            continue
+        if isinstance(geom, MultiLineString):
+            single_lines.extend(list(geom.geoms))
         else:
-            single_lines.append(row.geometry)
+            single_lines.append(geom)
     
     # OPTIMIZATION 1: Timer for splitting
     print(f"Splitting {len(single_lines)} grid lines at intersections...")
@@ -1839,22 +1842,27 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
     
     # Add original grid segments - preserve existing attributes (including siting networks)
     if not grid_lines_gdf.empty:
+        has_line_type = 'line_type' in grid_lines_gdf.columns
+        has_line_id = 'line_id' in grid_lines_gdf.columns
+        has_distance = 'distance_km' in grid_lines_gdf.columns
+        has_gid0 = 'GID_0' in grid_lines_gdf.columns
+
         for idx, row in grid_lines_gdf.iterrows():
             geom = row.geometry
             
             # Preserve existing attributes if they exist, otherwise use defaults
             attrs = {}
-            if 'line_type' in row.index:
+            if has_line_type:
                 attrs['line_type'] = row['line_type']
             else:
                 attrs['line_type'] = 'grid_infrastructure'
             
-            if 'line_id' in row.index:
+            if has_line_id:
                 attrs['line_id'] = row['line_id']
             else:
                 attrs['line_id'] = f'grid_{idx}'
             
-            if 'distance_km' in row.index and pd.notna(row['distance_km']):
+            if has_distance and pd.notna(row['distance_km']):
                 attrs['distance_km'] = row['distance_km']
             else:
                 # Calculate distance if not provided
@@ -1866,7 +1874,7 @@ def create_grid_lines_layer(grid_lines_gdf, network_graph, active_connections):
                     attrs['distance_km'] = None
             
             # Preserve GID_0 if it exists
-            if 'GID_0' in row.index:
+            if has_gid0:
                 attrs['GID_0'] = row['GID_0']
             
             all_geometries.append(geom)
@@ -2048,10 +2056,10 @@ def create_summary_statistics(country_iso3, centroids_gdf, facilities_gdf, facil
             facilities_of_type = facilities_gdf[facilities_gdf['Grouped_Type'] == energy_type]
             # Total_MWh_{type} = sum of available_total_mwh (adjusted by factor)
             if 'available_total_mwh' in facilities_of_type.columns:
-                total_mwh = sum(fac.get('available_total_mwh', 0) or 0 for _, fac in facilities_of_type.iterrows())
+                total_mwh = float(facilities_of_type['available_total_mwh'].fillna(0).sum())
             else:
                 # Fallback if column doesn't exist yet
-                total_mwh = sum((fac.get('total_mwh', 0) or 0) * SUPPLY_FACTOR for _, fac in facilities_of_type.iterrows())
+                total_mwh = float(facilities_of_type['total_mwh'].fillna(0).sum() * SUPPLY_FACTOR)
             # Supplied_MWh_{type} = sum of actually supplied (from network analysis)
             supplied_mwh = sum(facility_supplied.get(idx, 0) for idx in facilities_of_type.index)
             
@@ -2200,11 +2208,10 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
                     continue
                 
                 # Calculate total original capacity for facilities of this type
-                type_facility_capacity = sum((fac.get('total_mwh', 0) or 0) for _, fac in facilities_of_type.iterrows())
+                type_facility_capacity = float(facilities_of_type['total_mwh'].fillna(0).sum())
                 
                 # Allocate type-specific demand proportionally across facilities of this type
-                for idx, facility in facilities_of_type.iterrows():
-                    original_facility_mwh = facility.get('total_mwh', 0) or 0
+                for idx, original_facility_mwh in zip(facilities_of_type.index, facilities_of_type['total_mwh'].fillna(0).to_numpy()):
                     
                     if type_facility_capacity > 0:
                         facility_share = original_facility_mwh / type_facility_capacity
@@ -2545,15 +2552,23 @@ def allocate_supply_vectorized(centroids_gdf, facilities_gdf, centroid_facility_
     
     # Create facility list sorted by capacity (preserving original logic)
     facility_capacities = []
-    for idx, facility in facilities_gdf.iterrows():
+    gem_col = 'GEM unit/phase ID' if 'GEM unit/phase ID' in facilities_gdf.columns else None
+    type_col = 'Grouped_Type' if 'Grouped_Type' in facilities_gdf.columns else None
+    for idx, geom in zip(facilities_gdf.index, facilities_gdf.geometry):
         total_capacity = facility_remaining.get(idx, 0)
         if total_capacity > 0:
+            if gem_col is not None:
+                gem_val = facilities_gdf.at[idx, gem_col]
+                gem_id = str(gem_val) if pd.notna(gem_val) else ''
+            else:
+                gem_id = ''
+            facility_type = facilities_gdf.at[idx, type_col] if type_col is not None else ''
             facility_capacities.append({
                 'facility_idx': idx,
                 'total_capacity': total_capacity,
-                'gem_id': str(facility.get('GEM unit/phase ID', '')) if pd.notna(facility.get('GEM unit/phase ID', '')) else '',
-                'facility_type': facility.get('Grouped_Type', ''),
-                'geometry': facility.geometry
+                'gem_id': gem_id,
+                'facility_type': facility_type,
+                'geometry': geom
             })
     
     # Sort by capacity (largest first) - matches original behavior

@@ -142,10 +142,7 @@ _VIABILITY_DIR = {
 _VIABILITY_PREFIX    = {"Solar": "SOLAR",      "Wind": "WIND",    "Hydro": "HYDRO"}
 # Column containing the projected resource value in each parquet
 _VIABILITY_VALUE_COL = {"Solar": "value_2030", "Wind": "value_2030", "Hydro": "dis_m3_pyr"}
-# Normalisation denominators: Solar kWh/kWp/day, Hydro m³/s.
-# Wind is None → resolved at runtime to the 95th‑percentile of the country‑clipped
-# viable data, because ERA5-derived WPD is heavily underestimated (Jensen's
-# inequality + vector‑mean cancellation) so a global fixed cap spreads scores poorly.
+# Normalisation denominators: Solar kWh/kWp/day, Wind W/m2, Hydro m3/s.
 _VIABILITY_VALUE_MAX = {"Solar": 6.0,          "Wind": 25.0,        "Hydro": 100.0}
 
 
@@ -192,29 +189,64 @@ def _load_viable_centroids(energy_type, file_year, country_geom):
         return gpd.GeoDataFrame()
 
 
-def _nearest_viable_centroid(point, energy_type, viable_gdf):
-    """Snap to the single nearest viable centroid with no radius limit.
+def _build_viability_index(energy_type, viable_gdf):
+    """Precompute arrays and cKDTree used repeatedly during scoring.
 
-    Returns (nearest_geometry, dist_km, norm_resource_score).
-    norm_resource_score has no proximity weight — purely the resource value.
+    Returns a dict with immutable arrays/tree so expensive geometry extraction and
+    tree construction happens once per type per country run.
     """
+    if viable_gdf is None or len(viable_gdf) == 0:
+        return {
+            "gdf": gpd.GeoDataFrame(),
+            "coords": None,
+            "tree": None,
+            "val_col": _VIABILITY_VALUE_COL.get(energy_type),
+            "val_max": _VIABILITY_VALUE_MAX.get(energy_type, 1.0),
+            "values": np.array([], dtype=float),
+        }
+
     val_col = _VIABILITY_VALUE_COL[energy_type]
     val_max = _VIABILITY_VALUE_MAX[energy_type]
     if val_max is None:
         vals = viable_gdf[val_col].dropna() if val_col in viable_gdf.columns else pd.Series(dtype=float)
         val_max = float(vals.quantile(0.95)) if len(vals) > 0 else 1.0
 
-    coords = np.column_stack([viable_gdf.geometry.x, viable_gdf.geometry.y])
+    coords = np.column_stack([viable_gdf.geometry.x.values, viable_gdf.geometry.y.values])
+    values = viable_gdf[val_col].to_numpy(dtype=float, copy=False) if val_col in viable_gdf.columns else np.zeros(len(viable_gdf), dtype=float)
     tree = cKDTree(coords)
+    return {
+        "gdf": viable_gdf,
+        "coords": coords,
+        "tree": tree,
+        "val_col": val_col,
+        "val_max": float(val_max) if val_max and val_max > 0 else 1.0,
+        "values": values,
+    }
+
+
+def _nearest_viable_centroid(point, viability_index):
+    """Snap to the single nearest viable centroid with no radius limit.
+
+    Returns (nearest_geometry, dist_km, norm_resource_score).
+    norm_resource_score has no proximity weight — purely the resource value.
+    """
+    viable_gdf = viability_index["gdf"]
+    tree = viability_index["tree"]
+    values = viability_index["values"]
+    val_max = viability_index["val_max"]
+
+    if tree is None or len(viable_gdf) == 0:
+        return None, np.nan, 0.0
+
     _, i = tree.query([point.x, point.y], k=1)
     row = viable_gdf.iloc[i]
     dist_km = haversine_distance_km(point.y, point.x, row.geometry.y, row.geometry.x)
-    raw_val = float(row[val_col]) if val_col in viable_gdf.columns and not pd.isna(row[val_col]) else 0.0
+    raw_val = float(values[i]) if i < len(values) and not np.isnan(values[i]) else 0.0
     norm_val = min(raw_val / val_max, 1.0)
     return row.geometry, dist_km, norm_val
 
 
-def _viability_score(point, energy_type, viable_gdf, search_radius_km):
+def _viability_score(point, viability_index, search_radius_km):
     """Compute a [0, 1] viability score for a single cluster center point.
 
     Score = normalised_resource_value × proximity_weight
@@ -223,20 +255,12 @@ def _viability_score(point, energy_type, viable_gdf, search_radius_km):
 
     Returns: (score, best_point_or_None, distance_km)
     """
-    if viable_gdf is None or len(viable_gdf) == 0:
+    viable_gdf = viability_index["gdf"]
+    tree = viability_index["tree"]
+    values = viability_index["values"]
+    val_max = viability_index["val_max"]
+    if tree is None or len(viable_gdf) == 0:
         return 0.0, None, np.nan
-
-    val_col = _VIABILITY_VALUE_COL[energy_type]
-    val_max = _VIABILITY_VALUE_MAX[energy_type]
-    if val_max is None:
-        # Adaptive cap: 95th percentile of values in the country-clipped viable layer.
-        # Self-calibrates per country and year, avoiding poor spread from a global fixed cap.
-        vals = viable_gdf[val_col].dropna() if val_col in viable_gdf.columns else pd.Series(dtype=float)
-        val_max = float(vals.quantile(0.95)) if len(vals) > 0 else 1.0
-    has_val = val_col in viable_gdf.columns
-
-    coords = np.column_stack([viable_gdf.geometry.x, viable_gdf.geometry.y])
-    tree = cKDTree(coords)
 
     # Degree radius: use longitude scale (fewest km/degree) so we never miss a
     # true neighbour in any direction, then prune overshots via haversine below.
@@ -253,7 +277,7 @@ def _viability_score(point, energy_type, viable_gdf, search_radius_km):
         dist_km = haversine_distance_km(point.y, point.x, row.geometry.y, row.geometry.x)
         if dist_km > search_radius_km:
             continue  # prune cKDTree degree-space overshoot
-        raw_val = float(row[val_col]) if has_val and not pd.isna(row[val_col]) else 0.0
+        raw_val = float(values[i]) if i < len(values) and not np.isnan(values[i]) else 0.0
         norm_val = min(raw_val / val_max, 1.0)
         prox_w   = max(0.0, (search_radius_km - dist_km) / search_radius_km)
         score    = norm_val * prox_w
@@ -301,18 +325,31 @@ def apply_viability_to_clusters(cluster_centers_gdf, analysis_year, admin_bounda
     viable_cache = {}
     for etype in cluster_centers_gdf["Grouped_Type"].unique():
         if etype not in _VIABILITY_DIR:
-            viable_cache[etype] = gpd.GeoDataFrame()
+            viable_cache[etype] = _build_viability_index(etype, gpd.GeoDataFrame())
         else:
-            viable_cache[etype] = _load_viable_centroids(etype, file_year, country_geom)
-            n = len(viable_cache[etype])
+            gdf = _load_viable_centroids(etype, file_year, country_geom)
+            viable_cache[etype] = _build_viability_index(etype, gdf)
+            n = len(gdf)
             print(f"  [viability] {etype}: {n} viable centroids within country (year={file_year})")
 
     new_geoms, scores, src_years, fallbacks, dists, methods = [], [], [], [], [], []
+    empty_viability_index = {
+        "gdf": gpd.GeoDataFrame(),
+        "coords": None,
+        "tree": None,
+        "val_col": None,
+        "val_max": 1.0,
+        "values": np.array([], dtype=float),
+    }
 
-    for _, row in cluster_centers_gdf.iterrows():
-        etype = row["Grouped_Type"]
+    geoms = cluster_centers_gdf.geometry.to_numpy()
+    etypes = cluster_centers_gdf["Grouped_Type"].to_numpy()
+
+    for point, etype in zip(geoms, etypes):
         score, best_pt, dist_km = _viability_score(
-            row.geometry, etype, viable_cache.get(etype), VIABILITY_SEARCH_RADIUS_KM
+            point,
+            viable_cache.get(etype, empty_viability_index),
+            VIABILITY_SEARCH_RADIUS_KM,
         )
 
         if best_pt is not None:
@@ -322,13 +359,11 @@ def apply_viability_to_clusters(cluster_centers_gdf, analysis_year, admin_bounda
             fallbacks.append(global_fallback)
             dists.append(round(dist_km, 3))
             methods.append("weighted_snap")
-        elif etype in {"Solar", "Wind"} and len(viable_cache.get(etype, [])) > 0:
+        elif etype in {"Solar", "Wind"} and len(viable_cache.get(etype, {}).get("gdf", [])) > 0:
             # Solar/Wind: always snap to the nearest viable centroid even beyond radius.
             # This eliminates geo_center_fallback for these types so the cluster center
             # always lies on a resource-validated site.
-            n_pt, n_dist, n_score = _nearest_viable_centroid(
-                row.geometry, etype, viable_cache[etype]
-            )
+            n_pt, n_dist, n_score = _nearest_viable_centroid(point, viable_cache[etype])
             new_geoms.append(n_pt)
             scores.append(round(n_score, 4))
             src_years.append(file_year)
@@ -337,7 +372,7 @@ def apply_viability_to_clusters(cluster_centers_gdf, analysis_year, admin_bounda
             methods.append("nearest_viable_fallback")
         else:
             # No viable layer available for this type — keep original center
-            new_geoms.append(row.geometry)
+            new_geoms.append(point)
             scores.append(0.0)
             src_years.append(file_year)
             fallbacks.append(True)
@@ -424,16 +459,16 @@ def rebalance_viability_by_type(cluster_centers_gdf, viable_cache, file_year):
     score_w = np.zeros(n)   # Wind  score at each fallback cluster
     mwh     = np.zeros(n)   # MWh for each fallback cluster
 
-    solar_viable = viable_cache.get("Solar", gpd.GeoDataFrame())
-    wind_viable  = viable_cache.get("Wind",  gpd.GeoDataFrame())
+    solar_viable = viable_cache.get("Solar", _build_viability_index("Solar", gpd.GeoDataFrame()))
+    wind_viable  = viable_cache.get("Wind",  _build_viability_index("Wind",  gpd.GeoDataFrame()))
 
-    for k, idx in enumerate(fallback_idx):
-        row   = cluster_centers_gdf.loc[idx]
-        pt    = row.geometry
-        mwh[k] = float(row["remaining_mwh"])
+    fallback_rows = cluster_centers_gdf.loc[fallback_idx, ["geometry", "remaining_mwh"]]
+    for k, row in enumerate(fallback_rows.itertuples(index=False)):
+        pt = row.geometry
+        mwh[k] = float(row.remaining_mwh)
 
-        ss, _, _ = _viability_score(pt, "Solar", solar_viable, VIABILITY_SEARCH_RADIUS_KM)
-        sw, _, _ = _viability_score(pt, "Wind",  wind_viable,  VIABILITY_SEARCH_RADIUS_KM)
+        ss, _, _ = _viability_score(pt, solar_viable, VIABILITY_SEARCH_RADIUS_KM)
+        sw, _, _ = _viability_score(pt, wind_viable,  VIABILITY_SEARCH_RADIUS_KM)
         score_s[k] = ss
         score_w[k] = sw
 
@@ -1389,28 +1424,28 @@ def compute_grid_distances(cluster_centers_gdf, grid_lines_gdf):
     
     grid_union = grid_lines_gdf.geometry.unary_union
     
-    distances = []
-    nearest_points_list = []
+    n_clusters = len(cluster_centers_gdf)
+    distances = np.empty(n_clusters, dtype=float)
+    nearest_lons = np.empty(n_clusters, dtype=float)
+    nearest_lats = np.empty(n_clusters, dtype=float)
     
     print(f"\nCalculating distances for {len(cluster_centers_gdf)} cluster centers...")
     
-    for idx, cluster in cluster_centers_gdf.iterrows():
-        cluster_point = cluster.geometry
-        
+    for i, cluster_point in enumerate(cluster_centers_gdf.geometry.to_numpy()):
         nearest_geoms = nearest_points(cluster_point, grid_union)
         nearest_grid_point = nearest_geoms[1]
-        
-        distance_km = haversine_distance_km(
+
+        distances[i] = haversine_distance_km(
             cluster_point.y, cluster_point.x,
             nearest_grid_point.y, nearest_grid_point.x
         )
-        
-        distances.append(distance_km)
-        nearest_points_list.append(nearest_grid_point)
-    
+
+        nearest_lons[i] = nearest_grid_point.x
+        nearest_lats[i] = nearest_grid_point.y
+
     cluster_centers_gdf['distance_to_grid_km'] = distances
-    cluster_centers_gdf['nearest_grid_lon'] = [pt.x for pt in nearest_points_list]
-    cluster_centers_gdf['nearest_grid_lat'] = [pt.y for pt in nearest_points_list]
+    cluster_centers_gdf['nearest_grid_lon'] = nearest_lons
+    cluster_centers_gdf['nearest_grid_lat'] = nearest_lats
     cluster_centers_gdf['is_remote'] = cluster_centers_gdf['distance_to_grid_km'] > GRID_DISTANCE_THRESHOLD_KM
     
     print(f"\nGrid distance statistics:")
