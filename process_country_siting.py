@@ -53,9 +53,13 @@ def get_bigdata_path(folder_name):
     local_path = folder_name
     cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
     
-    if os.path.exists(local_path):
+    # Check that the folder exists AND contains files (not just an empty/tracked directory)
+    def folder_has_data(path):
+        return os.path.isdir(path) and any(True for _ in os.scandir(path))
+
+    if folder_has_data(local_path):
         return local_path
-    elif os.path.exists(cluster_path):
+    elif folder_has_data(cluster_path):
         return cluster_path
     else:
         # Return local path as default (will trigger appropriate error if needed)

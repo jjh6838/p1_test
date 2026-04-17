@@ -718,6 +718,9 @@ python generate_hpc_scripts.py --create-parallel-siting
 
 # Normalize CRLF to LF for cluster execution
 sed -i 's/\r$//' parallel_scripts_siting/*.sh submit_all_parallel_siting.sh
+
+# Set execute permissions for all wrapper and batch scripts
+chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 ```
 
 **Features:**

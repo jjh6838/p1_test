@@ -80,7 +80,7 @@ ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
 
 # --- Auto-detect tier based on country if not specified ---
 SITING_TIER_1="IND CHN USA"
-SITING_TIER_2="ARG MEX IDN RUS BRA KAZ AUS SAU CAN"
+SITING_TIER_2="CAN SAU BRA KAZ MEX AUS ARG RUS IDN"
 
 if [ -z "$TIER" ]; then
     if [[ " $SITING_TIER_1 " =~ " $ISO3 " ]]; then

@@ -58,6 +58,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import heapq
 import time
+import traceback
 from contextlib import contextmanager
 
 try:
@@ -105,9 +106,13 @@ def get_bigdata_path(folder_name):
     local_path = folder_name
     cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
     
-    if os.path.exists(local_path):
+    # Check that the folder exists AND contains files (not just an empty/tracked directory)
+    def folder_has_data(path):
+        return os.path.isdir(path) and any(True for _ in os.scandir(path))
+
+    if folder_has_data(local_path):
         return local_path
-    elif os.path.exists(cluster_path):
+    elif folder_has_data(cluster_path):
         return cluster_path
     else:
         # Return local path as default (will trigger appropriate error if needed)
@@ -571,11 +576,26 @@ def stitch_grid_segments(grid_lines_gdf, admin_boundaries, max_distance_km=GRID_
     grid_utm = grid_lines_gdf.to_crs(utm_crs)
     grid_graph = nx.Graph()
 
+    def iter_line_geometries(geom):
+        """Yield only LineString geometries from possibly nested multi-part inputs."""
+        if geom is None or geom.is_empty:
+            return []
+        if isinstance(geom, LineString):
+            return [geom]
+        if isinstance(geom, MultiLineString):
+            return list(geom.geoms)
+        if isinstance(geom, GeometryCollection):
+            lines = []
+            for sub in geom.geoms:
+                lines.extend(iter_line_geometries(sub))
+            return lines
+        return []
+
     # Build temporary graph from grid lines
     for geom in grid_utm.geometry:
         if geom is None or geom.is_empty:
             continue
-        lines = list(geom.geoms) if isinstance(geom, MultiLineString) else [geom]
+        lines = iter_line_geometries(geom)
         for line in lines:
             coords = list(line.coords)
             if len(coords) < 2:
@@ -763,6 +783,12 @@ def load_grid_lines(country_bbox, admin_boundaries, scenario=None, country_iso3=
                     
                     # Fill any remaining nulls in line_type
                     grid_country['line_type'] = grid_country['line_type'].fillna('grid_infrastructure')
+
+                if not grid_country.empty and 'geometry' in grid_country.columns:
+                    geom_types = grid_country.geometry.geom_type.value_counts(dropna=False)
+                    print("Combined grid geometry types before stitch:")
+                    for gtype, count in geom_types.items():
+                        print(f"  {gtype}: {count}")
 
                 # Stitch the combined grid to connect siting networks with existing infrastructure
                 grid_country = stitch_grid_segments(grid_country, admin_boundaries, GRID_STITCH_DISTANCE_KM)
@@ -953,7 +979,24 @@ def split_intersecting_edges(lines):
             gdf = gpd.GeoDataFrame({'geometry': lines})
             split_gdf = momepy_preprocessing.split_lines(gdf)
             print(f"  Fast split (momepy) produced {len(split_gdf)} segments")
-            return list(split_gdf.geometry)
+            # Flatten multi-part outputs into individual LineStrings.
+            result = []
+            for geom in split_gdf.geometry:
+                if geom is None or geom.is_empty:
+                    continue
+                if isinstance(geom, MultiLineString):
+                    result.extend(list(geom.geoms))
+                elif isinstance(geom, LineString):
+                    result.append(geom)
+                elif isinstance(geom, GeometryCollection):
+                    for sub in geom.geoms:
+                        if isinstance(sub, MultiLineString):
+                            result.extend(list(sub.geoms))
+                        elif isinstance(sub, LineString):
+                            result.append(sub)
+                else:
+                    continue
+            return result
         except Exception as e:
             print(f"  Warning: momepy split failed ({e}); falling back to STRtree/legacy splitter")
     elif HAS_MOMEPY:
@@ -978,6 +1021,8 @@ def split_intersecting_edges(lines):
             if isinstance(chunk_merged, (LineString, MultiLineString)):
                 segments = [chunk_merged] if isinstance(chunk_merged, LineString) else list(chunk_merged.geoms)
                 for segment in segments:
+                    if not isinstance(segment, LineString):
+                        continue
                     coords = list(segment.coords)
                     for j in range(len(coords) - 1):
                         chunk_segments.append(LineString([coords[j], coords[j + 1]]))
@@ -1006,6 +1051,8 @@ def split_intersecting_edges(lines):
                 segments = [batch_merged] if isinstance(batch_merged, LineString) else list(batch_merged.geoms)
                 batch_segments = []
                 for segment in segments:
+                    if not isinstance(segment, LineString):
+                        continue
                     coords = list(segment.coords)
                     for i in range(len(coords) - 1):
                         batch_segments.append(LineString([coords[i], coords[i + 1]]))
@@ -1028,6 +1075,8 @@ def split_intersecting_edges(lines):
         segments = [merged] if isinstance(merged, LineString) else list(merged.geoms)
         final_segments = []
         for segment in segments:
+            if not isinstance(segment, LineString):
+                continue
             coords = list(segment.coords)
             for i in range(len(coords) - 1):
                 final_segments.append(LineString([coords[i], coords[i + 1]]))
@@ -1085,22 +1134,39 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
             round(coord[1] / snap_tolerance) * snap_tolerance,
         )
 
+    def iter_line_geometries(geom):
+        if geom is None or geom.is_empty:
+            return []
+        if isinstance(geom, LineString):
+            return [geom]
+        if isinstance(geom, MultiLineString):
+            return list(geom.geoms)
+        if isinstance(geom, GeometryCollection):
+            lines = []
+            for sub in geom.geoms:
+                lines.extend(iter_line_geometries(sub))
+            return lines
+        return []
+
     # Create nodes/edges from line endpoints
     grid_nodes = set()
     grid_edges = []
-    for line in split_lines:
-        if line is None or line.is_empty:
+    for raw_line in split_lines:
+        if raw_line is None or raw_line.is_empty:
             continue
-        coords = list(line.coords)
-        if len(coords) < 2:
-            continue
-        start = snap_coord(coords[0])
-        end = snap_coord(coords[-1])
-        if start == end:
-            continue
-        grid_nodes.add(start)
-        grid_nodes.add(end)
-        grid_edges.append((start, end, line))
+        # Defensively flatten any multi-part geometries that slipped through
+        sub_lines = iter_line_geometries(raw_line)
+        for line in sub_lines:
+            coords = list(line.coords)
+            if len(coords) < 2:
+                continue
+            start = snap_coord(coords[0])
+            end = snap_coord(coords[-1])
+            if start == end:
+                continue
+            grid_nodes.add(start)
+            grid_nodes.add(end)
+            grid_edges.append((start, end, line))
 
     print(f"Adding {len(grid_nodes)} snapped grid nodes to graph...")
 
@@ -2487,6 +2553,7 @@ def process_country_supply(country_iso3, output_dir="outputs_per_country", test_
     except Exception as e:
         total_elapsed = time.time() - total_start
         print(f"Error processing {country_iso3} after {total_elapsed:.1f}s: {e}")
+        traceback.print_exc()
         return None
 
 
