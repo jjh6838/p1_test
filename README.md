@@ -715,6 +715,9 @@ python generate_hpc_scripts.py --create-parallel
 
 # Generate parallel siting analysis scripts
 python generate_hpc_scripts.py --create-parallel-siting
+
+# Normalize CRLF to LF for cluster execution
+sed -i 's/\r$//' parallel_scripts_siting/*.sh submit_all_parallel_siting.sh
 ```
 
 **Features:**
@@ -966,9 +969,10 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 # PREPARATION
 # ═══════════════════════════════════════════════════════════════
 
-# Generate parallel scripts (automatically uses Unix line endings)
+# Generate parallel scripts
 python generate_hpc_scripts.py --create-parallel         # 40 supply scripts
 python generate_hpc_scripts.py --create-parallel-siting  # 25 siting scripts
+sed -i 's/\r$//' parallel_scripts_siting/*.sh submit_all_parallel_siting.sh
 chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # ═══════════════════════════════════════════════════════════════

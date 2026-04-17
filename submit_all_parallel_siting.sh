@@ -7,6 +7,10 @@ RUN_ALL_SCENARIOS=""
 SUPPLY_FACTOR=""
 SBATCH_EXPORT=""
 
+# Resolve all relative paths from the repository root (script location).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 while [ $# -gt 0 ]; do
     case $1 in
         --run-all-scenarios)

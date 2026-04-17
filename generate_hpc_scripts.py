@@ -39,7 +39,7 @@ import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 import os
-import config
+import config as project_config
 
 def get_bigdata_path(folder_name):
     """
@@ -179,7 +179,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
     # Check cluster spec on cluster: sinfo -N -o "%P %N %t %c %m" | sort
 
     TIER_CONFIG = {
-        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 40, "time": "168:00:00", "partition": "Long", "nodelist": "ouce-cn64"},  # CHN - dedicated node cn60 and 64 - Long, 40 cpus, max 900G
+#        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 40, "time": "168:00:00", "partition": "Long", "nodelist": "ouce-cn64"},  # CHN - dedicated node cn60 and 64 - Long, 40 cpus, max 900G
+        "t1": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN 
         "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU, FRA - Long partition (7 days)
         "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h)
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
@@ -712,7 +713,7 @@ echo "[INFO] Resources: Partition=$PARTITION, Time=$TIME, Memory=$MEM, CPUs=$CPU
 # --- Determine scenario flag and log directory ---
 if [ -n "$SUPPLY_FACTOR" ]; then
     SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
-    LOG_DIR="outputs_per_country/parquet/{config.ANALYSIS_YEAR}_supply_${{SCENARIO_PCT}}%/logs"
+    LOG_DIR="outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_${{SCENARIO_PCT}}%/logs"
     SCENARIO_DESC="supply factor ${{SCENARIO_PCT}}%"
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
@@ -720,7 +721,7 @@ elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SCENARIO_DESC="ALL scenarios (100%, 90%, 80%, 70%, 60%)"
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
 else
-    LOG_DIR="outputs_per_country/parquet/{config.ANALYSIS_YEAR}_supply_100%/logs"
+    LOG_DIR="outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_100%/logs"
     SCENARIO_DESC="100% (default)"
     SBATCH_EXPORT=""
 fi
@@ -1101,14 +1102,14 @@ if [ -n "$SUPPLY_FACTOR" ]; then
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
     # Convert supply factor to percentage (e.g., 0.9 -> 90)
     SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
-    LOG_DIR="outputs_per_country/parquet/{config.ANALYSIS_YEAR}_supply_${{SCENARIO_PCT}}%/logs"
+    LOG_DIR="outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_${{SCENARIO_PCT}}%/logs"
     echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor ${{SCENARIO_PCT}}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
     LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 else
-    LOG_DIR="outputs_per_country/parquet/{config.ANALYSIS_YEAR}_supply_100%/logs"
+    LOG_DIR="outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_100%/logs"
     echo "[INFO] Running default scenario: 100%"
 fi
 
@@ -1283,7 +1284,7 @@ echo "[INFO] Resources: Partition=$PARTITION, Time=$TIME, Memory=$MEM, CPUs=$CPU
 # --- Determine scenario flag and log directory ---
 if [ -n "$SUPPLY_FACTOR" ]; then
     SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
-    LOG_DIR="outputs_per_country/parquet/{config.ANALYSIS_YEAR}_supply_${{SCENARIO_PCT}}%/logs"
+    LOG_DIR="outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_${{SCENARIO_PCT}}%/logs"
     SCENARIO_DESC="supply factor ${{SCENARIO_PCT}}%"
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
@@ -1291,7 +1292,7 @@ elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SCENARIO_DESC="ALL scenarios (100%, 90%, 80%, 70%, 60%)"
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
 else
-    LOG_DIR="outputs_per_country/parquet/{config.ANALYSIS_YEAR}_supply_100%/logs"
+    LOG_DIR="outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_100%/logs"
     SCENARIO_DESC="100% (default)"
     SBATCH_EXPORT=""
 fi

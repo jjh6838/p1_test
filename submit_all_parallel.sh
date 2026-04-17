@@ -7,6 +7,10 @@ RUN_ALL_SCENARIOS=""
 SUPPLY_FACTOR=""
 SBATCH_EXPORT=""
 
+# Resolve all relative paths from the repository root (script location).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 while [ $# -gt 0 ]; do
     case $1 in
         --run-all-scenarios)
@@ -50,8 +54,29 @@ else
     echo "[INFO] Running default scenario: 100%"
 fi
 
-# Create scenario-specific log directory
-LOG_DIR="outputs_per_country/parquet/${SCENARIO}/logs"
+# Create scenario-specific log directory.
+# For single-scenario reruns after siting, write logs under *_add_v2/logs.
+if [ -z "$RUN_ALL_SCENARIOS" ]; then
+    YEAR_PART="${SCENARIO%%_supply_*}"
+    PCT_PART="${SCENARIO##*_supply_}"
+    if compgen -G "outputs_per_country/parquet/${SCENARIO}/${YEAR_PART}_siting_${PCT_PART}_*.xlsx" > /dev/null; then
+        LOG_DIR="outputs_per_country/parquet/${SCENARIO}_add_v2/logs"
+        echo "[INFO] Detected siting outputs for ${SCENARIO}; using add_v2 log directory"
+    else
+        LOG_DIR="outputs_per_country/parquet/${SCENARIO}/logs"
+    fi
+else
+    if compgen -G "outputs_per_country/parquet/2030_supply_100%/2030_siting_100%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/2030_supply_90%/2030_siting_90%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/2030_supply_80%/2030_siting_80%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/2030_supply_70%/2030_siting_70%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/2030_supply_60%/2030_siting_60%_*.xlsx" > /dev/null; then
+        LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios_add_v2"
+        echo "[INFO] Detected siting outputs for run-all scenarios; using add_v2 log directory"
+    else
+        LOG_DIR="outputs_per_country/parquet/${SCENARIO}/logs"
+    fi
+fi
 mkdir -p "$LOG_DIR"
 echo "[INFO] Logs will be saved to: ${LOG_DIR}/"
 
@@ -88,7 +113,7 @@ echo "Check completion:"
 echo "  find outputs_per_country/parquet -name '*.parquet' | wc -l"
 echo ""
 echo "Resource allocation summary (tiered partition strategy):"
-echo "  Tier 1 (CHN, USA):              1 country/script  | Interactive partition (168h) | 450G, 40 CPUs"
+echo "  Tier 1 (CHN, USA):              1 country/script  | Interactive partition (168h) | 95G, 40 CPUs"
 echo "  Tier 2 (IND, CAN, MEX):         1 country/script  | Medium partition (48h)       | 95G, 40 CPUs"
 echo "  Tier 3 (RUS, BRA, AUS, etc.):   1 country/script  | Medium partition (48h)       | 95G, 40 CPUs"
 echo "  Tier 4 (TUR, NGA, COL, etc.):   2 countries/script | Short partition (12h)        | 95G, 40 CPUs"
