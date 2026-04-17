@@ -79,8 +79,8 @@ fi
 ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
 
 # --- Auto-detect tier based on country if not specified ---
-SITING_TIER_1="IND CHN USA"
-SITING_TIER_2="CAN SAU BRA KAZ MEX AUS ARG RUS IDN"
+SITING_TIER_1="USA IND CHN"
+SITING_TIER_2="CAN RUS IDN MEX SAU AUS KAZ BRA ARG"
 
 if [ -z "$TIER" ]; then
     if [[ " $SITING_TIER_1 " =~ " $ISO3 " ]]; then
@@ -180,20 +180,30 @@ elif [ "\${RUN_ALL_SCENARIOS:-}" = "1" ]; then
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
 
-# Process siting analysis
+# Process siting analysis (with retry for transient NFS issues)
 echo "[INFO] Processing siting for ${ISO3} (T${TIER})..."
-if \$PY process_country_siting.py ${ISO3} \$SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] Siting for ${ISO3} completed at \$(date)"
-else
-    echo "[ERROR] Siting for ${ISO3} failed at \$(date)"
-    exit 1
-fi
+MAX_RETRIES=3
+for ATTEMPT in \$(seq 1 \$MAX_RETRIES); do
+    if \$PY process_country_siting.py ${ISO3} \$SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] Siting for ${ISO3} completed at \$(date) (attempt \$ATTEMPT)"
+        break
+    else
+        if [ "\$ATTEMPT" -lt "\$MAX_RETRIES" ]; then
+            echo "[WARN] Siting for ${ISO3} failed on attempt \$ATTEMPT/\$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] Siting for ${ISO3} failed after \$MAX_RETRIES attempts at \$(date)"
+            exit 1
+        fi
+    fi
+done
 HEREDOC_BODY
 
 # --- Submit the job ---
 echo "[INFO] Submitting siting analysis for ${ISO3}..."
 sbatch --job-name="ds_${ISO3}" \
        --partition="$PARTITION" \
+       --exclude=ouce-cn62 \
        --time="$TIME" \
        --mem="$MEM" \
        --ntasks=1 \

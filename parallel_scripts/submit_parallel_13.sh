@@ -6,6 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
+#SBATCH --exclude=ouce-cn62
 #SBATCH --output=outputs_per_country/logs/parallel_13_%j.out
 #SBATCH --error=outputs_per_country/logs/parallel_13_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -46,10 +47,19 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing KAZ (T3)..."
-if $PY process_country_supply.py KAZ $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] KAZ completed"
-else
-    echo "[ERROR] KAZ failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py KAZ $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] KAZ completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] KAZ failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] KAZ failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 13/40 (T3) completed at $(date)"

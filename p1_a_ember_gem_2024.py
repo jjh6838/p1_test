@@ -27,34 +27,9 @@ import pandas as pd
 import warnings
 from pycountry import countries
 import os
+from config import get_bigdata_path
 
 # Suppress openpyxl warning
-
-def get_bigdata_path(folder_name):
-    """
-    Get the correct path for bigdata folders.
-    Checks local path first, then cluster path if not found.
-    
-    Args:
-        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
-    
-    Returns:
-        str: Path to the folder
-    """
-    local_path = folder_name
-    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
-    
-    # Check that the folder exists AND contains files (not just an empty/tracked directory)
-    def folder_has_data(path):
-        return os.path.isdir(path) and any(True for _ in os.scandir(path))
-
-    if folder_has_data(local_path):
-        return local_path
-    elif folder_has_data(cluster_path):
-        return cluster_path
-    else:
-        # Return local path as default (will trigger appropriate error if needed)
-        return local_path
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 # Define granular and grouped energy categories

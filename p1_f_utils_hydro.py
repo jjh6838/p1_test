@@ -35,21 +35,7 @@ warnings.filterwarnings('ignore', 'CRS mismatch')
 # PATH CONFIGURATION
 # =============================================================================
 
-def get_bigdata_path(folder_name: str) -> str:
-    """Get correct path for bigdata folders (local vs cluster)."""
-    local_path = folder_name
-    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
-    
-    # Check that the folder exists AND contains files (not just an empty/tracked directory)
-    def folder_has_data(path):
-        return os.path.isdir(path) and any(True for _ in os.scandir(path))
-
-    if folder_has_data(local_path):
-        return local_path
-    elif folder_has_data(cluster_path):
-        return cluster_path
-    else:
-        return local_path
+from config import get_bigdata_path
 
 
 # =============================================================================

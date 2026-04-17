@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing siting analysis for BRA (T2)..."
-if $PY process_country_siting.py BRA $SCENARIO_FLAG; then
-    echo "[SUCCESS] BRA siting analysis completed"
-else
-    echo "[ERROR] BRA siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py BRA $SCENARIO_FLAG; then
+        echo "[SUCCESS] BRA siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] BRA siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] BRA siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CAN (T2)..."
-if $PY process_country_siting.py CAN $SCENARIO_FLAG; then
-    echo "[SUCCESS] CAN siting analysis completed"
-else
-    echo "[ERROR] CAN siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CAN $SCENARIO_FLAG; then
+        echo "[SUCCESS] CAN siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CAN siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CAN siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Siting batch 5/25 (T2) completed at $(date)"

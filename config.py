@@ -11,6 +11,53 @@ Used by:
   - combine_one_results.py
   - combine_global_results.py
 """
+import os
+import time
+
+# =============================================================================
+# PATH CONFIGURATION (Local vs Cluster)
+# =============================================================================
+
+def get_bigdata_path(folder_name):
+    """
+    Get the correct path for bigdata folders.
+    On SLURM jobs, prefers the shared cluster path to avoid local empty-folder masking.
+    Otherwise checks local path first, then cluster fallback.
+    Includes retry logic to handle transient NFS mount delays on compute nodes.
+
+    Args:
+        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
+
+    Returns:
+        str: Path to the folder
+    """
+    local_path = folder_name
+    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}" #This is configurable based on your cluster setup
+    running_on_slurm = os.environ.get("SLURM_JOB_ID") is not None
+
+    def folder_has_data(path):
+        if not os.path.isdir(path):
+            return False
+        with os.scandir(path) as it:
+            return any(True for _ in it)
+
+    # On HPC jobs, prefer shared cluster storage with retry for transient NFS issues.
+    if running_on_slurm:
+        for attempt in range(3):
+            if folder_has_data(cluster_path):
+                return cluster_path
+            if attempt < 2:
+                time.sleep(2)
+        # All retries failed — warn loudly before falling through
+        print(f"[WARNING] get_bigdata_path: cluster path '{cluster_path}' not accessible "
+              f"after 3 attempts (SLURM_JOB_ID={os.environ.get('SLURM_JOB_ID')})")
+    if folder_has_data(local_path):
+        return local_path
+    if folder_has_data(cluster_path):
+        return cluster_path
+    # Return local path as default (will trigger appropriate error if needed)
+    print(f"[WARNING] get_bigdata_path: no data found for '{folder_name}' in any location")
+    return local_path
 
 # =============================================================================
 # COMMON SETTINGS

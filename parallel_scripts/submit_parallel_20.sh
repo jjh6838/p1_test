@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing GHA (T4)..."
-if $PY process_country_supply.py GHA $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GHA completed"
-else
-    echo "[ERROR] GHA failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GHA $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GHA completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GHA failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GHA failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing IRQ (T4)..."
-if $PY process_country_supply.py IRQ $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] IRQ completed"
-else
-    echo "[ERROR] IRQ failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py IRQ $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] IRQ completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] IRQ failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] IRQ failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 20/40 (T4) completed at $(date)"

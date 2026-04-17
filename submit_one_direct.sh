@@ -84,9 +84,9 @@ ISO3=$(echo "$ISO3" | tr '[:lower:]' '[:upper:]')
 
 # --- Auto-detect tier based on country if not specified ---
 TIER_1="CHN"
-TIER_2="BRA FRA USA IND DEU"
-TIER_3="ARG IDN CAN RUS EGY KAZ SAU MEX IRN AUS ZAF"
-TIER_4="MMR UKR TCD IRQ GHA NOR NGA PHL VEN PER JPN GEO COL TUR SDN MLI PAK ETH DZA SWE"
+TIER_2="BRA DEU FRA USA IND"
+TIER_3="ARG MEX EGY RUS AUS CAN KAZ ZAF IDN SAU IRN"
+TIER_4="TUR IRQ SWE TCD MLI DZA NOR PER MMR NGA PAK ETH GEO VEN COL PHL JPN UKR SDN GHA"
 
 if [ -z "$TIER" ]; then
     if [[ " $TIER_1 " =~ " $ISO3 " ]]; then
@@ -202,20 +202,30 @@ elif [ "\${RUN_ALL_SCENARIOS:-}" = "1" ]; then
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
 
-# Process country
+# Process country (with retry for transient NFS issues)
 echo "[INFO] Processing ${ISO3} (T${TIER})..."
-if \$PY process_country_supply.py ${ISO3} \$SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ${ISO3} completed at \$(date)"
-else
-    echo "[ERROR] ${ISO3} failed at \$(date)"
-    exit 1
-fi
+MAX_RETRIES=3
+for ATTEMPT in \$(seq 1 \$MAX_RETRIES); do
+    if \$PY process_country_supply.py ${ISO3} \$SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] ${ISO3} completed at \$(date) (attempt \$ATTEMPT)"
+        break
+    else
+        if [ "\$ATTEMPT" -lt "\$MAX_RETRIES" ]; then
+            echo "[WARN] ${ISO3} failed on attempt \$ATTEMPT/\$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ${ISO3} failed after \$MAX_RETRIES attempts at \$(date)"
+            exit 1
+        fi
+    fi
+done
 HEREDOC_BODY
 
 # --- Submit the job ---
 echo "[INFO] Submitting ${ISO3}..."
 sbatch --job-name="d_${ISO3}" \
        --partition="$PARTITION" \
+       --exclude=ouce-cn62 \
        --time="$TIME" \
        --mem="$MEM" \
        --ntasks=1 \

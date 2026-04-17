@@ -6,6 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=40
+#SBATCH --exclude=ouce-cn62
 #SBATCH --output=outputs_per_country/logs/parallel_11_%j.out
 #SBATCH --error=outputs_per_country/logs/parallel_11_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -46,10 +47,19 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing IDN (T3)..."
-if $PY process_country_supply.py IDN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] IDN completed"
-else
-    echo "[ERROR] IDN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py IDN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] IDN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] IDN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] IDN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 11/40 (T3) completed at $(date)"

@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing COL (T4)..."
-if $PY process_country_supply.py COL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] COL completed"
-else
-    echo "[ERROR] COL failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py COL $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] COL completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] COL failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] COL failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing DZA (T4)..."
-if $PY process_country_supply.py DZA $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] DZA completed"
-else
-    echo "[ERROR] DZA failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py DZA $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] DZA completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] DZA failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] DZA failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 18/40 (T4) completed at $(date)"

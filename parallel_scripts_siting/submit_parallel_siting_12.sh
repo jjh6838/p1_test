@@ -46,80 +46,199 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing siting analysis for COG (T3)..."
-if $PY process_country_siting.py COG $SCENARIO_FLAG; then
-    echo "[SUCCESS] COG siting analysis completed"
-else
-    echo "[ERROR] COG siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py COG $SCENARIO_FLAG; then
+        echo "[SUCCESS] COG siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] COG siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] COG siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for COL (T3)..."
-if $PY process_country_siting.py COL $SCENARIO_FLAG; then
-    echo "[SUCCESS] COL siting analysis completed"
-else
-    echo "[ERROR] COL siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py COL $SCENARIO_FLAG; then
+        echo "[SUCCESS] COL siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] COL siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] COL siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for COM (T3)..."
-if $PY process_country_siting.py COM $SCENARIO_FLAG; then
-    echo "[SUCCESS] COM siting analysis completed"
-else
-    echo "[ERROR] COM siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py COM $SCENARIO_FLAG; then
+        echo "[SUCCESS] COM siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] COM siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] COM siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CPV (T3)..."
-if $PY process_country_siting.py CPV $SCENARIO_FLAG; then
-    echo "[SUCCESS] CPV siting analysis completed"
-else
-    echo "[ERROR] CPV siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CPV $SCENARIO_FLAG; then
+        echo "[SUCCESS] CPV siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CPV siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CPV siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CRI (T3)..."
-if $PY process_country_siting.py CRI $SCENARIO_FLAG; then
-    echo "[SUCCESS] CRI siting analysis completed"
-else
-    echo "[ERROR] CRI siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CRI $SCENARIO_FLAG; then
+        echo "[SUCCESS] CRI siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CRI siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CRI siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CUB (T3)..."
-if $PY process_country_siting.py CUB $SCENARIO_FLAG; then
-    echo "[SUCCESS] CUB siting analysis completed"
-else
-    echo "[ERROR] CUB siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CUB $SCENARIO_FLAG; then
+        echo "[SUCCESS] CUB siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CUB siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CUB siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CYM (T3)..."
-if $PY process_country_siting.py CYM $SCENARIO_FLAG; then
-    echo "[SUCCESS] CYM siting analysis completed"
-else
-    echo "[ERROR] CYM siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CYM $SCENARIO_FLAG; then
+        echo "[SUCCESS] CYM siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CYM siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CYM siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CYP (T3)..."
-if $PY process_country_siting.py CYP $SCENARIO_FLAG; then
-    echo "[SUCCESS] CYP siting analysis completed"
-else
-    echo "[ERROR] CYP siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CYP $SCENARIO_FLAG; then
+        echo "[SUCCESS] CYP siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CYP siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CYP siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for CZE (T3)..."
-if $PY process_country_siting.py CZE $SCENARIO_FLAG; then
-    echo "[SUCCESS] CZE siting analysis completed"
-else
-    echo "[ERROR] CZE siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CZE $SCENARIO_FLAG; then
+        echo "[SUCCESS] CZE siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CZE siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CZE siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for DEU (T3)..."
-if $PY process_country_siting.py DEU $SCENARIO_FLAG; then
-    echo "[SUCCESS] DEU siting analysis completed"
-else
-    echo "[ERROR] DEU siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py DEU $SCENARIO_FLAG; then
+        echo "[SUCCESS] DEU siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] DEU siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] DEU siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for DJI (T3)..."
-if $PY process_country_siting.py DJI $SCENARIO_FLAG; then
-    echo "[SUCCESS] DJI siting analysis completed"
-else
-    echo "[ERROR] DJI siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py DJI $SCENARIO_FLAG; then
+        echo "[SUCCESS] DJI siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] DJI siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] DJI siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Siting batch 12/25 (T3) completed at $(date)"

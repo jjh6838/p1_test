@@ -86,37 +86,12 @@ from config import (
     COMMON_CRS, ANALYSIS_YEAR, DEMAND_TYPES, SUPPLY_FACTOR,
     GRID_STITCH_DISTANCE_KM, NODE_SNAP_TOLERANCE_M,
     MAX_CONNECTION_DISTANCE_M, FACILITY_SEARCH_RADIUS_KM,
-    NO_GRID_CONNECTION_RADIUS_KM
+    NO_GRID_CONNECTION_RADIUS_KM,
+    get_bigdata_path,
 )
 
 # Configuration logging guard to avoid duplicate prints when imported by worker processes
 _CONFIG_PRINTED = False
-
-def get_bigdata_path(folder_name):
-    """
-    Get the correct path for bigdata folders.
-    Checks local path first, then cluster path if not found.
-    
-    Args:
-        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
-    
-    Returns:
-        str: Path to the folder
-    """
-    local_path = folder_name
-    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
-    
-    # Check that the folder exists AND contains files (not just an empty/tracked directory)
-    def folder_has_data(path):
-        return os.path.isdir(path) and any(True for _ in os.scandir(path))
-
-    if folder_has_data(local_path):
-        return local_path
-    elif folder_has_data(cluster_path):
-        return cluster_path
-    else:
-        # Return local path as default (will trigger appropriate error if needed)
-        return local_path
 
 def print_configuration_banner(test_mode=False, scenario_suffix=""):
     """Emit configuration details once per process."""
@@ -979,23 +954,21 @@ def split_intersecting_edges(lines):
             gdf = gpd.GeoDataFrame({'geometry': lines})
             split_gdf = momepy_preprocessing.split_lines(gdf)
             print(f"  Fast split (momepy) produced {len(split_gdf)} segments")
-            # Flatten multi-part outputs into individual LineStrings.
-            result = []
-            for geom in split_gdf.geometry:
+            # Flatten multi-part outputs into individual LineStrings (recursive).
+            def _flatten_geom(geom):
                 if geom is None or geom.is_empty:
-                    continue
-                if isinstance(geom, MultiLineString):
-                    result.extend(list(geom.geoms))
-                elif isinstance(geom, LineString):
-                    result.append(geom)
+                    return
+                if isinstance(geom, LineString):
+                    yield geom
+                elif isinstance(geom, MultiLineString):
+                    yield from geom.geoms
                 elif isinstance(geom, GeometryCollection):
                     for sub in geom.geoms:
-                        if isinstance(sub, MultiLineString):
-                            result.extend(list(sub.geoms))
-                        elif isinstance(sub, LineString):
-                            result.append(sub)
-                else:
-                    continue
+                        yield from _flatten_geom(sub)
+
+            result = []
+            for geom in split_gdf.geometry:
+                result.extend(_flatten_geom(geom))
             return result
         except Exception as e:
             print(f"  Warning: momepy split failed ({e}); falling back to STRtree/legacy splitter")
@@ -1107,16 +1080,25 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
     
     # Initialize graph
     G = nx.Graph()
-    
-    # Process grid lines
+
+    def iter_line_geometries(geom):
+        if geom is None or geom.is_empty:
+            return []
+        if isinstance(geom, LineString):
+            return [geom]
+        if isinstance(geom, MultiLineString):
+            return list(geom.geoms)
+        if isinstance(geom, GeometryCollection):
+            lines = []
+            for sub in geom.geoms:
+                lines.extend(iter_line_geometries(sub))
+            return lines
+        return []
+
+    # Process grid lines — flatten any multi-part geometries
     single_lines = []
     for geom in grid_lines_utm.geometry:
-        if geom is None or geom.is_empty:
-            continue
-        if isinstance(geom, MultiLineString):
-            single_lines.extend(list(geom.geoms))
-        else:
-            single_lines.append(geom)
+        single_lines.extend(iter_line_geometries(geom))
     
     # OPTIMIZATION 1: Timer for splitting
     print(f"Splitting {len(single_lines)} grid lines at intersections...")
@@ -1133,20 +1115,6 @@ def create_network_graph(facilities_gdf, grid_lines_gdf, centroids_gdf):
             round(coord[0] / snap_tolerance) * snap_tolerance,
             round(coord[1] / snap_tolerance) * snap_tolerance,
         )
-
-    def iter_line_geometries(geom):
-        if geom is None or geom.is_empty:
-            return []
-        if isinstance(geom, LineString):
-            return [geom]
-        if isinstance(geom, MultiLineString):
-            return list(geom.geoms)
-        if isinstance(geom, GeometryCollection):
-            lines = []
-            for sub in geom.geoms:
-                lines.extend(iter_line_geometries(sub))
-            return lines
-        return []
 
     # Create nodes/edges from line endpoints
     grid_nodes = set()

@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing NOR (T4)..."
-if $PY process_country_supply.py NOR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] NOR completed"
-else
-    echo "[ERROR] NOR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py NOR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] NOR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] NOR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] NOR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing PAK (T4)..."
-if $PY process_country_supply.py PAK $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PAK completed"
-else
-    echo "[ERROR] PAK failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py PAK $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] PAK completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] PAK failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] PAK failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 23/40 (T4) completed at $(date)"

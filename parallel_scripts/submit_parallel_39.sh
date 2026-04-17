@@ -46,80 +46,199 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing SYC (T5)..."
-if $PY process_country_supply.py SYC $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SYC completed"
-else
-    echo "[ERROR] SYC failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SYC $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SYC completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SYC failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SYC failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SYR (T5)..."
-if $PY process_country_supply.py SYR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SYR completed"
-else
-    echo "[ERROR] SYR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SYR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SYR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SYR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SYR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TGO (T5)..."
-if $PY process_country_supply.py TGO $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TGO completed"
-else
-    echo "[ERROR] TGO failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TGO $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TGO completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TGO failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TGO failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing THA (T5)..."
-if $PY process_country_supply.py THA $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] THA completed"
-else
-    echo "[ERROR] THA failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py THA $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] THA completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] THA failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] THA failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TJK (T5)..."
-if $PY process_country_supply.py TJK $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TJK completed"
-else
-    echo "[ERROR] TJK failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TJK $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TJK completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TJK failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TJK failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TKM (T5)..."
-if $PY process_country_supply.py TKM $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TKM completed"
-else
-    echo "[ERROR] TKM failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TKM $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TKM completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TKM failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TKM failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TLS (T5)..."
-if $PY process_country_supply.py TLS $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TLS completed"
-else
-    echo "[ERROR] TLS failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TLS $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TLS completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TLS failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TLS failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TON (T5)..."
-if $PY process_country_supply.py TON $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TON completed"
-else
-    echo "[ERROR] TON failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TON $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TON completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TON failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TON failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TTO (T5)..."
-if $PY process_country_supply.py TTO $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TTO completed"
-else
-    echo "[ERROR] TTO failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TTO $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TTO completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TTO failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TTO failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TUN (T5)..."
-if $PY process_country_supply.py TUN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TUN completed"
-else
-    echo "[ERROR] TUN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TUN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TUN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TUN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TUN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TWN (T5)..."
-if $PY process_country_supply.py TWN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TWN completed"
-else
-    echo "[ERROR] TWN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TWN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TWN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TWN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TWN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 39/40 (T5) completed at $(date)"

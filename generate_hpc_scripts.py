@@ -40,32 +40,7 @@ import geopandas as gpd
 from pathlib import Path
 import os
 import config as project_config
-
-def get_bigdata_path(folder_name):
-    """
-    Get the correct path for bigdata folders.
-    Checks local path first, then cluster path if not found.
-    
-    Args:
-        folder_name: Name of the bigdata folder (e.g., 'bigdata_gadm')
-    
-    Returns:
-        str: Path to the folder
-    """
-    local_path = folder_name
-    cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
-    
-    # Check that the folder exists AND contains files (not just an empty/tracked directory)
-    def folder_has_data(path):
-        return os.path.isdir(path) and any(True for _ in os.scandir(path))
-
-    if folder_has_data(local_path):
-        return local_path
-    elif folder_has_data(cluster_path):
-        return cluster_path
-    else:
-        # Return local path as default (will trigger appropriate error if needed)
-        return local_path
+from config import get_bigdata_path
 
 def get_country_list():
     """
@@ -186,7 +161,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
 #        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 40, "time": "168:00:00", "partition": "Long", "nodelist": "ouce-cn64"},  # CHN - dedicated node cn60 and 64 - Long, 40 cpus, max 900G
         "t1": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN 
         "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU, FRA - Long partition (7 days)
-        "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h)
+        "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium", "exclude": "ouce-cn62"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h). cn62 lacks NFS mount for shared bigdata.
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
         "t5": {"max_countries_per_script": 12, "mem": "25G", "cpus": 40, "time": "12:00:00", "partition": "Short"}     # All others - 12 countries per script
     }
@@ -337,6 +312,8 @@ def create_parallel_scripts(num_scripts=40, countries=None):
         nodelist_directive = ""
         if "nodelist" in config and config["nodelist"]:
             nodelist_directive = f"\n#SBATCH --nodelist={config['nodelist']}"
+        if "exclude" in config and config["exclude"]:
+            nodelist_directive += f"\n#SBATCH --exclude={config['exclude']}"
         
         # The script content includes SLURM directives (#SBATCH) which request the necessary
         # resources (time, memory, CPUs) from the cluster scheduler.
@@ -390,14 +367,28 @@ fi
         
         # Add country processing commands
         # Each script will call `process_country_supply.py` for each country in its batch.
-        for country in batch:
+        # Includes retry logic (up to 3 attempts) to handle transient NFS mount delays.
+        for ci, country in enumerate(batch):
             script_content += f"""
 echo "[INFO] Processing {country} ({get_tier(country).upper()})..."
-if $PY process_country_supply.py {country} $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] {country} completed"
-else
-    echo "[ERROR] {country} failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py {country} $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] {country} completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] {country} failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] {country} failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+"""
+            if ci < len(batch) - 1:
+                script_content += """echo "[INFO] Pausing 5s before next country..."
+sleep 5
 """
         
         script_content += f"""
@@ -416,6 +407,9 @@ echo "[INFO] Batch {i}/{len(all_batches)} ({tier.upper()}) completed at $(date)"
     master_script = f"""#!/bin/bash
 # Submit all parallel jobs immediately (SLURM will queue them automatically)
 # Usage: ./submit_all_parallel.sh [--run-all-scenarios] [--supply-factor <value>]
+
+    SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
+    cd "$SCRIPT_DIR"
 
 # --- Parse arguments ---
 RUN_ALL_SCENARIOS=""
@@ -465,8 +459,28 @@ else
     echo "[INFO] Running default scenario: 100%"
 fi
 
-# Create scenario-specific log directory
-LOG_DIR="outputs_per_country/parquet/${{SCENARIO}}/logs"
+# Create scenario-specific log directory (route to add_v2 logs on second supply run)
+if [ -z "$RUN_ALL_SCENARIOS" ]; then
+    YEAR_PART="${{SCENARIO%%_supply_*}}"
+    PCT_PART="${{SCENARIO##*_supply_}}"
+    if compgen -G "outputs_per_country/parquet/${{SCENARIO}}/${{YEAR_PART}}_siting_${{PCT_PART}}_*.xlsx" > /dev/null; then
+        LOG_DIR="outputs_per_country/parquet/${{SCENARIO}}_add_v2/logs"
+        echo "[INFO] Detected siting outputs for ${{SCENARIO}}; using add_v2 log directory"
+    else
+        LOG_DIR="outputs_per_country/parquet/${{SCENARIO}}/logs"
+    fi
+else
+    if compgen -G "outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_100%/{project_config.ANALYSIS_YEAR}_siting_100%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_90%/{project_config.ANALYSIS_YEAR}_siting_90%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_80%/{project_config.ANALYSIS_YEAR}_siting_80%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_70%/{project_config.ANALYSIS_YEAR}_siting_70%_*.xlsx" > /dev/null || \
+       compgen -G "outputs_per_country/parquet/{project_config.ANALYSIS_YEAR}_supply_60%/{project_config.ANALYSIS_YEAR}_siting_60%_*.xlsx" > /dev/null; then
+        LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios_add_v2"
+        echo "[INFO] Detected siting outputs for run-all scenarios; using add_v2 log directory"
+    else
+        LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
+    fi
+fi
 mkdir -p "$LOG_DIR"
 echo "[INFO] Logs will be saved to: ${{LOG_DIR}}/"
 
@@ -777,20 +791,30 @@ elif [ "\\${{RUN_ALL_SCENARIOS:-}}" = "1" ]; then
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
 
-# Process country
+# Process country (with retry for transient NFS issues)
 echo "[INFO] Processing ${{ISO3}} (T${{TIER}})..."
-if \\$PY process_country_supply.py ${{ISO3}} \\$SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ${{ISO3}} completed at \\$(date)"
-else
-    echo "[ERROR] ${{ISO3}} failed at \\$(date)"
-    exit 1
-fi
+MAX_RETRIES=3
+for ATTEMPT in \\$(seq 1 \\$MAX_RETRIES); do
+    if \\$PY process_country_supply.py ${{ISO3}} \\$SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] ${{ISO3}} completed at \\$(date) (attempt \\$ATTEMPT)"
+        break
+    else
+        if [ "\\$ATTEMPT" -lt "\\$MAX_RETRIES" ]; then
+            echo "[WARN] ${{ISO3}} failed on attempt \\$ATTEMPT/\\$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ${{ISO3}} failed after \\$MAX_RETRIES attempts at \\$(date)"
+            exit 1
+        fi
+    fi
+done
 HEREDOC_BODY
 
 # --- Submit the job ---
 echo "[INFO] Submitting ${{ISO3}}..."
 sbatch --job-name="d_${{ISO3}}" \\
        --partition="$PARTITION" \\
+       --exclude=ouce-cn62 \\
        --time="$TIME" \\
        --mem="$MEM" \\
        --ntasks=1 \\
@@ -996,6 +1020,13 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
         tier = batch_info["tier"]
         config = batch_info["config"]
         
+        # Build optional node directives
+        node_directives = ""
+        if "nodelist" in config and config["nodelist"]:
+            node_directives += f"\n#SBATCH --nodelist={config['nodelist']}"
+        if "exclude" in config and config["exclude"]:
+            node_directives += f"\n#SBATCH --exclude={config['exclude']}"
+        
         script_content = f"""#!/bin/bash --login
 #SBATCH --job-name=p{i:02d}s_{tier}
 #SBATCH --partition={config["partition"]}
@@ -1003,7 +1034,7 @@ def create_parallel_siting_scripts(num_scripts=40, countries=None):
 #SBATCH --mem={config["mem"]}
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task={config["cpus"]}
+#SBATCH --cpus-per-task={config["cpus"]}{node_directives}
 #SBATCH --output=outputs_per_country/logs/siting_{i:02d}_%j.out
 #SBATCH --error=outputs_per_country/logs/siting_{i:02d}_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -1044,14 +1075,27 @@ fi
 # Process countries in this batch
 """
         
-        for country in batch:
+        for ci, country in enumerate(batch):
             script_content += f"""
 echo "[INFO] Processing siting analysis for {country} ({get_tier(country).upper()})..."
-if $PY process_country_siting.py {country} $SCENARIO_FLAG; then
-    echo "[SUCCESS] {country} siting analysis completed"
-else
-    echo "[ERROR] {country} siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py {country} $SCENARIO_FLAG; then
+        echo "[SUCCESS] {country} siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] {country} siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] {country} siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+"""
+            if ci < len(batch) - 1:
+                script_content += """echo "[INFO] Pausing 5s before next country..."
+sleep 5
 """
         
         script_content += f"""
@@ -1348,20 +1392,30 @@ elif [ "\\${{RUN_ALL_SCENARIOS:-}}" = "1" ]; then
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 fi
 
-# Process siting analysis
+# Process siting analysis (with retry for transient NFS issues)
 echo "[INFO] Processing siting for ${{ISO3}} (T${{TIER}})..."
-if \\$PY process_country_siting.py ${{ISO3}} \\$SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] Siting for ${{ISO3}} completed at \\$(date)"
-else
-    echo "[ERROR] Siting for ${{ISO3}} failed at \\$(date)"
-    exit 1
-fi
+MAX_RETRIES=3
+for ATTEMPT in \\$(seq 1 \\$MAX_RETRIES); do
+    if \\$PY process_country_siting.py ${{ISO3}} \\$SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] Siting for ${{ISO3}} completed at \\$(date) (attempt \\$ATTEMPT)"
+        break
+    else
+        if [ "\\$ATTEMPT" -lt "\\$MAX_RETRIES" ]; then
+            echo "[WARN] Siting for ${{ISO3}} failed on attempt \\$ATTEMPT/\\$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] Siting for ${{ISO3}} failed after \\$MAX_RETRIES attempts at \\$(date)"
+            exit 1
+        fi
+    fi
+done
 HEREDOC_BODY
 
 # --- Submit the job ---
 echo "[INFO] Submitting siting analysis for ${{ISO3}}..."
 sbatch --job-name="ds_${{ISO3}}" \\
        --partition="$PARTITION" \\
+       --exclude=ouce-cn62 \\
        --time="$TIME" \\
        --mem="$MEM" \\
        --ntasks=1 \\

@@ -46,80 +46,199 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing SEN (T5)..."
-if $PY process_country_supply.py SEN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SEN completed"
-else
-    echo "[ERROR] SEN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SEN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SEN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SEN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SEN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SGP (T5)..."
-if $PY process_country_supply.py SGP $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SGP completed"
-else
-    echo "[ERROR] SGP failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SGP $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SGP completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SGP failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SGP failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SLE (T5)..."
-if $PY process_country_supply.py SLE $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SLE completed"
-else
-    echo "[ERROR] SLE failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SLE $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SLE completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SLE failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SLE failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SLV (T5)..."
-if $PY process_country_supply.py SLV $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SLV completed"
-else
-    echo "[ERROR] SLV failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SLV $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SLV completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SLV failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SLV failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SOM (T5)..."
-if $PY process_country_supply.py SOM $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SOM completed"
-else
-    echo "[ERROR] SOM failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SOM $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SOM completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SOM failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SOM failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SRB (T5)..."
-if $PY process_country_supply.py SRB $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SRB completed"
-else
-    echo "[ERROR] SRB failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SRB $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SRB completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SRB failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SRB failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SSD (T5)..."
-if $PY process_country_supply.py SSD $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SSD completed"
-else
-    echo "[ERROR] SSD failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SSD $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SSD completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SSD failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SSD failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SUR (T5)..."
-if $PY process_country_supply.py SUR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SUR completed"
-else
-    echo "[ERROR] SUR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SUR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SUR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SUR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SUR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SVK (T5)..."
-if $PY process_country_supply.py SVK $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SVK completed"
-else
-    echo "[ERROR] SVK failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SVK $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SVK completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SVK failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SVK failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SVN (T5)..."
-if $PY process_country_supply.py SVN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SVN completed"
-else
-    echo "[ERROR] SVN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SVN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SVN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SVN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SVN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing SWZ (T5)..."
-if $PY process_country_supply.py SWZ $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] SWZ completed"
-else
-    echo "[ERROR] SWZ failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py SWZ $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] SWZ completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] SWZ failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] SWZ failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 38/40 (T5) completed at $(date)"

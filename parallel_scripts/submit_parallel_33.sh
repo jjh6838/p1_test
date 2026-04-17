@@ -46,87 +46,217 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing GUM (T5)..."
-if $PY process_country_supply.py GUM $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GUM completed"
-else
-    echo "[ERROR] GUM failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GUM $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GUM completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GUM failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GUM failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GUY (T5)..."
-if $PY process_country_supply.py GUY $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GUY completed"
-else
-    echo "[ERROR] GUY failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GUY $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GUY completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GUY failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GUY failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing HND (T5)..."
-if $PY process_country_supply.py HND $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] HND completed"
-else
-    echo "[ERROR] HND failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py HND $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] HND completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] HND failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] HND failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing HRV (T5)..."
-if $PY process_country_supply.py HRV $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] HRV completed"
-else
-    echo "[ERROR] HRV failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py HRV $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] HRV completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] HRV failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] HRV failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing HUN (T5)..."
-if $PY process_country_supply.py HUN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] HUN completed"
-else
-    echo "[ERROR] HUN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py HUN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] HUN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] HUN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] HUN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing IRL (T5)..."
-if $PY process_country_supply.py IRL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] IRL completed"
-else
-    echo "[ERROR] IRL failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py IRL $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] IRL completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] IRL failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] IRL failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing ISL (T5)..."
-if $PY process_country_supply.py ISL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ISL completed"
-else
-    echo "[ERROR] ISL failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py ISL $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] ISL completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] ISL failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ISL failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing ISR (T5)..."
-if $PY process_country_supply.py ISR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ISR completed"
-else
-    echo "[ERROR] ISR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py ISR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] ISR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] ISR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ISR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing ITA (T5)..."
-if $PY process_country_supply.py ITA $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ITA completed"
-else
-    echo "[ERROR] ITA failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py ITA $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] ITA completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] ITA failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ITA failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing JAM (T5)..."
-if $PY process_country_supply.py JAM $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] JAM completed"
-else
-    echo "[ERROR] JAM failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py JAM $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] JAM completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] JAM failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] JAM failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing JOR (T5)..."
-if $PY process_country_supply.py JOR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] JOR completed"
-else
-    echo "[ERROR] JOR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py JOR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] JOR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] JOR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] JOR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing KEN (T5)..."
-if $PY process_country_supply.py KEN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] KEN completed"
-else
-    echo "[ERROR] KEN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py KEN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] KEN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] KEN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] KEN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 33/40 (T5) completed at $(date)"

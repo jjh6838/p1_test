@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing ETH (T4)..."
-if $PY process_country_supply.py ETH $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] ETH completed"
-else
-    echo "[ERROR] ETH failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py ETH $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] ETH completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] ETH failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ETH failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GEO (T4)..."
-if $PY process_country_supply.py GEO $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GEO completed"
-else
-    echo "[ERROR] GEO failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GEO $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GEO completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GEO failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GEO failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 19/40 (T4) completed at $(date)"

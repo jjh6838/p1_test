@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing PER (T4)..."
-if $PY process_country_supply.py PER $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PER completed"
-else
-    echo "[ERROR] PER failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py PER $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] PER completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] PER failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] PER failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing PHL (T4)..."
-if $PY process_country_supply.py PHL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] PHL completed"
-else
-    echo "[ERROR] PHL failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py PHL $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] PHL completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] PHL failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] PHL failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 24/40 (T4) completed at $(date)"

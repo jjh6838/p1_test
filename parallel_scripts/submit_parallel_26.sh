@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing TCD (T4)..."
-if $PY process_country_supply.py TCD $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TCD completed"
-else
-    echo "[ERROR] TCD failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TCD $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TCD completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TCD failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TCD failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing TUR (T4)..."
-if $PY process_country_supply.py TUR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] TUR completed"
-else
-    echo "[ERROR] TUR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py TUR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] TUR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] TUR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] TUR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 26/40 (T4) completed at $(date)"

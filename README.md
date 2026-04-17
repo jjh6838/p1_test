@@ -52,7 +52,7 @@ This project performs country-level analysis of electricity supply and demand ne
 ## Project Structure
 
 ```
-├── config.py                          # Central configuration parameters
+├── config.py                          # Central configuration + bigdata path resolution
 │
 ├── # ═══ Data Preparation Scripts ═══
 ├── p1_a_ember_gem_2024.py             # Harmonize Ember + Global Energy Monitor data
@@ -231,13 +231,15 @@ grep -l "USA" parallel_scripts/*.sh
 **Script-to-Country Mapping (Tier 1-2):**
 | Script | Countries | Tier | Notes |
 |--------|-----------|------|-------|
-| 01 | CHN | T1 | 168h Long, ouce-cn64 (450GB dedicated) |
-| 02 | USA | T2 | 168h Long |
-| 03 | IND | T2 | 168h Long |
-| 04 | BRA | T2 | 168h Long |
-| 05 | DEU | T2 | 168h Long |
-| 06 | FRA | T2 | 168h Long |
-| 07+ | Multiple | T3-T5 | Medium/Small countries |
+| 01 | CHN | T1 | Long partition (168h) |
+| 02 | USA | T2 | Long partition (168h) |
+| 03 | IND | T2 | Long partition (168h) |
+| 04 | BRA | T2 | Long partition (168h) |
+| 05 | DEU | T2 | Long partition (168h) |
+| 06 | FRA | T2 | Long partition (168h) |
+| 07–17 | 11 countries | T3 | Medium partition (48h) |
+| 18–27 | 20 countries | T4 | Short partition (12h), 2 per script |
+| 28–40 | ~156 countries | T5 | Short partition (12h), 12 per script |
 
 ---
 
@@ -716,8 +718,8 @@ python generate_hpc_scripts.py --create-parallel
 # Generate parallel siting analysis scripts
 python generate_hpc_scripts.py --create-parallel-siting
 
-# Normalize CRLF to LF for cluster execution
-sed -i 's/\r$//' parallel_scripts_siting/*.sh submit_all_parallel_siting.sh
+# Optional safety step on Linux (scripts are generated with LF already)
+sed -i 's/\r$//' submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # Set execute permissions for all wrapper and batch scripts
 chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
@@ -728,6 +730,10 @@ chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 - Validates countries against GADM boundaries (excludes HKG, MAC, XKX)
 - Groups countries into computational tiers (T1-T5) based on size/complexity
 - Generates optimized SLURM scripts with appropriate resource allocation
+- Automatic retry logic (3 attempts with 10s backoff) for transient failures
+- Inter-country pause (5s) in multi-country batches (T4/T5) for stability
+- Configurable node exclusion via `"exclude"` in `TIER_CONFIG` (e.g., nodes lacking shared storage mounts)
+- All scripts generated with Unix line endings (LF) for cross-platform compatibility
 
 **Generated Scripts:**
 | Script | Description |
@@ -957,13 +963,17 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 
 ### Resource Allocation
 
-| Tier | Countries | CPUs | Memory | Time | Partition | Node | Examples |
-|------|-----------|------|--------|------|-----------|------|----------|
-| **1** | CHN | 40 | 450GB | 168h | Long | ouce-cn64 | China (dedicated node) |
-| **2** | 5 large | 40 | 95GB | 168h | Long | - | USA, IND, BRA, DEU, FRA |
-| **3** | 11 medium-large | 40 | 95GB | 48h | Medium | - | CAN, MEX, RUS, AUS, ARG, etc. |
-| **4** | 20 medium | 40 | 95GB | 12h | Short | - | TUR, NGA, COL, PAK, VEN, etc. (2/script) |
-| **5** | ~156 small | 40 | 25GB | 12h | Short | - | All others (12/script) |
+Countries are grouped into five computational tiers. The default tier configuration is defined in `generate_hpc_scripts.py` and can be adjusted for your cluster:
+
+| Tier | Countries | CPUs | Memory | Time | Partition | Examples |
+|------|-----------|------|--------|------|-----------|----------|
+| **1** | 1 (largest) | 40 | 95GB | 168h | Long | CHN |
+| **2** | 5 large | 40 | 95GB | 168h | Long | USA, IND, BRA, DEU, FRA |
+| **3** | 11 medium-large | 40 | 95GB | 48h | Medium | CAN, MEX, RUS, AUS, ARG, etc. |
+| **4** | 20 medium | 40 | 95GB | 12h | Short | TUR, NGA, COL, PAK, VEN, etc. (2/script) |
+| **5** | ~156 small | 40 | 25GB | 12h | Short | All others (12/script) |
+
+> **Customizing for your cluster:** Edit `TIER_CONFIG` in `generate_hpc_scripts.py` to change partition names, memory limits, time limits, CPU counts, or node include/exclude lists. For example, if your cluster uses `gpu` and `cpu` partitions instead of `Long`/`Medium`/`Short`, update the `"partition"` values accordingly.
 
 ### Complete HPC Workflow
 
@@ -975,7 +985,8 @@ Multi-layer spatial database for GIS software (QGIS, ArcGIS).
 # Generate parallel scripts
 python generate_hpc_scripts.py --create-parallel         # 40 supply scripts
 python generate_hpc_scripts.py --create-parallel-siting  # 25 siting scripts
-sed -i 's/\r$//' parallel_scripts_siting/*.sh submit_all_parallel_siting.sh
+# Optional safety step on Linux (scripts are generated with LF already)
+sed -i 's/\r$//' submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 chmod +x submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh
 
 # ═══════════════════════════════════════════════════════════════
@@ -1073,10 +1084,46 @@ ls -lh outputs_global/*_global.gpkg
 
 | Issue | Solution |
 |-------|----------|
-| `'\r': command not found` | Run `sed -i 's/\r$//' *.sh` on Linux |
+| `'\r': command not found` | Run `sed -i 's/\r$//' submit_*.sh parallel_scripts/*.sh parallel_scripts_siting/*.sh` on Linux |
 | `Permission denied` | Run `chmod +x *.sh` |
 | Memory errors | Check with `sacct -j <JOB_ID> --format=MaxRSS` |
 | Missing country outputs | Check `countries_list.txt` and job logs |
+| `bigdata_gadm/gadm_410-levels.gpkg: No such file or directory` (on cluster) | See **Bigdata Path Behavior (Local vs Cluster)** below |
+| Jobs fail instantly on specific nodes | Shared storage may not be mounted on that node. Use `sbatch --exclude=<node>` or add `"exclude": "<node>"` to `TIER_CONFIG` |
+| `Sub-geometries may have coordinate sequences, but multi-part geometries do not` (second supply run / add_v2) | Update to latest `process_country_supply.py` and re-run the failed country |
+
+### Bigdata Path Behavior (Local vs Cluster)
+
+All scripts resolve bigdata folders via the centralized `get_bigdata_path()` function in `config.py`. A folder is considered "has data" only if it exists **and** contains at least one entry (empty git-tracked directories are ignored).
+
+**Resolution order:**
+
+| Context | Priority |
+|---------|----------|
+| **SLURM job** (`SLURM_JOB_ID` set) | 1. Cluster shared path (with retry) &rarr; 2. Local with data &rarr; 3. Cluster fallback &rarr; 4. Local default |
+| **Local / interactive** | 1. Local with data &rarr; 2. Cluster with data &rarr; 3. Local default |
+
+The cluster shared path is configured in `config.py` (variable `cluster_path` inside `get_bigdata_path()`). Update this to match your cluster's shared storage location.
+
+On SLURM jobs, the function retries up to 3 times (2s apart) if the cluster path is not immediately accessible, to handle transient NFS mount delays on compute nodes.
+
+**Example (Oxford OUCE cluster):**
+```python
+# In config.py — change this to your cluster's shared storage path
+cluster_path = f"/soge-home/projects/mistral/ji/{folder_name}"
+```
+
+Quick cluster diagnostic:
+
+```bash
+# Check local vs cluster data availability
+ls -la bigdata_gadm/
+ls -l /your/cluster/shared/path/bigdata_gadm/ 
+ls -l /soge-home/projects/mistral/ji/bigdata_gadm/ # (e.g., in case of Oxford OUCE cluster)
+
+# Verify which path a script resolves to (from Python)
+python -c "from config import get_bigdata_path; print(get_bigdata_path('bigdata_gadm'))"
+```
 
 ### Siting Data Not Detected
 
@@ -1103,17 +1150,20 @@ print(gdf['line_type'].unique())
 
 ```bash
 # Check parallelization in logs
-grep "Using parallel processing" outputs_per_country/logs/parallel_*.out
+find outputs_per_country/parquet -type f -path "*/logs/parallel_*.out" -print0 | xargs -0 grep "Parallel processing configured for"
 
 # Verify CPU allocation
-grep "MAX_WORKERS" outputs_per_country/logs/parallel_*.out
+find outputs_per_country/parquet -type f -path "*/logs/parallel_*.out" -print0 | xargs -0 grep "workers"
 ```
 
 ### Log Files
 
 | Log | Location | Content |
 |-----|----------|---------|  
-| Supply jobs | `outputs_per_country/logs/parallel_*.out` | Processing output |
+| Supply jobs (single scenario) | `outputs_per_country/parquet/{scenario}/logs/parallel_*.out` | Processing output |
+| Supply jobs (ADD_V2 rerun) | `outputs_per_country/parquet/{scenario}_add_v2/logs/parallel_*.out` | Processing output after siting integration |
+| Supply jobs (`--run-all-scenarios`) | `outputs_per_country/parquet/logs_run_all_scenarios/parallel_*.out` | Multi-scenario processing output |
+| Supply jobs (`--run-all-scenarios` ADD_V2) | `outputs_per_country/parquet/logs_run_all_scenarios_add_v2/parallel_*.out` | Multi-scenario processing output after siting integration |
 | Siting jobs | `outputs_per_country/logs/siting_*.out` | Siting output |
 | Combination | `outputs_per_country/logs/workflow_*.out` | Merge output |
 | Errors | `*.err` files | Error messages |

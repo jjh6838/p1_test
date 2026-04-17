@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing siting analysis for ARG (T2)..."
-if $PY process_country_siting.py ARG $SCENARIO_FLAG; then
-    echo "[SUCCESS] ARG siting analysis completed"
-else
-    echo "[ERROR] ARG siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py ARG $SCENARIO_FLAG; then
+        echo "[SUCCESS] ARG siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] ARG siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] ARG siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing siting analysis for AUS (T2)..."
-if $PY process_country_siting.py AUS $SCENARIO_FLAG; then
-    echo "[SUCCESS] AUS siting analysis completed"
-else
-    echo "[ERROR] AUS siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py AUS $SCENARIO_FLAG; then
+        echo "[SUCCESS] AUS siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] AUS siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] AUS siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Siting batch 4/25 (T2) completed at $(date)"

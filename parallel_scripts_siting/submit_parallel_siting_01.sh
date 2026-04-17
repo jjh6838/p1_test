@@ -46,10 +46,19 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing siting analysis for CHN (T1)..."
-if $PY process_country_siting.py CHN $SCENARIO_FLAG; then
-    echo "[SUCCESS] CHN siting analysis completed"
-else
-    echo "[ERROR] CHN siting analysis failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_siting.py CHN $SCENARIO_FLAG; then
+        echo "[SUCCESS] CHN siting analysis completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] CHN siting failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] CHN siting analysis failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Siting batch 1/25 (T1) completed at $(date)"

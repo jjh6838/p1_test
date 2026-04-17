@@ -46,10 +46,19 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing USA (T2)..."
-if $PY process_country_supply.py USA $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] USA completed"
-else
-    echo "[ERROR] USA failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py USA $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] USA completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] USA failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] USA failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 6/40 (T2) completed at $(date)"

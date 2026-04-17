@@ -46,17 +46,37 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing JPN (T4)..."
-if $PY process_country_supply.py JPN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] JPN completed"
-else
-    echo "[ERROR] JPN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py JPN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] JPN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] JPN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] JPN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing MLI (T4)..."
-if $PY process_country_supply.py MLI $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] MLI completed"
-else
-    echo "[ERROR] MLI failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py MLI $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] MLI completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] MLI failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] MLI failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 21/40 (T4) completed at $(date)"

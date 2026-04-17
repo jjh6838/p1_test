@@ -46,87 +46,217 @@ fi
 # Process countries in this batch
 
 echo "[INFO] Processing FIN (T5)..."
-if $PY process_country_supply.py FIN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] FIN completed"
-else
-    echo "[ERROR] FIN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py FIN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] FIN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] FIN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] FIN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing FJI (T5)..."
-if $PY process_country_supply.py FJI $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] FJI completed"
-else
-    echo "[ERROR] FJI failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py FJI $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] FJI completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] FJI failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] FJI failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing FRO (T5)..."
-if $PY process_country_supply.py FRO $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] FRO completed"
-else
-    echo "[ERROR] FRO failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py FRO $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] FRO completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] FRO failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] FRO failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GAB (T5)..."
-if $PY process_country_supply.py GAB $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GAB completed"
-else
-    echo "[ERROR] GAB failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GAB $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GAB completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GAB failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GAB failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GBR (T5)..."
-if $PY process_country_supply.py GBR $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GBR completed"
-else
-    echo "[ERROR] GBR failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GBR $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GBR completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GBR failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GBR failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GIN (T5)..."
-if $PY process_country_supply.py GIN $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GIN completed"
-else
-    echo "[ERROR] GIN failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GIN $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GIN completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GIN failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GIN failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GMB (T5)..."
-if $PY process_country_supply.py GMB $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GMB completed"
-else
-    echo "[ERROR] GMB failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GMB $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GMB completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GMB failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GMB failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GNB (T5)..."
-if $PY process_country_supply.py GNB $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GNB completed"
-else
-    echo "[ERROR] GNB failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GNB $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GNB completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GNB failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GNB failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GNQ (T5)..."
-if $PY process_country_supply.py GNQ $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GNQ completed"
-else
-    echo "[ERROR] GNQ failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GNQ $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GNQ completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GNQ failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GNQ failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GRC (T5)..."
-if $PY process_country_supply.py GRC $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GRC completed"
-else
-    echo "[ERROR] GRC failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GRC $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GRC completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GRC failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GRC failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GRL (T5)..."
-if $PY process_country_supply.py GRL $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GRL completed"
-else
-    echo "[ERROR] GRL failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GRL $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GRL completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GRL failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GRL failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
+echo "[INFO] Pausing 5s before next country..."
+sleep 5
 
 echo "[INFO] Processing GTM (T5)..."
-if $PY process_country_supply.py GTM $SCENARIO_FLAG --output-dir outputs_per_country; then
-    echo "[SUCCESS] GTM completed"
-else
-    echo "[ERROR] GTM failed"
-fi
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if $PY process_country_supply.py GTM $SCENARIO_FLAG --output-dir outputs_per_country; then
+        echo "[SUCCESS] GTM completed (attempt $ATTEMPT)"
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            echo "[WARN] GTM failed on attempt $ATTEMPT/$MAX_RETRIES - retrying in 10s..."
+            sleep 10
+        else
+            echo "[ERROR] GTM failed after $MAX_RETRIES attempts"
+        fi
+    fi
+done
 
 echo "[INFO] Batch 32/40 (T5) completed at $(date)"
