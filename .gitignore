@@ -20,6 +20,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Figure scripts
+figure_scripts/
+
 # Output files
 outputs_global/
 outputs_per_country/
