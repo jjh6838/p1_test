@@ -115,7 +115,23 @@ def add_tifs_to_gpkg(year: int, gpkg_path: Path, logger) -> int:
     Returns:
         Number of TIFs added
     """
+    import sqlite3
     import subprocess
+
+    def gpkg_table_exists(table_name: str) -> bool:
+        """Return True if a table already exists in the target GeoPackage."""
+        if not gpkg_path.exists():
+            return False
+        try:
+            with sqlite3.connect(gpkg_path) as conn:
+                cursor = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND lower(name)=lower(?) LIMIT 1",
+                    (table_name,),
+                )
+                return cursor.fetchone() is not None
+        except Exception as e:
+            logger.warning(f"Could not inspect GeoPackage tables: {e}")
+            return False
     
     tif_paths = get_cmip6_tif_paths(year)
     added_count = 0
@@ -130,6 +146,10 @@ def add_tifs_to_gpkg(year: int, gpkg_path: Path, logger) -> int:
             # Add _raster suffix to avoid conflict with vector layer names
             raster_layer_name = tif_path.stem + "_raster"
             
+            if gpkg_table_exists(raster_layer_name):
+                logger.info(f"Skipping existing raster table: {raster_layer_name}")
+                continue
+
             cmd = [
                 "gdal_translate",
                 "-of", "GPKG",
@@ -145,7 +165,7 @@ def add_tifs_to_gpkg(year: int, gpkg_path: Path, logger) -> int:
                 logger.info(f"Added TIF to GPKG: {raster_layer_name}")
                 added_count += 1
             else:
-                logger.warning(f"Failed to add {tif_path.name}: {result.stderr}")
+                logger.warning(f"Failed to add {tif_path.name}: {result.stderr.strip()}")
                 
         except Exception as e:
             logger.warning(f"Failed to add {tif_path.name}: {e}")

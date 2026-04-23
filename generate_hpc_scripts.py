@@ -159,7 +159,7 @@ def create_parallel_scripts(num_scripts=40, countries=None):
 
     TIER_CONFIG = {
 #        "t1": {"max_countries_per_script": 1, "mem": "450G", "cpus": 40, "time": "168:00:00", "partition": "Long", "nodelist": "ouce-cn64"},  # CHN - dedicated node cn60 and 64 - Long, 40 cpus, max 900G
-        "t1": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN 
+        "t1": {"max_countries_per_script": 1, "mem": "300G", "cpus": 40, "time": "168:00:00", "partition": "Long"},  # CHN 
         "t2": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "168:00:00", "partition": "Long"},     # USA, IND, BRA, DEU, FRA - Long partition (7 days)
         "t3": {"max_countries_per_script": 1, "mem": "95G", "cpus": 40, "time": "48:00:00", "partition": "Medium", "exclude": "ouce-cn62"},      # CAN, MEX, RUS, AUS, etc. - Medium partition (48h). cn62 lacks NFS mount for shared bigdata.
         "t4": {"max_countries_per_script": 2, "mem": "95G", "cpus": 40, "time": "12:00:00", "partition": "Short"},      # TUR, NGA, COL, etc. - two countries per script
