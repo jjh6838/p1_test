@@ -1,0 +1,206 @@
+ISO3,COUNTRY_NAME,IEA_GROUP,EU_MEMBER
+AIA,Anguilla,Central and South America,no
+AFG,Afghanistan,Asia Pacific,no
+AGO,Angola,Africa,no
+ATG,Antigua and Barbuda,Central and South America,no
+ALB,Albania,Europe,no
+ARE,United Arab Emirates,Middle East,no
+ARG,Argentina,Central and South America,no
+ARM,Armenia,Eurasia,no
+ABW,Aruba,Central and South America,no
+AUS,Australia,Asia Pacific,no
+AUT,Austria,Europe,yes
+AZE,Azerbaijan,Eurasia,no
+BDI,Burundi,Africa,no
+BEL,Belgium,Europe,yes
+BEN,Benin,Africa,no
+BHS,Bahamas,Central and South America,no
+BFA,Burkina Faso,Africa,no
+BGD,Bangladesh,Asia Pacific,no
+BGR,Bulgaria,Europe,yes
+BHR,Bahrain,Middle East,no
+BRB,Barbados,Central and South America,no
+BIH,Bosnia and Herzegovina,Europe,no
+BLR,Belarus,Europe,no
+BLZ,Belize,Central and South America,no
+BMU,Bermuda,Central and South America,no
+BOL,Bolivia,Central and South America,no
+BES,"Bonaire, Sint Eustatius and Saba",Central and South America,no
+BRA,Brazil,Central and South America,no
+BTN,Bhutan,Asia Pacific,no
+BRN,Brunei Darussalam,Asia Pacific,no
+BWA,Botswana,Africa,no
+CAF,Central African Republic,Africa,no
+CAN,Canada,North America,no
+CHE,Switzerland,Europe,no
+VGB,British Virgin Islands,Central and South America,no
+KHM,Cambodia,Asia Pacific,no
+CIV,Côte d'Ivoire,Africa,no
+CMR,Cameroon,Africa,no
+COD,"Congo, The Democratic Republic of the",Africa,no
+COG,Congo,Africa,no
+CHN,China,Asia Pacific,no
+CYM,Cayman Islands,Central and South America,no
+COM,Comoros,Africa,no
+CPV,Cabo Verde,Africa,no
+CHL,Chile,Central and South America,no
+COL,Colombia,Central and South America,no
+CRI,Costa Rica,Central and South America,no
+CUB,Cuba,Central and South America,no
+CYP,Cyprus,Europe,yes
+CZE,Czechia,Europe,yes
+DEU,Germany,Europe,yes
+DJI,Djibouti,Africa,no
+CUW,Curaçao,Central and South America,no
+DNK,Denmark,Europe,yes
+DMA,Dominica,Central and South America,no
+DZA,Algeria,Africa,no
+DOM,Dominican Republic,Central and South America,no
+EGY,Egypt,Africa,no
+ERI,Eritrea,Africa,no
+ESP,Spain,Europe,yes
+EST,Estonia,Europe,yes
+ETH,Ethiopia,Africa,no
+FIN,Finland,Europe,yes
+TWN,Chinese Taipei,Asia Pacific,no
+ECU,Ecuador,Central and South America,no
+FRA,France,Europe,yes
+GAB,Gabon,Africa,no
+GBR,United Kingdom,Europe,no
+GEO,Georgia,Eurasia,no
+GHA,Ghana,Africa,no
+GIB,Gibraltar,Europe,no
+GIN,Guinea,Africa,no
+GMB,Gambia,Africa,no
+GNB,Guinea-Bissau,Africa,no
+GNQ,Equatorial Guinea,Africa,no
+GRC,Greece,Europe,yes
+SLV,El Salvador,Central and South America,no
+FLK,Falkland Islands,Central and South America,no
+GRD,Grenada,Central and South America,no
+COK,Cook Islands,Asia Pacific,no
+GTM,Guatemala,Central and South America,no
+HRV,Croatia,Europe,yes
+GUY,Guyana,Central and South America,no
+HUN,Hungary,Europe,yes
+FJI,Fiji,Asia Pacific,no
+PYF,French Polynesia,Asia Pacific,no
+IRL,Ireland,Europe,yes
+IRN,Iran,Middle East,no
+IRQ,Iraq,Middle East,no
+ISL,Iceland,Europe,no
+ISR,Israel,Europe,no
+ITA,Italy,Europe,yes
+HTI,Haiti,Central and South America,no
+JOR,Jordan,Middle East,no
+HKG,Hong Kong (China),Asia Pacific,no
+KAZ,Kazakhstan,Eurasia,no
+KEN,Kenya,Africa,no
+KGZ,Kyrgyzstan,Eurasia,no
+IND,India,Asia Pacific,no
+IDN,Indonesia,Asia Pacific,no
+HND,Honduras,Central and South America,no
+JPN,Japan,Asia Pacific,no
+KWT,Kuwait,Middle East,no
+KIR,Kiribati,Asia Pacific,no
+LBN,Lebanon,Middle East,no
+LBR,Liberia,Africa,no
+LBY,Libya,Africa,no
+JAM,Jamaica,Central and South America,no
+LAO,Laos,Asia Pacific,no
+LSO,Lesotho,Africa,no
+LTU,Lithuania,Europe,yes
+LUX,Luxembourg,Europe,yes
+LVA,Latvia,Europe,yes
+MAC,Macao (China),Asia Pacific,no
+MAR,Morocco,Africa,no
+MDA,Moldova,Europe,no
+MDG,Madagascar,Africa,no
+MYS,Malaysia,Asia Pacific,no
+MEX,Mexico,North America,no
+MKD,North Macedonia,Europe,no
+MLI,Mali,Africa,no
+MLT,Malta,Europe,yes
+MDV,Maldives,Asia Pacific,no
+MNE,Montenegro,Europe,no
+MNG,Mongolia,Asia Pacific,no
+MOZ,Mozambique,Africa,no
+MRT,Mauritania,Africa,no
+MSR,Montserrat,Central and South America,no
+MUS,Mauritius,Africa,no
+MWI,Malawi,Africa,no
+MMR,Myanmar,Asia Pacific,no
+NAM,Namibia,Africa,no
+NPL,Nepal,Asia Pacific,no
+NER,Niger,Africa,no
+NGA,Nigeria,Africa,no
+NIC,Nicaragua,Central and South America,no
+NLD,Netherlands,Europe,yes
+NOR,Norway,Europe,no
+NCL,New Caledonia,Asia Pacific,no
+NZL,New Zealand,Asia Pacific,no
+OMN,Oman,Middle East,no
+PRK,North Korea,Asia Pacific,no
+PAN,Panama,Central and South America,no
+PRY,Paraguay,Central and South America,no
+PAK,Pakistan,Asia Pacific,no
+PLW,Palau,Asia Pacific,no
+PNG,Papua New Guinea,Asia Pacific,no
+POL,Poland,Europe,yes
+PHL,Philippines,Asia Pacific,no
+PRT,Portugal,Europe,yes
+PER,Peru,Central and South America,no
+WSM,Samoa,Asia Pacific,no
+QAT,Qatar,Middle East,no
+ROU,Romania,Europe,yes
+RUS,Russian Federation,Eurasia,no
+RWA,Rwanda,Africa,no
+SAU,Saudi Arabia,Middle East,no
+SDN,Sudan,Africa,no
+SEN,Senegal,Africa,no
+SGP,Singapore,Asia Pacific,no
+SLB,Solomon Islands,Asia Pacific,no
+SLE,Sierra Leone,Africa,no
+KNA,Saint Kitts and Nevis,Central and South America,no
+SOM,Somalia,Africa,no
+LCA,Saint Lucia,Central and South America,no
+SRB,Serbia,Europe,no
+SSD,South Sudan,Africa,no
+STP,Sao Tome and Principe,Africa,no
+SPM,Saint Pierre and Miquelon,Central and South America,no
+SVK,Slovakia,Europe,yes
+SVN,Slovenia,Europe,yes
+SWE,Sweden,Europe,yes
+SWZ,Eswatini,Africa,no
+VCT,Saint Vincent and the Grenadines,Central and South America,no
+SYC,Seychelles,Africa,no
+SYR,Syria,Middle East,no
+SXM,Sint Maarten,Central and South America,no
+TCD,Chad,Africa,no
+TGO,Togo,Africa,no
+KOR,South Korea,Asia Pacific,no
+TJK,Tajikistan,Eurasia,no
+TKM,Turkmenistan,Eurasia,no
+LKA,Sri Lanka,Asia Pacific,no
+THA,Thailand,Asia Pacific,no
+SUR,Suriname,Central and South America,no
+TUN,Tunisia,Africa,no
+TUR,Türkiye,Europe,no
+TLS,Timor-Leste,Asia Pacific,no
+TZA,Tanzania,Africa,no
+UGA,Uganda,Africa,no
+UKR,Ukraine,Europe,no
+TTO,Trinidad and Tobago,Central and South America,no
+USA,United States,North America,no
+UZB,Uzbekistan,Eurasia,no
+TCA,Turks and Caicos Islands,Central and South America,no
+URY,Uruguay,Central and South America,no
+VEN,Venezuela,Central and South America,no
+TON,Tonga,Asia Pacific,no
+VUT,Vanuatu,Asia Pacific,no
+VNM,Vietnam,Asia Pacific,no
+XKX,Kosovo,Europe,no
+YEM,Yemen,Middle East,no
+ZAF,South Africa,Africa,no
+ZMB,Zambia,Africa,no
+ZWE,Zimbabwe,Africa,no
