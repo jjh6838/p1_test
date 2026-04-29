@@ -71,7 +71,7 @@ if [ -z "$ISO3" ]; then
     echo "  $0 USA --tier 2             # Use Tier 2 resources (95G memory)"
     echo ""
     echo "Tier resources:"
-    echo "  T1: 95G, 40 CPUs, 168:00:00 (Long)  - CHN"
+    echo "  T1: 300G, 40 CPUs, 168:00:00 (Long)  - CHN"
     echo "  T2: 95G, 40 CPUs, 168:00:00 (Long)   - USA, IND, BRA, DEU, FRA"
     echo "  T3: 95G, 40 CPUs, 48:00:00 (Medium)  - CAN, MEX, RUS, AUS, etc."
     echo "  T4: 95G, 40 CPUs, 12:00:00 (Short)   - TUR, NGA, VEN, ETH, etc."
@@ -108,7 +108,7 @@ case $TIER in
     1)
         PARTITION="Long"
         TIME="168:00:00"
-        MEM="95G"
+        MEM="300G"
         CPUS="40"
         ;;
     2)

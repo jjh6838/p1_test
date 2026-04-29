@@ -7,6 +7,18 @@ RUN_ALL_SCENARIOS=""
 SUPPLY_FACTOR=""
 SBATCH_EXPORT=""
 
+# Resolve analysis year from config.py so log paths follow 2030/2050 settings.
+ANALYSIS_YEAR=$(python - <<'PY'
+from config import ANALYSIS_YEAR
+print(ANALYSIS_YEAR)
+PY
+)
+
+if [ -z "$ANALYSIS_YEAR" ]; then
+    ANALYSIS_YEAR="2030"
+    echo "[WARN] Could not resolve ANALYSIS_YEAR from config.py; defaulting to ${ANALYSIS_YEAR}"
+fi
+
 while [ $# -gt 0 ]; do
     case $1 in
         --run-all-scenarios)
@@ -39,14 +51,14 @@ if [ -n "$SUPPLY_FACTOR" ]; then
     SBATCH_EXPORT="--export=ALL,SUPPLY_FACTOR=$SUPPLY_FACTOR"
     # Convert supply factor to percentage (e.g., 0.9 -> 90)
     SCENARIO_PCT=$(echo "$SUPPLY_FACTOR * 100" | bc | cut -d. -f1)
-    LOG_DIR="outputs_per_country/parquet/2030_supply_${SCENARIO_PCT}%/logs"
+    LOG_DIR="outputs_per_country/parquet/${ANALYSIS_YEAR}_supply_${SCENARIO_PCT}%/logs"
     echo "[INFO] Running single scenario: $SUPPLY_FACTOR (supply factor ${SCENARIO_PCT}%)"
 elif [ -n "$RUN_ALL_SCENARIOS" ]; then
     SBATCH_EXPORT="--export=ALL,RUN_ALL_SCENARIOS=1"
     LOG_DIR="outputs_per_country/parquet/logs_run_all_scenarios"
     echo "[INFO] Running ALL scenarios (100%, 90%, 80%, 70%, 60%)"
 else
-    LOG_DIR="outputs_per_country/parquet/2030_supply_100%/logs"
+    LOG_DIR="outputs_per_country/parquet/${ANALYSIS_YEAR}_supply_100%/logs"
     echo "[INFO] Running default scenario: 100%"
 fi
 
