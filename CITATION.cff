@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Jeong"
+  given-names: "Jihyeon"
+  orcid: "https://orcid.org/0009-0003-0812-9490"
+- family-names: "Hall"
+  given-names: "Jim W"
+  orcid: "https://orcid.org/0000-0002-2024-9191"
+- family-names: "Thomas"
+  given-names: "Fred"
+  orcid: "TBD"
+title: "global-electricity-supply-demand-dataset"
+version: 1.0.0
+doi: 10.5281/zenodo.1234 (TBD)
+date-released: 2026-04-29 (TBD)
+url: "https://github.com/jjh6838/global-electricity-supply-demand-dataset"
