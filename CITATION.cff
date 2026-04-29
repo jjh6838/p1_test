@@ -1,5 +1,6 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
+message: "If you use this dataset or code, please cite it as below."
+type: dataset
 authors:
 - family-names: "Jeong"
   given-names: "Jihyeon"
@@ -9,9 +10,7 @@ authors:
   orcid: "https://orcid.org/0000-0002-2024-9191"
 - family-names: "Thomas"
   given-names: "Fred"
-  orcid: "TBD"
-title: "global-electricity-supply-demand-dataset"
+title: "Global Renewable Energy Supply-Demand Geospatial Dataset"
 version: 1.0.0
-doi: 10.5281/zenodo.1234 (TBD)
-date-released: 2026-04-29 (TBD)
-url: "https://github.com/jjh6838/global-electricity-supply-demand-dataset"
+url: "https://github.com/jjh6838/global-renewable-energy-supply-demand"
+license: "MIT"
