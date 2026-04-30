@@ -132,8 +132,8 @@ This project performs country-level analysis of electricity supply and demand ne
 
 ```bash
 # Clone repository
-git clone <repository-url>
-cd <cloned-folder-name>
+git clone https://github.com/jjh6838/global-renewable-electricity-supply-networks.git
+cd global-renewable-electricity-supply-networks
 
 # Create conda environment
 conda env create -f environment.yml
